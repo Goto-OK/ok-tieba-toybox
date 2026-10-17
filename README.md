@@ -1,0 +1,159 @@
+# 贴吧统计（tieba-reply-stats）
+
+输入贴吧帖子链接，抓取**主题楼层 + 楼中楼**，按用户汇总，导出 Excel；
+并提供参与者成分、查成分、黑名单、游客模式（无 Cookie）和 Android 版。
+
+> 当前版本：**1.2.0**　详细改动见 [CHANGELOG.md](CHANGELOG.md)
+
+---
+
+## 快速开始
+
+### Windows 桌面版（推荐）
+
+1. 双击 `贴吧回复统计.exe`；
+2. 粘贴帖子链接（每行一个，也可以直接填帖子 ID）；
+3. 选择是否抓楼中楼、是否导出 Excel；
+4. 点「开始统计」。
+
+**不需要 Cookie** 也能抓公开帖子（游客模式）：
+
+- 楼层、每层前 10 条楼中楼、参与者、等级；
+- 用户最近发言、基本信息。
+
+需要**完整楼中楼、关注列表、完整资料**时，再在「抓取」页填入 Cookie（含 `BDUSS`）。
+
+### 命令行
+
+```bash
+python tieba_stats.py https://tieba.baidu.com/p/1234567890 -o 统计.xlsx
+python tieba_stats.py <url1> <url2> --no-comments
+python tieba_stats.py <url> --cookie "BDUSS=xxx; STOKEN=xxx"
+```
+
+### Android
+
+安装 `android/贴吧统计_debug.apk`（debug 签名，仅自测）。  
+界面是 WebView + 本地 Python 服务，功能与桌面版大体一致。
+
+---
+
+## 功能
+
+- **楼层抓取**：自动识别总页数，逐页抓取；
+- **楼中楼**：`totalComment` + `/p/comment` 双通道（登录态）；游客模式走客户端 protobuf，每层前 10 条；
+- **按用户统计**：楼层数、楼中楼数、合计、等级、头衔、首次出现楼层；
+- **参与者**：点人查看关注贴吧、最近发言（主题帖 + 回复，带正文）；
+- **查成分**：用户名 / 用户ID / 昵称查询，支持条数与日期范围；
+- **黑名单**：安全 / 警告 / 禁止三级，红绿灯标记，支持 Excel 导入导出；
+- **表格查看**：回复统计 / 楼层明细 / 楼中楼明细，可排序、可打开链接；
+- **导出 Excel**：多 sheet、超链接、冻结、筛选、合计行；
+- **游客模式**：无 Cookie 抓公开帖子（见下）；
+- **Android**：同一套核心，WebView 界面。
+
+---
+
+## 游客模式（无 Cookie）
+
+使用贴吧客户端 protobuf 接口：
+
+```text
+POST https://tiebac.baidu.com/c/f/pb/page?cmd=302001
+```
+
+无登录态可返回公开帖子的楼层、每层前 10 条楼中楼、用户列表和等级。  
+限制：每层最多 10 条楼中楼；完整关注列表、完整资料仍需 Cookie。
+
+---
+
+## 项目结构
+
+```text
+tieba-reply-stats/
+├─ tieba_reply_stats/       核心包（抓取、解析、protobuf、导出）
+├─ tieba_gui.py             Windows 桌面 GUI（tkinter）
+├─ tieba_stats.py           命令行入口
+├─ tests/                   selftest + HTML/JSON fixtures
+├─ tools/                   快照采集、查询、wheel 下载
+├─ scripts/                 构建 / 同步脚本
+├─ docs/                    需求、架构、协议、发布文档
+├─ snapshots/               用户-贴吧等级快照（本地数据，默认不入库）
+├─ assets/                  图标、版本信息
+├─ android/                 Android 工程、APK、说明
+├─ sample/                  示例 Excel
+└─ 使用说明.txt              面向用户的完整说明
+```
+
+核心模块：
+
+| 模块 | 作用 |
+|---|---|
+| `fetch.py` | HTTP、Cookie、重试、缓存 |
+| `parse.py` | 网页 HTML 解析（lxml） |
+| `page_pb.py` | 客户端帖子 protobuf（游客模式） |
+| `pbapi.py` | `page_pc` / `nestedFloor`，补等级和 ID |
+| `profile.py` | 用户资料、关注列表、最近发言 |
+| `profile_pb.py` | 客户端 profile protobuf |
+| `userpost_pb.py` | 客户端 userpost protobuf |
+| `collect.py` | 抓取编排、等级补全 |
+| `models.py` | Floor / Comment / ThreadData |
+| `export.py` | Excel 导出 |
+| `blacklist.py` | 三级名单与 Excel 导入导出 |
+| `settings.py` | 通用设置 |
+
+---
+
+## 开发
+
+```bash
+pip install -r requirements.txt
+python tests/selftest.py          # 离线自测
+python tieba_gui.py               # 桌面 GUI
+python tieba_stats.py --help      # CLI
+```
+
+依赖：`openpyxl`、`lxml`（Android 使用自带的 `lxml.html` 兼容层，基于 BeautifulSoup）。
+
+### 构建
+
+```powershell
+# 桌面 exe（如果执行策略阻止 .ps1，用 powershell -ExecutionPolicy Bypass -File 运行）
+./scripts/build_desktop.ps1
+
+# Android APK（需要 JDK 17 + Android SDK 34 + Gradle 8.7）
+./scripts/build_android.ps1 -JavaHome "E:\android-build\jdk-17.0.12+7" `
+    -AndroidSdk "E:\android-build\sdk" -Gradle "E:\android-build\gradle-8.7\bin\gradle.bat"
+```
+
+同步核心到 Android 工程：
+
+```bash
+python scripts/sync_android.py
+```
+
+---
+
+## 文档
+
+- [需求与边界](docs/requirements.md)
+- [架构与数据流](docs/architecture.md)
+- [接口与协议](docs/protocol.md)
+- [发布流程](docs/release.md)
+- [更新日志](CHANGELOG.md)
+- [用户使用说明](使用说明.txt)
+- [Android 说明](android/README.md)
+- [快照数据说明](snapshots/README.md)
+
+---
+
+## 限制与声明
+
+- 本项目使用的是贴吧**网页/客户端内部接口**，不是百度官方开放 API；接口可能变更或限流；
+- 请控制抓取频率，不要用于商业采集或骚扰；
+- Cookie 是账号凭证，只保存在本机（Windows 用 DPAPI，Android 为 App 私有目录明文），不要提交到仓库或发给他人；
+- 隐藏关注列表无法完整枚举，只能部分恢复；
+- 游客模式每层最多 10 条楼中楼。
+
+## 许可证
+
+[MIT](LICENSE)

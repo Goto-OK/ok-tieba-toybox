@@ -1,0 +1,40 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.build/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Local configuration / secrets
+.env
+cookie*.json
+*.cookie
+*.key
+
+# Build output
+dist/
+build/
+*.spec
+贴吧回复统计_v*/
+贴吧回复统计_绿色版.zip
+android/project/app/build/
+android/project/.gradle/
+android/project/local.properties
+android/*.apk
+*.xlsx
+!sample/*.xlsx
+
+# Runtime data
+snapshots/*.jsonl
+logs/
+*.log
+
+# IDE / OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db

@@ -1,0 +1,376 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>贴吧统计</title>
+<style>
+  :root { --bg:#f3f5f9; --card:#fff; --line:#e2e6ee; --text:#1f2937; --muted:#6b7280; --blue:#1f4e79; }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body { margin:0; font-family: -apple-system, "Microsoft YaHei", sans-serif; background:var(--bg); color:var(--text); font-size:14px; }
+  header { position:sticky; top:0; z-index:10; background:var(--blue); color:#fff; padding:10px 12px; display:flex; align-items:center; gap:8px; }
+  header h1 { font-size:16px; margin:0; font-weight:600; }
+  #status { margin-left:auto; font-size:12px; opacity:.9; }
+  nav { display:flex; overflow-x:auto; background:#fff; border-bottom:1px solid var(--line); position:sticky; top:44px; z-index:9; }
+  nav button { flex:0 0 auto; border:0; background:transparent; padding:11px 14px; font-size:14px; color:var(--muted); border-bottom:2px solid transparent; }
+  nav button.active { color:var(--blue); border-bottom-color:var(--blue); font-weight:600; }
+  main { padding:10px; padding-bottom:40px; }
+  section { display:none; }
+  section.active { display:block; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:12px; margin-bottom:10px; }
+  .card h2 { font-size:14px; margin:0 0 8px; color:var(--blue); }
+  label { display:block; font-size:12px; color:var(--muted); margin:8px 0 4px; }
+  textarea, input, select { width:100%; border:1px solid var(--line); border-radius:8px; padding:8px; font-size:14px; background:#fff; }
+  textarea { resize:vertical; }
+  .row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  .row > * { flex:1; min-width:90px; }
+  .row .btn { flex:0 0 auto; min-width:auto; }
+  .btn { border:0; border-radius:8px; padding:10px 14px; background:var(--blue); color:#fff; font-size:14px; }
+  .btn.secondary { background:#e5e9f0; color:#334155; }
+  .btn.danger { background:#dc2626; }
+  .btn:disabled { opacity:.5; }
+  .muted { color:var(--muted); font-size:12px; }
+  #log { height:190px; overflow:auto; background:#0f172a; color:#d1fae5; border-radius:8px; padding:8px; font-family:Consolas,monospace; font-size:12px; white-space:pre-wrap; }
+  .table-wrap { overflow:auto; max-height:60vh; border:1px solid var(--line); border-radius:8px; }
+  table { border-collapse:collapse; width:100%; font-size:12px; }
+  th, td { border-bottom:1px solid var(--line); padding:6px 8px; text-align:left; white-space:nowrap; }
+  th { background:#f8fafc; position:sticky; top:0; z-index:1; }
+  tr.ban { background:#fee2e2; } tr.warn { background:#fef3c7; } tr.safe { background:#dcfce7; }
+  tr.clickable:active { background:#eef2ff; }
+  .tag { display:inline-block; padding:1px 6px; border-radius:999px; background:#eef2ff; color:#3730a3; font-size:11px; }
+  .info { font-size:13px; line-height:1.7; color:#334155; }
+  .info b { color:var(--blue); }
+  .list { display:flex; gap:6px; overflow-x:auto; padding-bottom:4px; }
+  .list button { flex:0 0 auto; }
+  .empty { color:var(--muted); padding:18px 0; text-align:center; }
+</style>
+</head>
+<body>
+<header>
+  <h1>贴吧统计</h1>
+  <span id="status">就绪</span>
+</header>
+<nav>
+  <button data-tab="fetch" class="active">抓取</button>
+  <button data-tab="people">参与者</button>
+  <button data-tab="grid">表格</button>
+  <button data-tab="lookup">查成分</button>
+  <button data-tab="settings">设置</button>
+</nav>
+<main>
+  <section id="tab-fetch" class="active">
+    <div class="card">
+      <h2>Cookie</h2>
+      <textarea id="cookie" rows="3" placeholder="粘贴贴吧 Cookie（含 BDUSS）"></textarea>
+      <div class="row" style="margin-top:8px">
+        <button class="btn secondary" id="saveCookie">保存 Cookie</button>
+        <span class="muted" id="cookieHint"></span>
+      </div>
+    </div>
+    <div class="card">
+      <h2>帖子</h2>
+      <textarea id="urls" rows="3" placeholder="每行一个帖子链接，或直接填帖子 ID"></textarea>
+      <div class="row" style="margin-top:8px">
+        <div><label>最多页数（0=全部）</label><input id="maxPages" type="number" value="0" min="0"></div>
+        <div><label>楼中楼</label><select id="comments"><option value="1">抓</option><option value="0">不抓</option></select></div>
+        <div><label>导出 Excel</label><select id="export"><option value="1">是</option><option value="0">否</option></select></div>
+      </div>
+      <div class="row" style="margin-top:8px">
+        <button class="btn" id="startBtn">开始统计</button>
+        <button class="btn danger" id="stopBtn" disabled>停止</button>
+        <button class="btn secondary" id="exportBtn">下载 Excel</button>
+      </div>
+    </div>
+    <div class="card">
+      <h2>运行日志</h2>
+      <div id="log">等待开始…</div>
+    </div>
+  </section>
+
+  <section id="tab-people">
+    <div class="card">
+      <div class="row">
+        <button class="btn secondary" id="reloadPeople">刷新参与者</button>
+        <span class="muted" id="peopleHint"></span>
+      </div>
+      <div class="table-wrap" style="margin-top:8px">
+        <table><thead><tr><th>标记</th><th>昵称</th><th>用户名</th><th>ID</th><th>等级</th><th>楼层</th><th>楼中楼</th><th>合计</th></tr></thead>
+        <tbody id="peopleBody"><tr><td colspan="8" class="empty">还没有数据</td></tr></tbody></table>
+      </div>
+    </div>
+    <div class="card" id="personCard" style="display:none">
+      <h2 id="personTitle">详细</h2>
+      <div class="info" id="personInfo"></div>
+      <h2 style="margin-top:10px">关注的贴吧</h2>
+      <div class="table-wrap"><table><thead><tr><th>贴吧</th><th>等级</th></tr></thead><tbody id="personForums"></tbody></table></div>
+      <h2 style="margin-top:10px">最近发言</h2>
+      <div class="table-wrap"><table><thead><tr><th>日期</th><th>类型</th><th>贴吧</th><th>标题</th><th>内容</th></tr></thead><tbody id="personPosts"></tbody></table></div>
+    </div>
+  </section>
+
+  <section id="tab-grid">
+    <div class="card">
+      <div class="list">
+        <button class="btn secondary gridKind active" data-kind="users">回复统计</button>
+        <button class="btn secondary gridKind" data-kind="floors">楼层明细</button>
+        <button class="btn secondary gridKind" data-kind="comments">楼中楼明细</button>
+      </div>
+      <div class="table-wrap" style="margin-top:8px">
+        <table><thead id="gridHead"></thead><tbody id="gridBody"></tbody></table>
+      </div>
+    </div>
+  </section>
+
+  <section id="tab-lookup">
+    <div class="card">
+      <div class="row">
+        <div><label>查询方式</label><select id="lookupMode"><option>用户名</option><option>用户ID</option><option>昵称</option></select></div>
+        <div><label>内容</label><input id="lookupQuery" placeholder="用户名 / ID / 昵称"></div>
+      </div>
+      <div class="row" style="margin-top:8px">
+        <div><label>条数</label><input id="lookupCount" type="number" value="50" min="5" max="1000"></div>
+        <div><label>开始日期</label><input id="lookupStart" type="date"></div>
+        <div><label>结束日期</label><input id="lookupEnd" type="date"></div>
+      </div>
+      <div class="row" style="margin-top:8px">
+        <button class="btn" id="lookupBtn">查询</button>
+      </div>
+      <div class="info" id="lookupInfo" style="margin-top:8px"></div>
+    </div>
+    <div class="card">
+      <h2>关注的贴吧</h2>
+      <div class="table-wrap"><table><thead><tr><th>贴吧</th><th>等级</th></tr></thead><tbody id="lookupForums"></tbody></table></div>
+      <h2 style="margin-top:10px">最近发言</h2>
+      <div class="table-wrap"><table><thead><tr><th>日期</th><th>类型</th><th>贴吧</th><th>标题</th><th>内容</th></tr></thead><tbody id="lookupPosts"></tbody></table></div>
+    </div>
+  </section>
+
+  <section id="tab-settings">
+    <div class="card">
+      <h2>黑名单</h2>
+      <p class="muted">每行一个贴吧名，命中优先级：禁止 &gt; 警告 &gt; 安全。</p>
+      <label>禁止（红）</label><textarea id="blBan" rows="4"></textarea>
+      <label>警告（黄）</label><textarea id="blWarn" rows="4"></textarea>
+      <label>安全（绿）</label><textarea id="blSafe" rows="4"></textarea>
+      <div class="row" style="margin-top:8px"><button class="btn" id="saveBlacklist">保存黑名单</button></div>
+    </div>
+    <div class="card">
+      <h2>通用</h2>
+      <label><input type="checkbox" id="colorForum" style="width:auto"> 关注的贴吧表格标色</label>
+      <label><input type="checkbox" id="colorPosts" style="width:auto"> 最近发言表格标色</label>
+      <div class="row" style="margin-top:8px"><button class="btn secondary" id="saveSettings">保存设置</button></div>
+    </div>
+  </section>
+</main>
+
+<script>
+const $ = (id) => document.getElementById(id);
+let blacklist = {safe:[], warn:[], ban:[]};
+let lastLogCount = -1;
+
+async function api(path, options) {
+  const response = await fetch(path, options);
+  return response.json();
+}
+function norm(name) {
+  return String(name || '').replace(/吧$/, '').toLowerCase().replace(/\s+/g, '');
+}
+function classify(bar) {
+  const name = norm(bar);
+  for (const level of ['ban','warn','safe']) {
+    for (const item of (blacklist[level] || [])) {
+      if (norm(item) === name) return level;
+    }
+  }
+  return '';
+}
+function rowClass(bar) {
+  const level = classify(bar);
+  return level ? level : '';
+}
+function el(tag, text) { const node = document.createElement(tag); node.textContent = text == null ? '' : text; return node; }
+function fillTable(tbody, rows, mapper) {
+  tbody.innerHTML = '';
+  if (!rows || !rows.length) {
+    const tr = document.createElement('tr');
+    const td = document.createElement('td');
+    td.colSpan = 9; td.className = 'empty'; td.textContent = '没有数据';
+    tr.appendChild(td); tbody.appendChild(tr); return;
+  }
+  for (const row of rows) {
+    const tr = document.createElement('tr');
+    const mapped = mapper(row);
+    for (const cell of mapped.cells) tr.appendChild(el('td', cell));
+    if (mapped.cls) tr.className = mapped.cls;
+    if (mapped.onclick) tr.onclick = mapped.onclick;
+    tbody.appendChild(tr);
+  }
+}
+
+function switchTab(name) {
+  document.querySelectorAll('nav button').forEach(b => b.classList.toggle('active', b.dataset.tab === name));
+  document.querySelectorAll('section').forEach(s => s.classList.toggle('active', s.id === 'tab-' + name));
+  if (name === 'people') loadPeople();
+  if (name === 'grid') loadGrid();
+  if (name === 'settings') loadSettings();
+}
+
+async function loadStatus() {
+  try {
+    const data = await api('/api/status');
+    $('status').textContent = data.running ? `抓取中 ${data.done}/${data.total}` : (data.people ? `${data.people} 人` : '就绪');
+    $('startBtn').disabled = data.running;
+    $('stopBtn').disabled = !data.running;
+    if (Array.isArray(data.logs) && data.logs.length !== lastLogCount) {
+      lastLogCount = data.logs.length;
+      $('log').textContent = data.logs.join('\n') || '等待开始…';
+      $('log').scrollTop = $('log').scrollHeight;
+    }
+    if (data.error) $('status').textContent = '出错';
+  } catch (e) { /* ignore */ }
+}
+
+async function loadCookie() {
+  const data = await api('/api/cookie');
+  if (data.cookie) $('cookie').value = data.cookie;
+  $('cookieHint').textContent = data.has ? '已保存' : '未保存';
+}
+async function saveCookie() {
+  const cookie = $('cookie').value.trim();
+  if (!cookie) return alert('先粘贴 Cookie');
+  await api('/api/cookie', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({cookie})});
+  $('cookieHint').textContent = '已保存';
+}
+
+async function startJob() {
+  const urls = $('urls').value.split(/[\n,，;；]+/).map(s => s.trim()).filter(Boolean);
+  if (!urls.length) return alert('先填帖子链接');
+  const data = await api('/api/start', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({
+      urls, cookie: $('cookie').value.trim(), remember: true,
+      max_pages: Number($('maxPages').value || 0),
+      comments: $('comments').value === '1',
+      export: $('export').value === '1'
+    })
+  });
+  if (!data.ok) alert(data.error || '启动失败');
+}
+async function stopJob() { await api('/api/stop', {method:'POST'}); }
+
+async function loadPeople() {
+  const data = await api('/api/people');
+  fillTable($('peopleBody'), data.people || [], (row) => ({
+    cells: [row.mark || '⚪', row.name, row.username || '-', row.uid || '-', row.level ? 'Lv.' + row.level : '-', row.floor, row.comment, row.total],
+    cls: row.hit || '',
+    onclick: () => loadPerson(row)
+  }));
+  $('peopleHint').textContent = `共 ${(data.people || []).length} 人`;
+}
+
+async function loadPerson(row) {
+  $('personCard').style.display = 'block';
+  $('personTitle').textContent = row.name || row.uid;
+  $('personInfo').textContent = '查询中…';
+  const params = new URLSearchParams({uid: row.uid || '', name: row.username || row.name || '', bar: (row.bars || [])[0] || ''});
+  const data = await api('/api/person?' + params.toString());
+  renderProfile(data);
+}
+
+function renderProfile(data) {
+  if (!data.ok) { $('personInfo').textContent = data.error || '查询失败'; return; }
+  const bits = [];
+  bits.push(`昵称 <b>${data.nickname || data.username || '-'}</b>`);
+  bits.push(`用户名 <b>${data.username || '-'}</b>`);
+  bits.push(`ID <b>${data.user_id || '-'}</b>`);
+  if (data.fans != null) bits.push(`粉丝 ${data.fans}`);
+  if (data.concern != null) bits.push(`关注数 ${data.concern}`);
+  if (data.post_num) bits.push(`发帖 ${data.post_num}`);
+  if (data.hidden) bits.push('<span style="color:#b45309">⚠ 关注列表隐藏</span>');
+  $('personInfo').innerHTML = bits.join(' · ');
+  fillTable($('personForums'), data.forums || [], (f) => ({cells:[f.name, f.level ? 'Lv.'+f.level : '-'], cls: rowClass(f.name)}));
+  fillTable($('personPosts'), data.posts || [], (p) => ({cells:[p.time, p.type, p.bar, p.title, p.content], cls: rowClass(p.bar),
+    onclick: () => p.url && window.open(p.url, '_blank')}));
+}
+
+let gridKind = 'users';
+async function loadGrid() {
+  const data = await api('/api/grid?kind=' + gridKind);
+  const headers = {
+    users: ['#','昵称','用户名','ID','等级','头衔','楼层','楼中楼','合计'],
+    floors: ['楼层','昵称','用户名','ID','等级','头衔','内容'],
+    comments: ['所在楼层','回复者','用户名','ID','等级','内容']
+  }[gridKind];
+  const head = $('gridHead'); head.innerHTML = '';
+  const tr = document.createElement('tr');
+  for (const h of headers) tr.appendChild(el('th', h));
+  head.appendChild(tr);
+  fillTable($('gridBody'), data.rows || [], (row) => ({cells: row}));
+}
+document.querySelectorAll('.gridKind').forEach(btn => btn.onclick = () => {
+  gridKind = btn.dataset.kind;
+  document.querySelectorAll('.gridKind').forEach(b => b.classList.toggle('btn', b === btn));
+  loadGrid();
+});
+
+async function doLookup() {
+  const params = new URLSearchParams({
+    mode: $('lookupMode').value, q: $('lookupQuery').value.trim(),
+    count: $('lookupCount').value || '50',
+    start: $('lookupStart').value || '', end: $('lookupEnd').value || ''
+  });
+  $('lookupInfo').textContent = '查询中…';
+  const data = await api('/api/lookup?' + params.toString());
+  if (!data.ok) { $('lookupInfo').textContent = data.error || '查询失败'; $('lookupForums').innerHTML=''; $('lookupPosts').innerHTML=''; return; }
+  const bits = [`昵称 <b>${data.nickname || data.username || '-'}</b>`, `用户名 <b>${data.username || '-'}</b>`, `ID <b>${data.user_id || '-'}</b>`];
+  if (data.fans != null) bits.push(`粉丝 ${data.fans}`);
+  if (data.concern != null) bits.push(`关注数 ${data.concern}`);
+  if (data.post_num) bits.push(`发帖 ${data.post_num}`);
+  if (data.hidden) bits.push('<span style="color:#b45309">⚠ 关注列表隐藏</span>');
+  $('lookupInfo').innerHTML = bits.join(' · ');
+  fillTable($('lookupForums'), data.forums || [], (f) => ({cells:[f.name, f.level ? 'Lv.'+f.level : '-'], cls: rowClass(f.name)}));
+  fillTable($('lookupPosts'), data.posts || [], (p) => ({cells:[p.time, p.type, p.bar, p.title, p.content], cls: rowClass(p.bar),
+    onclick: () => p.url && window.open(p.url, '_blank')}));
+}
+
+async function loadSettings() {
+  blacklist = await api('/api/blacklist');
+  $('blBan').value = (blacklist.ban || []).join('\n');
+  $('blWarn').value = (blacklist.warn || []).join('\n');
+  $('blSafe').value = (blacklist.safe || []).join('\n');
+  const settings = await api('/api/settings');
+  $('colorForum').checked = settings.color_forum !== false;
+  $('colorPosts').checked = settings.color_posts !== false;
+}
+async function saveBlacklist() {
+  const data = {
+    ban: $('blBan').value.split('\n').map(s => s.trim()).filter(Boolean),
+    warn: $('blWarn').value.split('\n').map(s => s.trim()).filter(Boolean),
+    safe: $('blSafe').value.split('\n').map(s => s.trim()).filter(Boolean)
+  };
+  const result = await api('/api/blacklist', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(data)});
+  if (result.ok) { blacklist = data; alert('已保存'); } else alert('保存失败');
+}
+async function saveWebSettings() {
+  await api('/api/settings', {method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({color_forum: $('colorForum').checked, color_posts: $('colorPosts').checked})});
+  alert('已保存');
+}
+
+document.querySelectorAll('nav button').forEach(btn => btn.onclick = () => switchTab(btn.dataset.tab));
+$('saveCookie').onclick = saveCookie;
+$('startBtn').onclick = startJob;
+$('stopBtn').onclick = stopJob;
+$('exportBtn').onclick = () => { window.location.href = '/api/export'; };
+$('reloadPeople').onclick = loadPeople;
+$('lookupBtn').onclick = doLookup;
+$('saveBlacklist').onclick = saveBlacklist;
+$('saveSettings').onclick = saveWebSettings;
+
+loadCookie();
+api('/api/blacklist').then(d => { blacklist = d; }).catch(() => {});
+loadStatus();
+setInterval(loadStatus, 1500);
+</script>
+</body>
+</html>

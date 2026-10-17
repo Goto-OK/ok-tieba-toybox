@@ -1,0 +1,47 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "tieba-reply-stats"
+version = "1.2.0"
+description = "抓取百度贴吧楼层与楼中楼，按用户统计并导出 Excel"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "tieba-reply-stats contributors" }]
+keywords = ["tieba", "baidu", "scraper", "excel"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: Microsoft :: Windows",
+    "Topic :: Utilities",
+]
+dependencies = [
+    "openpyxl>=3.1",
+    "lxml>=4.9",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8",
+    "ruff>=0.6",
+]
+
+[project.scripts]
+tieba-stats = "tieba_reply_stats.cli:main"
+tieba-stats-gui = "tieba_gui:main"
+
+[tool.setuptools]
+py-modules = ["tieba_gui"]
+
+[tool.setuptools.packages.find]
+include = ["tieba_reply_stats*"]
+
+[tool.ruff]
+line-length = 110
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I"]
+ignore = ["E501"]
