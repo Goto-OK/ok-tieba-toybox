@@ -4,13 +4,15 @@
 
 - 采用语义化版本：`MAJOR.MINOR.PATCH`；
 - 用户可见功能 → MINOR；修复 → PATCH；
-- 版本号当前写在 `tieba_gui.py` 的 `VERSION`，同时更新
-  `assets/version_info.txt`（P1 计划收敛为单一来源）。
+- 版本号只有一个来源：`tieba_reply_stats/version.py` 的 `__version__`；
+- `pyproject.toml` 动态读取该值；
+- `assets/version_info.txt` 由 `scripts/write_version_info.py` 生成（构建脚本会自动调用）。
 
 ## 2. 发布前检查
 
 ```bash
 python -m compileall tieba_reply_stats tieba_gui.py
+python -m pytest
 python tests/selftest.py
 ```
 

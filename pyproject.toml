@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "tieba-reply-stats"
-version = "1.2.0"
+dynamic = ["version"]
 description = "抓取百度贴吧楼层与楼中楼，按用户统计并导出 Excel"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -35,6 +35,9 @@ tieba-stats-gui = "tieba_gui:main"
 [tool.setuptools]
 py-modules = ["tieba_gui"]
 
+[tool.setuptools.dynamic]
+version = { attr = "tieba_reply_stats.version.__version__" }
+
 [tool.setuptools.packages.find]
 include = ["tieba_reply_stats*"]
 
@@ -45,3 +48,7 @@ target-version = "py310"
 [tool.ruff.lint]
 select = ["E", "F", "W", "I"]
 ignore = ["E501"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"

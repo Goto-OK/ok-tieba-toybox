@@ -20,8 +20,7 @@ from .fetch import (
     parse_cookie_input,
 )
 from .models import ThreadData
-
-VERSION = "1.0.0"
+from .version import __version__ as VERSION
 
 
 def build_parser() -> argparse.ArgumentParser:

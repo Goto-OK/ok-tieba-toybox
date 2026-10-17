@@ -236,8 +236,15 @@ def _parse_comments(post: bytes, floor: Dict, thread: Dict, users: Dict[str, Dic
     return result
 
 
-def _request(fetcher, tid: str, pn: int, rn: int, with_comments: bool, comment_rn: int) -> bytes:
-    bduss = fetcher.cookie_dict().get("BDUSS", "") if fetcher is not None else ""
+def build_request(
+    tid: str,
+    pn: int = 1,
+    rn: int = 30,
+    with_comments: bool = True,
+    comment_rn: int = 10,
+    bduss: str = "",
+) -> bytes:
+    """Encode PbPageReqIdl bytes (without the multipart wrapper)."""
     common = b"".join([
         _fv(1, 2),
         _fb(2, CLIENT_VERSION),
@@ -255,7 +262,12 @@ def _request(fetcher, tid: str, pn: int, rn: int, with_comments: bool, comment_r
         _fv(18, pn),
         _fv(74, 0),
     ])
-    payload = _fb(1, data)
+    return _fb(1, data)
+
+
+def _request(fetcher, tid: str, pn: int, rn: int, with_comments: bool, comment_rn: int) -> bytes:
+    bduss = fetcher.cookie_dict().get("BDUSS", "") if fetcher is not None else ""
+    payload = build_request(tid, pn, rn, with_comments, comment_rn, bduss)
     boundary = "-*_r1999"
     body = (
         f"--{boundary}\r\n"
@@ -277,6 +289,11 @@ def _request(fetcher, tid: str, pn: int, rn: int, with_comments: bool, comment_r
 def fetch_page(fetcher, tid: str, pn: int = 1, with_comments: bool = True,
                rn: int = 30, comment_rn: int = 10) -> Dict:
     raw = _request(fetcher, tid, pn, rn, with_comments, comment_rn)
+    return parse_response(raw, with_comments)
+
+
+def parse_response(raw: bytes, with_comments: bool = True) -> Dict:
+    """Decode a PbPageResIdl response into a plain dict."""
     error = _msg(raw, 1) or b""
     code = _num(error, 1)
     if code:

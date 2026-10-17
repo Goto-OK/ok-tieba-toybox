@@ -1,4 +1,4 @@
-﻿VSVersionInfo(
+VSVersionInfo(
   ffi=FixedFileInfo(
     filevers=(1, 2, 0, 0),
     prodvers=(1, 2, 0, 0),
@@ -29,23 +29,3 @@
     VarFileInfo([VarStruct('Translation', [2052, 1200])])
   ]
 )
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

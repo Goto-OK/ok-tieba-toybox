@@ -22,13 +22,14 @@ $ErrorActionPreference = "Stop"
 $Root = Split-Path -Parent $PSScriptRoot
 $Gui = Join-Path $Root "tieba_gui.py"
 $Assets = Join-Path $Root "assets"
+$VersionFile = Join-Path $Root "tieba_reply_stats\version.py"
 
 if (-not $Version) {
-    $text = Get-Content -LiteralPath $Gui -Raw -Encoding UTF8
-    if ($text -match 'VERSION\s*=\s*"([^"]+)"') {
+    $text = Get-Content -LiteralPath $VersionFile -Raw -Encoding UTF8
+    if ($text -match '__version__\s*=\s*"([^"]+)"') {
         $Version = $Matches[1]
     } else {
-        throw "无法从 tieba_gui.py 读取 VERSION"
+        throw "无法从 tieba_reply_stats/version.py 读取版本号"
     }
 }
 if (-not $Python) {
@@ -53,6 +54,9 @@ if (-not (Test-Path -LiteralPath $VenvPython)) {
 }
 & $VenvPython -m pip install --disable-pip-version-check --no-input --quiet pyinstaller
 if ($LASTEXITCODE -ne 0) { throw "安装 PyInstaller 失败" }
+
+& $VenvPython (Join-Path $Root "scripts\write_version_info.py")
+if ($LASTEXITCODE -ne 0) { throw "生成 version_info 失败" }
 
 Write-Host "[2/5] 构建 exe（版本 $Version）"
 & $VenvPython -m PyInstaller --noconfirm --clean --onedir --windowed `
@@ -93,3 +97,4 @@ if ($UpdateShortcut) {
 }
 
 Write-Host "完成：$Output"
+exit 0

@@ -44,8 +44,9 @@ from tieba_reply_stats.export import export_workbook
 from tieba_reply_stats.fetch import CaptchaError, Fetcher, FetchError, ThreadGoneError, parse_cookie_input
 from tieba_reply_stats.profile import fetch_user_profile, resolve_user
 
+from tieba_reply_stats.version import __version__ as VERSION
+
 APP_TITLE = "贴吧楼层回复统计"
-VERSION = "1.2.0"
 
 _EMOJI_CODE_RE = re.compile(r"\[U\+([0-9A-Fa-f]{4,6})\]")
 

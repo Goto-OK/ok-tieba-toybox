@@ -100,7 +100,7 @@ def _text(data: bytes, number: int) -> Optional[str]:
         return value.decode("gb18030", "replace")
 
 
-def _build_request(uid: int, bduss: str) -> bytes:
+def build_request(uid: int, bduss: str) -> bytes:
     common = b"".join([
         _fv(1, 2),
         _fb(2, CLIENT_VERSION),
@@ -127,7 +127,7 @@ def fetch_profile(fetcher, uid: str) -> Dict:
     if not bduss:
         return {}
     boundary = "----tbpb" + uuid.uuid4().hex
-    payload = _build_request(uid_int, bduss)
+    payload = build_request(uid_int, bduss)
     body = (
         f"--{boundary}\r\n"
         'Content-Disposition: form-data; name="data"; filename="blob"\r\n'
@@ -147,7 +147,12 @@ def fetch_profile(fetcher, uid: str) -> Dict:
             raw = response.read()
     except Exception:  # noqa: BLE001
         return {}
-    if raw[:1] == b"{":
+    return parse_response(raw)
+
+
+def parse_response(raw: bytes) -> Dict:
+    """Decode a ProfileResIdl response; {} when it is not a profile."""
+    if not raw or raw[:1] == b"{":
         return {}
     data = None
     for number, wire, value in _fields(raw):

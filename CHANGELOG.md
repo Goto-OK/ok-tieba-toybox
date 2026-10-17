@@ -2,6 +2,17 @@
 
 本项目从 1.0.6 起按版本记录；更早的迭代未系统留档。
 
+## [Unreleased]
+
+### 工程
+
+- 新增 `pytest` 测试：页面/protobuf 解析、黑名单、版本一致性；
+- `page_pb` / `profile_pb` / `userpost_pb` 拆出 `build_request` 与
+  `parse_response`，可以离线测试二进制协议；
+- 版本号收敛到 `tieba_reply_stats/version.py`，`pyproject.toml` 动态读取，
+  `assets/version_info.txt` 由 `scripts/write_version_info.py` 生成；
+- 构建脚本自动读取版本并生成 version_info。
+
 ## [1.2.0] - 2026-10-18
 
 ### 新增

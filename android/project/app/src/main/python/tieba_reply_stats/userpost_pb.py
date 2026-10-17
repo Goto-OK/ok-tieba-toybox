@@ -117,13 +117,14 @@ def _content_text(post: bytes) -> str:
     return text
 
 
-def _request(fetcher, uid: int, pn: int, rn: int = 20, is_thread: int = 1) -> bytes:
-    bduss = fetcher.cookie_dict().get("BDUSS", "")
+def build_request(uid: int, pn: int = 1, rn: int = 20, is_thread: int = 1, bduss: str = "") -> bytes:
+    """Encode UserPostReqIdl bytes (without the multipart wrapper)."""
     common = b"".join([
         _fv(1, 2),
         _fb(2, CLIENT_VERSION),
-        _fb(10, bduss.encode()),
     ])
+    if bduss:
+        common += _fb(10, bduss.encode())
     data = b"".join([
         _fv(1, uid),
         _fv(2, rn),
@@ -133,7 +134,12 @@ def _request(fetcher, uid: int, pn: int, rn: int = 20, is_thread: int = 1) -> by
         _fv(33, 0),
         _fb(27, common),
     ])
-    payload = _fb(1, data)
+    return _fb(1, data)
+
+
+def _request(fetcher, uid: int, pn: int, rn: int = 20, is_thread: int = 1) -> bytes:
+    bduss = fetcher.cookie_dict().get("BDUSS", "")
+    payload = build_request(uid, pn, rn, is_thread, bduss)
     boundary = "----tbp" + uuid.uuid4().hex
     body = (
         f"--{boundary}\r\n"
@@ -153,7 +159,7 @@ def _request(fetcher, uid: int, pn: int, rn: int = 20, is_thread: int = 1) -> by
         return response.read()
 
 
-def _parse(raw: bytes) -> List[Dict]:
+def parse_response(raw: bytes) -> List[Dict]:
     data = None
     for number, wire, value in _fields(raw):
         if number == 2 and wire == 2:
@@ -198,7 +204,7 @@ def fetch_user_threads(fetcher, uid: str, max_pages: int = 3) -> List[Dict]:
             raw = _request(fetcher, uid_int, pn)
         except Exception:  # noqa: BLE001
             break
-        page = _parse(raw)
+        page = parse_response(raw)
         if not page:
             break
         for post in page:

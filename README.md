@@ -107,10 +107,15 @@ tieba-reply-stats/
 
 ```bash
 pip install -r requirements.txt
-python tests/selftest.py          # 离线自测
-python tieba_gui.py               # 桌面 GUI
-python tieba_stats.py --help      # CLI
+pip install pytest                 # 或 pip install -e ".[dev]"
+python -m pytest                   # 单元测试（离线）
+python tests/selftest.py           # 端到端自测（离线 fixtures）
+python tieba_gui.py                # 桌面 GUI
+python tieba_stats.py --help       # CLI
 ```
+
+版本号只有一个来源：`tieba_reply_stats/version.py` 的 `__version__`；
+`pyproject.toml` 动态读取，`assets/version_info.txt` 由构建脚本生成。
 
 依赖：`openpyxl`、`lxml`（Android 使用自带的 `lxml.html` 兼容层，基于 BeautifulSoup）。
 
