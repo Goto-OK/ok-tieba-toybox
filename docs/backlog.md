@@ -14,13 +14,15 @@
 
 规范已完成并提交：`docs: define explicit guest/login modes and guest light rules`。
 
+核心已完成：`b77a8f8 feat: add explicit guest/login mode to collection core`（25 个测试通过）。
+
 ### 核心
 
-- [ ] `CollectOptions` 增加 `mode`（`guest` / `login`），`ThreadData.meta` 记录本次模式
-- [ ] `collect_thread` 去掉“无 BDUSS 自动走匿名”的隐式分流，改为按 `mode` 分支
-- [ ] 登录模式缺 `BDUSS` 直接报错，不降级
-- [ ] 免登录模式不读取、不发送 Cookie
-- [ ] 免登录楼中楼维持每层前 10 条，登录模式走完整楼中楼
+- [x] `CollectOptions` 增加 `mode`（`guest` / `login`），`ThreadData.meta` 记录本次模式
+- [x] `collect_thread` 去掉“无 BDUSS 自动走匿名”的隐式分流，改为按 `mode` 分支
+- [x] 登录模式缺 `BDUSS` 直接报错，不降级
+- [x] 免登录模式不读取、不发送 Cookie
+- [x] 免登录楼中楼维持每层前 10 条，登录模式走完整楼中楼
 
 ### 桌面 GUI
 
@@ -65,8 +67,8 @@
 
 ### 测试
 
-- [ ] 登录模式无 Cookie 报错、不降级
-- [ ] 免登录忽略 Cookie
+- [x] 登录模式无 Cookie 报错、不降级
+- [x] 免登录忽略 Cookie
 - [ ] 免登录红绿灯只使用发言吧，不产生黄灯
 - [ ] 登录红绿灯隐藏关注标黄规则不回归
 - [ ] 设置持久化模式
