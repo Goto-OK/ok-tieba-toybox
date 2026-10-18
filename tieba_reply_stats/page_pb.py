@@ -75,13 +75,13 @@ def _fields(data: bytes):
             value, index = _read_varint(data, index)
         elif wire == 2:
             length, index = _read_varint(data, index)
-            value = data[index:index + length]
+            value = data[index : index + length]
             index += length
         elif wire == 5:
-            value = data[index:index + 4]
+            value = data[index : index + 4]
             index += 4
         elif wire == 1:
-            value = data[index:index + 8]
+            value = data[index : index + 8]
             index += 8
         else:
             return
@@ -218,20 +218,22 @@ def _parse_comments(post: bytes, floor: Dict, thread: Dict, users: Dict[str, Dic
         match = REPLY_PREFIX_RE.match(text)
         if match:
             reply_to = match.group(1).strip()
-            text = text[match.end():].lstrip()
-        result.append({
-            "floor_no": floor["post_no"],
-            "pid": str(_num(sub, 1) or ""),
-            "author": author_info.get("nickname") or author_info.get("username") or "匿名用户",
-            "author_name": author_info.get("username") or "",
-            "author_id": uid,
-            "portrait": author_info.get("portrait") or "",
-            "time": _num(sub, 3),
-            "content": text,
-            "reply_to": reply_to,
-            "level": author_info.get("level") or 0,
-            "is_op": bool(uid and uid == thread.get("author_id")),
-        })
+            text = text[match.end() :].lstrip()
+        result.append(
+            {
+                "floor_no": floor["post_no"],
+                "pid": str(_num(sub, 1) or ""),
+                "author": author_info.get("nickname") or author_info.get("username") or "匿名用户",
+                "author_name": author_info.get("username") or "",
+                "author_id": uid,
+                "portrait": author_info.get("portrait") or "",
+                "time": _num(sub, 3),
+                "content": text,
+                "reply_to": reply_to,
+                "level": author_info.get("level") or 0,
+                "is_op": bool(uid and uid == thread.get("author_id")),
+            }
+        )
     return result
 
 
@@ -244,23 +246,27 @@ def build_request(
     bduss: str = "",
 ) -> bytes:
     """Encode PbPageReqIdl bytes (without the multipart wrapper)."""
-    common = b"".join([
-        _fv(1, 2),
-        _fb(2, CLIENT_VERSION),
-    ])
+    common = b"".join(
+        [
+            _fv(1, 2),
+            _fb(2, CLIENT_VERSION),
+        ]
+    )
     if bduss:
         common += _fb(10, bduss.encode())
-    data = b"".join([
-        _fb(25, common),
-        _fv(4, int(tid)),
-        _fv(5, 0),
-        _fv(6, 0),
-        _fv(8, 1 if with_comments else 0),
-        _fv(9, comment_rn),
-        _fv(13, rn),
-        _fv(18, pn),
-        _fv(74, 0),
-    ])
+    data = b"".join(
+        [
+            _fb(25, common),
+            _fv(4, int(tid)),
+            _fv(5, 0),
+            _fv(6, 0),
+            _fv(8, 1 if with_comments else 0),
+            _fv(9, comment_rn),
+            _fv(13, rn),
+            _fv(18, pn),
+            _fv(74, 0),
+        ]
+    )
     return _fb(1, data)
 
 
@@ -269,9 +275,10 @@ def _request(fetcher, tid: str, pn: int, rn: int, with_comments: bool, comment_r
     payload = build_request(tid, pn, rn, with_comments, comment_rn, bduss)
     boundary = "-*_r1999"
     body = (
-        f"--{boundary}\r\n"
-        'Content-Disposition: form-data; name="data"; filename="file"\r\n\r\n'
-    ).encode() + payload + f"\r\n--{boundary}--\r\n".encode()
+        (f'--{boundary}\r\nContent-Disposition: form-data; name="data"; filename="file"\r\n\r\n').encode()
+        + payload
+        + f"\r\n--{boundary}--\r\n".encode()
+    )
     request = urllib.request.Request(
         PAGE_URL,
         data=body,
@@ -285,8 +292,9 @@ def _request(fetcher, tid: str, pn: int, rn: int, with_comments: bool, comment_r
         return response.read()
 
 
-def fetch_page(fetcher, tid: str, pn: int = 1, with_comments: bool = True,
-               rn: int = 30, comment_rn: int = 10) -> Dict:
+def fetch_page(
+    fetcher, tid: str, pn: int = 1, with_comments: bool = True, rn: int = 30, comment_rn: int = 10
+) -> Dict:
     raw = _request(fetcher, tid, pn, rn, with_comments, comment_rn)
     return parse_response(raw, with_comments)
 
@@ -356,34 +364,38 @@ def collect_thread_anon(url: str, fetcher, options) -> ThreadData:
             if not row["post_no"] or row["pid"] in seen_floors:
                 continue
             seen_floors.add(row["pid"])
-            floors.append(Floor(
-                post_no=row["post_no"],
-                pid=row["pid"],
-                author=row["author"],
-                author_name=row["author_name"],
-                author_id=row["author_id"],
-                portrait=row["portrait"],
-                posted_at=_to_datetime(row["time"]),
-                content=row["content"],
-                reply_num=row["reply_num"],
-                is_op=row["is_op"],
-                level=str(row["level"]) if row["level"] else "",
-            ))
+            floors.append(
+                Floor(
+                    post_no=row["post_no"],
+                    pid=row["pid"],
+                    author=row["author"],
+                    author_name=row["author_name"],
+                    author_id=row["author_id"],
+                    portrait=row["portrait"],
+                    posted_at=_to_datetime(row["time"]),
+                    content=row["content"],
+                    reply_num=row["reply_num"],
+                    is_op=row["is_op"],
+                    level=str(row["level"]) if row["level"] else "",
+                )
+            )
         for row in data["comments"]:
-            comments.append(Comment(
-                floor_no=row["floor_no"],
-                floor_author="",
-                pid=row["pid"],
-                author=row["author"],
-                author_name=row["author_name"],
-                author_id=row["author_id"],
-                portrait=row["portrait"],
-                posted_at=_to_datetime(row["time"]),
-                content=row["content"],
-                reply_to=row["reply_to"],
-                is_op=row["is_op"],
-                level=str(row["level"]) if row["level"] else "",
-            ))
+            comments.append(
+                Comment(
+                    floor_no=row["floor_no"],
+                    floor_author="",
+                    pid=row["pid"],
+                    author=row["author"],
+                    author_name=row["author_name"],
+                    author_id=row["author_id"],
+                    portrait=row["portrait"],
+                    posted_at=_to_datetime(row["time"]),
+                    content=row["content"],
+                    reply_to=row["reply_to"],
+                    is_op=row["is_op"],
+                    level=str(row["level"]) if row["level"] else "",
+                )
+            )
 
     if options.log:
         options.log(f"  游客模式：{meta.forum or '?'} · {meta.title or tid}")
@@ -410,5 +422,3 @@ def collect_thread_anon(url: str, fetcher, options) -> ThreadData:
     if options.log:
         options.log(f"  完成：{len(floors)} 楼 / {len(comments)} 条楼中楼（游客模式，每层最多 10 条）")
     return ThreadData(meta=meta, floors=floors, comments=comments)
-
-

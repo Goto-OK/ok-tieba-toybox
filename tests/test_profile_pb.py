@@ -5,17 +5,19 @@ from tieba_reply_stats.profile_pb import _fb, _fv, _msg, _num, _text
 def _user_blob() -> bytes:
     priv = _fv(2, 3)  # like=3 -> hidden
     like_forum = _fb(1, "测试吧".encode()) + _fv(2, 99)
-    return b"".join([
-        _fv(2, 1001),
-        _fb(3, "alice".encode()),
-        _fb(4, "Alice".encode()),
-        _fb(5, "tb.1.abc?t=123".encode()),
-        _fv(30, 11),
-        _fv(31, 22),
-        _fv(37, 33),
-        _fb(45, priv),
-        _fb(47, like_forum),
-    ])
+    return b"".join(
+        [
+            _fv(2, 1001),
+            _fb(3, "alice".encode()),
+            _fb(4, "Alice".encode()),
+            _fb(5, "tb.1.abc?t=123".encode()),
+            _fv(30, 11),
+            _fv(31, 22),
+            _fv(37, 33),
+            _fb(45, priv),
+            _fb(47, like_forum),
+        ]
+    )
 
 
 def build_response() -> bytes:

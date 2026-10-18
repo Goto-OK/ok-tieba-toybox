@@ -35,8 +35,10 @@ def load_blacklist() -> Dict[str, List[str]]:
 
 
 def save_blacklist(data: Dict[str, List[str]]) -> bool:
-    payload = {key: [str(item).strip() for item in (data.get(key) or []) if str(item).strip()]
-               for key in ("safe", "warn", "ban")}
+    payload = {
+        key: [str(item).strip() for item in (data.get(key) or []) if str(item).strip()]
+        for key in ("safe", "warn", "ban")
+    }
     try:
         os.makedirs(APP_DIR, exist_ok=True)
         with open(CONFIG_PATH, "w", encoding="utf-8") as handle:
@@ -74,11 +76,18 @@ def classify(bars: List[str], data: Dict[str, List[str]]) -> Tuple[str, str]:
 def marker(level: str) -> str:
     return {"ban": "🔴", "warn": "🟡", "safe": "🟢"}.get(level, "⚪")
 
+
 CATEGORY_LABELS = {"safe": "安全", "warn": "警告", "ban": "禁止"}
 LABEL_TO_KEY = {
-    "安全": "safe", "警告": "warn", "禁止": "ban",
-    "safe": "safe", "warn": "warn", "ban": "ban",
-    "绿": "safe", "黄": "warn", "红": "ban",
+    "安全": "safe",
+    "警告": "warn",
+    "禁止": "ban",
+    "safe": "safe",
+    "warn": "warn",
+    "ban": "ban",
+    "绿": "safe",
+    "黄": "warn",
+    "红": "ban",
 }
 
 

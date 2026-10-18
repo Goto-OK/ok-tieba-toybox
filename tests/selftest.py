@@ -73,7 +73,7 @@ def test_helpers():
     cookies = parse_cookie_input("BDUSS=abc; STOKEN=def=ghi; ")
     check(cookies == {"BDUSS": "abc", "STOKEN": "def=ghi"}, f"cookie 解析：{cookies}")
     check(parse_datetime("2024-05-01 10:00").hour == 10, "日期解析")
-    check(strip_html("a<br>b<img class=\"BDE_Smiley\" alt=\"哈哈\">") == "a\nb哈哈", "HTML 清洗")
+    check(strip_html('a<br>b<img class="BDE_Smiley" alt="哈哈">') == "a\nb哈哈", "HTML 清洗")
 
 
 def test_collect():
@@ -87,14 +87,23 @@ def test_collect():
     check(len(thread.comments) == 15, f"楼中楼数：{len(thread.comments)}")
 
     floors = {f.post_no: f for f in thread.floors}
-    check(floors[1].author == "小A" and floors[1].author_name == "用户A" and floors[1].is_op, "1 楼昵称/用户名/楼主")
+    check(
+        floors[1].author == "小A" and floors[1].author_name == "用户A" and floors[1].is_op,
+        "1 楼昵称/用户名/楼主",
+    )
     check(floors[1].reply_num == 12, f"1 楼 comment_num：{floors[1].reply_num}")
-    check(floors[1].level == "12" and floors[1].badge == "知名人士", f"1 楼等级/头衔：{floors[1].level!r}/{floors[1].badge!r}")
+    check(
+        floors[1].level == "12" and floors[1].badge == "知名人士",
+        f"1 楼等级/头衔：{floors[1].level!r}/{floors[1].badge!r}",
+    )
     check(floors[1].posted_at is not None and floors[1].posted_at.hour == 10, "1 楼时间（从 tail-info 取）")
     check(floors[2].content == "> 引用内容\n回复内容哈哈", f"2 楼正文：{floors[2].content!r}")
     check(floors[3].content == "=1+1", f"3 楼正文：{floors[3].content!r}")
     check(floors[6].author == "匿名用户", f"6 楼作者：{floors[6].author!r}")
-    check(floors[5].author == "小A" and floors[5].author_name == "用户A", f"5 楼昵称/用户名：{floors[5].author!r}/{floors[5].author_name!r}")
+    check(
+        floors[5].author == "小A" and floors[5].author_name == "用户A",
+        f"5 楼昵称/用户名：{floors[5].author!r}/{floors[5].author_name!r}",
+    )
 
     # 1 楼应抓满 12 条（totalComment 10 条 + /p/comment 补 2 条）
     floor1_comments = [c for c in thread.comments if c.floor_no == 1]
@@ -108,7 +117,10 @@ def test_collect():
 
     stats = {s["name"]: s for s in thread.user_stats()}
     check(stats["用户B"]["total"] == 11, f"用户B 合计：{stats['用户B']['total']}")
-    check(stats["小A"]["total"] == 3 and stats["小A"]["username"] == "用户A", f"用户A 合计/用户名：{stats['小A']}")
+    check(
+        stats["小A"]["total"] == 3 and stats["小A"]["username"] == "用户A",
+        f"用户A 合计/用户名：{stats['小A']}",
+    )
     check(stats["用户C"]["total"] == 2, f"用户C 合计：{stats['用户C']['total']}")
     check(stats["用户D"]["total"] == 2, "用户D 合计")
     check(stats["用户E"]["total"] == 2, "用户E 合计")
@@ -131,7 +143,10 @@ def test_parse_fallback():
     comments, _has_next = parse_comments_page(payload, floor)
     check(len(comments) == 2, f"兜底解析数量：{len(comments)}")
     check(comments[0].author == "小A", f"兜底解析作者：{comments[0].author!r}")
-    check(comments[0].content == "谢谢分享" and comments[0].reply_to == "用户B", f"兜底解析内容：{comments[0].content!r}")
+    check(
+        comments[0].content == "谢谢分享" and comments[0].reply_to == "用户B",
+        f"兜底解析内容：{comments[0].content!r}",
+    )
 
 
 def test_export(render: bool):

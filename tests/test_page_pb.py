@@ -33,8 +33,14 @@ def _post(pid: int, floor: int, uid: int, text: str, sub: bytes = b"") -> bytes:
 
 
 def build_response() -> bytes:
-    sub = _fb(2, _fb(2, _content("回复 Bob : 你好")) + _fv(1, 222) + _fv(4, 1002)
-              + _fv(3, 1700000001) + _fb(7, _user(1002, "bob", "Bob", 5)))
+    sub = _fb(
+        2,
+        _fb(2, _content("回复 Bob : 你好"))
+        + _fv(1, 222)
+        + _fv(4, 1002)
+        + _fv(3, 1700000001)
+        + _fb(7, _user(1002, "bob", "Bob", 5)),
+    )
     thread = (
         _fv(1, 123)
         + _fb(3, "测试标题".encode())
@@ -48,14 +54,16 @@ def build_response() -> bytes:
         + _fb(142, _content("首楼内容"))
     )
     page = _fv(3, 1) + _fv(5, 3)
-    data = b"".join([
-        _fb(2, _fb(2, "测试吧".encode())),
-        _fb(3, page),
-        _fb(6, _post(111, 1, 1001, "主楼", sub)),
-        _fb(8, thread),
-        _fb(13, _user(1001, "alice", "Alice", 7)),
-        _fb(13, _user(1002, "bob", "Bob", 5)),
-    ])
+    data = b"".join(
+        [
+            _fb(2, _fb(2, "测试吧".encode())),
+            _fb(3, page),
+            _fb(6, _post(111, 1, 1001, "主楼", sub)),
+            _fb(8, thread),
+            _fb(13, _user(1001, "alice", "Alice", 7)),
+            _fb(13, _user(1002, "bob", "Bob", 5)),
+        ]
+    )
     return _fb(2, data)
 
 

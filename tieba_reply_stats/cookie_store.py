@@ -44,8 +44,13 @@ def _protect(data: bytes) -> Optional[bytes]:
     blob_entropy, _keep_entropy = _make_blob(ENTROPY)
     blob_out = _Blob()
     ok = crypt32.CryptProtectData(
-        ctypes.byref(blob_in), "TiebaReplyStats", ctypes.byref(blob_entropy),
-        None, None, CRYPTPROTECT_UI_FORBIDDEN, ctypes.byref(blob_out),
+        ctypes.byref(blob_in),
+        "TiebaReplyStats",
+        ctypes.byref(blob_entropy),
+        None,
+        None,
+        CRYPTPROTECT_UI_FORBIDDEN,
+        ctypes.byref(blob_out),
     )
     if not ok:
         return None
@@ -64,8 +69,13 @@ def _unprotect(data: bytes) -> Optional[bytes]:
     blob_entropy, _keep_entropy = _make_blob(ENTROPY)
     blob_out = _Blob()
     ok = crypt32.CryptUnprotectData(
-        ctypes.byref(blob_in), None, ctypes.byref(blob_entropy),
-        None, None, CRYPTPROTECT_UI_FORBIDDEN, ctypes.byref(blob_out),
+        ctypes.byref(blob_in),
+        None,
+        ctypes.byref(blob_entropy),
+        None,
+        None,
+        CRYPTPROTECT_UI_FORBIDDEN,
+        ctypes.byref(blob_out),
     )
     if not ok:
         return None

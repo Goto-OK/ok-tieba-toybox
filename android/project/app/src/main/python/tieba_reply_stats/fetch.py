@@ -304,7 +304,7 @@ class Fetcher:
                 last_error = error
                 if self.verbose:
                     print(f"    [retry {attempt}/{self.retries}] {error}")
-                time.sleep(min(2 ** attempt, 8))
+                time.sleep(min(2**attempt, 8))
                 continue
 
             text = self._decode(body, headers)
@@ -313,7 +313,7 @@ class Fetcher:
             if status in (403, 412) or response.looks_like_captcha():
                 raise CaptchaError(
                     "请求被百度安全验证拦截（当前网络 IP 可能被判定为异常）。"
-                    "请用浏览器打开该帖子，登录后复制 Cookie 再重试：--cookie \"你的Cookie\"。"
+                    '请用浏览器打开该帖子，登录后复制 Cookie 再重试：--cookie "你的Cookie"。'
                 )
             if status == 404:
                 raise ThreadGoneError(f"页面不存在（HTTP 404）：{url}")
@@ -321,7 +321,7 @@ class Fetcher:
                 last_error = FetchError(f"HTTP {status}")
                 if self.verbose:
                     print(f"    [retry {attempt}/{self.retries}] HTTP {status}")
-                time.sleep(min(2 ** attempt, 8))
+                time.sleep(min(2**attempt, 8))
                 continue
             if status >= 400:
                 raise FetchError(f"HTTP {status}：{url}")
@@ -361,14 +361,14 @@ class Fetcher:
                 raw, status, resp_headers = self._fetch_bytes(url, headers, body)
             except FetchError as error:
                 last_error = error
-                time.sleep(min(2 ** attempt, 8))
+                time.sleep(min(2**attempt, 8))
                 continue
             response = Response(self._decode(raw, resp_headers), url, status)
             if status in (403, 412) or response.looks_like_captcha():
                 raise CaptchaError("请求被百度安全验证拦截，请更新 Cookie 后重试。")
             if status >= 500:
                 last_error = FetchError(f"HTTP {status}")
-                time.sleep(min(2 ** attempt, 8))
+                time.sleep(min(2**attempt, 8))
                 continue
             if status >= 400:
                 raise FetchError(f"HTTP {status}：{url}")

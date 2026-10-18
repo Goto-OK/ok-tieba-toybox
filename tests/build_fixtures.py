@@ -23,8 +23,20 @@ def field(attrs: dict) -> str:
     return html.escape(json.dumps(attrs, ensure_ascii=False), quote=True)
 
 
-def post_html(*, post_no, pid, user_id, user_name, date, comment_num=0, is_lz=0,
-              content="", level="", badge="", nickname="") -> str:
+def post_html(
+    *,
+    post_no,
+    pid,
+    user_id,
+    user_name,
+    date,
+    comment_num=0,
+    is_lz=0,
+    content="",
+    level="",
+    badge="",
+    nickname="",
+) -> str:
     data = {
         "author": {"user_id": user_id, "user_name": user_name, "user_nickname": nickname or user_name},
         "content": {
@@ -91,12 +103,12 @@ var PageData = {{"forum":{{"id":{FID},"name":"{FORUM}"}},"thread":{{"id":{TID},"
 def comment_html_item(spid, showname, user_name, text, when) -> str:
     data = {"spid": spid, "showname": showname, "user_name": user_name, "portrait": "tb.1.xx"}
     return (
-        f'<li class="lzl_single_post j_lzl_s_p" data-field=\'{field(data)}\'>'
+        f"<li class=\"lzl_single_post j_lzl_s_p\" data-field='{field(data)}'>"
         f'<a name="{spid}"></a>'
         f'<a class="at j_user_card" username="{user_name}">{showname}</a>:'
         f'<span class="lzl_content_main">{text}</span>'
         f'<div class="lzl_content_reply"><span class="lzl_time">{when}</span></div>'
-        f'</li>'
+        f"</li>"
     )
 
 
@@ -109,13 +121,21 @@ def total_json(post_comments: dict) -> str:
     for pid, comments in post_comments.items():
         infos = []
         for cid, user_id, username, showname, content, now_time in comments:
-            infos.append({
-                "comment_id": int(cid), "user_id": user_id, "username": username,
-                "show_nickname": showname, "content": content, "now_time": now_time,
-                "post_id": int(pid),
-            })
+            infos.append(
+                {
+                    "comment_id": int(cid),
+                    "user_id": user_id,
+                    "username": username,
+                    "show_nickname": showname,
+                    "content": content,
+                    "now_time": now_time,
+                    "post_id": int(pid),
+                }
+            )
         data["data"]["comment_list"][pid] = {
-            "comment_num": len(infos), "comment_list_num": len(infos), "comment_info": infos,
+            "comment_num": len(infos),
+            "comment_list_num": len(infos),
+            "comment_info": infos,
         }
     return json.dumps(data, ensure_ascii=False)
 
@@ -126,35 +146,77 @@ def main() -> None:
     page1 = page_html(
         floors=(
             post_html(
-                post_no=1, pid="111111", user_id=1001, user_name="用户A",
-                date="2024-05-01 10:00", comment_num=12, is_lz=1,
-                content="主楼内容，欢迎回复<br>第二行", level="12", badge="知名人士", nickname="小A",
+                post_no=1,
+                pid="111111",
+                user_id=1001,
+                user_name="用户A",
+                date="2024-05-01 10:00",
+                comment_num=12,
+                is_lz=1,
+                content="主楼内容，欢迎回复<br>第二行",
+                level="12",
+                badge="知名人士",
+                nickname="小A",
             )
             + post_html(
-                post_no=2, pid="222222", user_id=1002, user_name="用户B",
-                date="2024-05-01 10:05", comment_num=2,
+                post_no=2,
+                pid="222222",
+                user_id=1002,
+                user_name="用户B",
+                date="2024-05-01 10:05",
+                comment_num=2,
                 content='&gt; 引用内容<br>回复内容<img class="BDE_Smiley" alt="哈哈">',
-                level="9", badge="核心吧友",
+                level="9",
+                badge="核心吧友",
             )
             + post_html(
-                post_no=3, pid="333333", user_id=1003, user_name="用户C",
-                date="2024-05-01 10:10", comment_num=0, content="=1+1", level="1", badge="初级粉丝",
+                post_no=3,
+                pid="333333",
+                user_id=1003,
+                user_name="用户C",
+                date="2024-05-01 10:10",
+                comment_num=0,
+                content="=1+1",
+                level="1",
+                badge="初级粉丝",
             )
             + post_html(
-                post_no=4, pid="444444", user_id=1002, user_name="用户B",
-                date="2024-05-01 10:20", comment_num=1,
+                post_no=4,
+                pid="444444",
+                user_id=1002,
+                user_name="用户B",
+                date="2024-05-01 10:20",
+                comment_num=1,
                 content='&nbsp;图片测试<img src="//tb2.bdstatic.com/pic.jpg">',
-                level="9", badge="核心吧友",
+                level="9",
+                badge="核心吧友",
             )
         ),
         pn=1,
     )
     page2 = page_html(
         floors=(
-            post_html(post_no=5, pid="555555", user_id=1001, user_name="用户A",
-                      date="2024-05-02 09:00", comment_num=0, content="第五层", level="12", badge="知名人士", nickname="小A")
-            + post_html(post_no=6, pid="666666", user_id=0, user_name="",
-                        date="2024-05-02 09:10", comment_num=0, content="匿名回复")
+            post_html(
+                post_no=5,
+                pid="555555",
+                user_id=1001,
+                user_name="用户A",
+                date="2024-05-02 09:00",
+                comment_num=0,
+                content="第五层",
+                level="12",
+                badge="知名人士",
+                nickname="小A",
+            )
+            + post_html(
+                post_no=6,
+                pid="666666",
+                user_id=0,
+                user_name="",
+                date="2024-05-02 09:10",
+                comment_num=0,
+                content="匿名回复",
+            )
         ),
         pn=2,
     )
@@ -167,10 +229,12 @@ def main() -> None:
     floor1_total[1] = ("10002", 1003, "用户C", "用户C", "回复 用户B: 第二层回复", 1714560002)
     floor1_total[3] = ("10004", 1004, "用户D", "用户D", "路过", 1714560004)
 
-    floor1_p1 = comment_page("".join(
-        comment_html_item(cid, showname, username, content, "2024-05-01 11:%02d" % i)
-        for i, (cid, _uid, username, showname, content, _t) in enumerate(floor1_total, start=1)
-    ))
+    floor1_p1 = comment_page(
+        "".join(
+            comment_html_item(cid, showname, username, content, "2024-05-01 11:%02d" % i)
+            for i, (cid, _uid, username, showname, content, _t) in enumerate(floor1_total, start=1)
+        )
+    )
     floor1_p2 = comment_page(
         comment_html_item("10011", "用户E", "用户E", "第十一层回复", "2024-05-01 11:11")
         + comment_html_item("10012", "用户B", "用户B", "第十二层回复", "2024-05-01 11:12")
@@ -180,17 +244,23 @@ def main() -> None:
         ("20001", 1001, "用户A", "小A", "回复 用户B: 谢谢分享", 1714570000),
         ("20002", 1004, "用户D", "用户D", "看看", 1714570001),
     ]
-    floor2_p1 = comment_page("".join(
-        comment_html_item(cid, showname, username, content, "2024-05-01 11:2%d" % i)
-        for i, (cid, _uid, username, showname, content, _t) in enumerate(floor2, start=1)
-    ))
-    floor4_p1 = comment_page(
-        comment_html_item("40001", "用户E", "用户E", "第四层打卡", "2024-05-01 11:30")
+    floor2_p1 = comment_page(
+        "".join(
+            comment_html_item(cid, showname, username, content, "2024-05-01 11:2%d" % i)
+            for i, (cid, _uid, username, showname, content, _t) in enumerate(floor2, start=1)
+        )
     )
+    floor4_p1 = comment_page(comment_html_item("40001", "用户E", "用户E", "第四层打卡", "2024-05-01 11:30"))
 
-    total1 = total_json({"111111": floor1_total, "222222": floor2, "444444": [
-        ("40001", 1005, "用户E", "用户E", "第四层打卡", 1714570002),
-    ]})
+    total1 = total_json(
+        {
+            "111111": floor1_total,
+            "222222": floor2,
+            "444444": [
+                ("40001", 1005, "用户E", "用户E", "第四层打卡", 1714570002),
+            ],
+        }
+    )
     total2 = total_json({})
 
     files = {

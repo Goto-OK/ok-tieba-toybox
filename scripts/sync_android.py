@@ -16,9 +16,7 @@ import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SOURCE = os.path.join(ROOT, "tieba_reply_stats")
-TARGET = os.path.join(
-    ROOT, "android", "project", "app", "src", "main", "python", "tieba_reply_stats"
-)
+TARGET = os.path.join(ROOT, "android", "project", "app", "src", "main", "python", "tieba_reply_stats")
 
 
 def _ignore(_directory, names):

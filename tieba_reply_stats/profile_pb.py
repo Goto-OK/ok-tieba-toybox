@@ -63,13 +63,13 @@ def _fields(data: bytes):
             value, index = _read_varint(data, index)
         elif wire == 2:
             length, index = _read_varint(data, index)
-            value = data[index:index + length]
+            value = data[index : index + length]
             index += length
         elif wire == 5:
-            value = data[index:index + 4]
+            value = data[index : index + 4]
             index += 4
         elif wire == 1:
-            value = data[index:index + 8]
+            value = data[index : index + 8]
             index += 8
         else:
             return
@@ -101,17 +101,21 @@ def _text(data: bytes, number: int) -> Optional[str]:
 
 
 def build_request(uid: int, bduss: str) -> bytes:
-    common = b"".join([
-        _fv(1, 2),
-        _fb(2, CLIENT_VERSION),
-        _fb(10, bduss.encode()),
-    ])
-    data = b"".join([
-        _fv(1, uid),
-        _fv(2, 1),
-        _fv(6, 1),
-        _fb(9, common),
-    ])
+    common = b"".join(
+        [
+            _fv(1, 2),
+            _fb(2, CLIENT_VERSION),
+            _fb(10, bduss.encode()),
+        ]
+    )
+    data = b"".join(
+        [
+            _fv(1, uid),
+            _fv(2, 1),
+            _fv(6, 1),
+            _fb(9, common),
+        ]
+    )
     return _fb(1, data)
 
 
@@ -129,10 +133,14 @@ def fetch_profile(fetcher, uid: str) -> Dict:
     boundary = "----tbpb" + uuid.uuid4().hex
     payload = build_request(uid_int, bduss)
     body = (
-        f"--{boundary}\r\n"
-        'Content-Disposition: form-data; name="data"; filename="blob"\r\n'
-        "Content-Type: application/octet-stream\r\n\r\n"
-    ).encode() + payload + f"\r\n--{boundary}--\r\n".encode()
+        (
+            f"--{boundary}\r\n"
+            'Content-Disposition: form-data; name="data"; filename="blob"\r\n'
+            "Content-Type: application/octet-stream\r\n\r\n"
+        ).encode()
+        + payload
+        + f"\r\n--{boundary}--\r\n".encode()
+    )
     request = urllib.request.Request(
         PROFILE_URL,
         data=body,

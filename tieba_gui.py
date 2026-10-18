@@ -1,4 +1,4 @@
-﻿#!/usr/bin/env python3
+#!/usr/bin/env python3
 """贴吧楼层回复统计 —— 图形界面（给不想用命令行的用户）。
 
 直接运行：python tieba_gui.py
@@ -75,6 +75,7 @@ def encode_display(value) -> str:
 def decode_display(value) -> str:
     """把 [U+XXXX] 还原成 emoji，用于回查。"""
     return _EMOJI_CODE_RE.sub(lambda match: chr(int(match.group(1), 16)), str(value or ""))
+
 
 COOKIE_HELP = """需要 Cookie 时，这样复制：
 
@@ -165,21 +166,30 @@ class App:
         header = tk.Frame(self.root, bg="#ffffff", padx=18, pady=12)
         header.pack(fill="x")
         tk.Label(
-            header, text=APP_TITLE, bg="#ffffff", fg="#1F4E79",
+            header,
+            text=APP_TITLE,
+            bg="#ffffff",
+            fg="#1F4E79",
             font=("Microsoft YaHei UI", 17, "bold"),
         ).pack(anchor="w")
         tk.Label(
             header,
             text="粘贴贴吧帖子链接，自动统计每个用户的楼层回复并导出 Excel",
-            bg="#ffffff", fg="#6b7280", font=("Microsoft YaHei UI", 9),
+            bg="#ffffff",
+            fg="#6b7280",
+            font=("Microsoft YaHei UI", 9),
         ).pack(anchor="w", pady=(3, 0))
 
         status = tk.Frame(self.root, bg="#ffffff", padx=16, pady=8)
         status.pack(side="bottom", fill="x")
         self.status_var = tk.StringVar(value="准备就绪")
         tk.Label(
-            status, textvariable=self.status_var, bg="#ffffff", fg="#475569",
-            font=("Microsoft YaHei UI", 9), anchor="w",
+            status,
+            textvariable=self.status_var,
+            bg="#ffffff",
+            fg="#475569",
+            font=("Microsoft YaHei UI", 9),
+            anchor="w",
         ).pack(side="left")
         self.progress = ttk.Progressbar(status, mode="indeterminate", length=200)
         self.progress.pack(side="right")
@@ -216,14 +226,23 @@ class App:
         box.grid(row=0, column=0, sticky="ew")
         box.columnconfigure(0, weight=1)
         self.url_text = tk.Text(
-            box, height=3, wrap="word", font=text_font,
-            relief="flat", highlightthickness=1, highlightbackground="#c9d2df",
-            highlightcolor="#1F4E79", padx=8, pady=6,
+            box,
+            height=3,
+            wrap="word",
+            font=text_font,
+            relief="flat",
+            highlightthickness=1,
+            highlightbackground="#c9d2df",
+            highlightcolor="#1F4E79",
+            padx=8,
+            pady=6,
         )
         self.url_text.grid(row=0, column=0, sticky="ew")
         tk.Label(
-            box, text="每行一个链接，也可以直接粘贴帖子 ID（如 1234567890）",
-            fg="#8a94a6", font=("Microsoft YaHei UI", 8),
+            box,
+            text="每行一个链接，也可以直接粘贴帖子 ID（如 1234567890）",
+            fg="#8a94a6",
+            font=("Microsoft YaHei UI", 8),
         ).grid(row=1, column=0, sticky="w", pady=(4, 0))
 
         # 2. 选项
@@ -232,11 +251,13 @@ class App:
         self.comments_var = tk.BooleanVar(value=True)
         self.exclude_op_var = tk.BooleanVar(value=False)
         ttk.Checkbutton(
-            options, text="抓取楼中楼回复（推荐；关闭后只统计每层主楼，速度更快）",
+            options,
+            text="抓取楼中楼回复（推荐；关闭后只统计每层主楼，速度更快）",
             variable=self.comments_var,
         ).grid(row=0, column=0, columnspan=3, sticky="w", pady=2)
         ttk.Checkbutton(
-            options, text="统计时不把 1 楼（楼主主帖）算作回复",
+            options,
+            text="统计时不把 1 楼（楼主主帖）算作回复",
             variable=self.exclude_op_var,
         ).grid(row=1, column=0, columnspan=3, sticky="w", pady=2)
         self.export_var = tk.BooleanVar(value=False)
@@ -251,10 +272,16 @@ class App:
         tk.Label(delay_row, text="请求间隔：").pack(side="left")
         self.delay_var = tk.StringVar(value="0.8")
         ttk.Spinbox(
-            delay_row, from_=0.3, to=5.0, increment=0.1, width=5,
+            delay_row,
+            from_=0.3,
+            to=5.0,
+            increment=0.1,
+            width=5,
             textvariable=self.delay_var,
         ).pack(side="left")
-        tk.Label(delay_row, text=" 秒（越小越快，越大越稳；被拦截时调大一些）", fg="#8a94a6").pack(side="left")
+        tk.Label(delay_row, text=" 秒（越小越快，越大越稳；被拦截时调大一些）", fg="#8a94a6").pack(
+            side="left"
+        )
 
         # 3. 保存位置
         out_box = ttk.LabelFrame(body, text=" 保存到 ", style="Card.TLabelframe")
@@ -262,7 +289,9 @@ class App:
         out_box.columnconfigure(0, weight=1)
         self.output_var = tk.StringVar()
         ttk.Entry(out_box, textvariable=self.output_var, font=text_font).grid(row=0, column=0, sticky="ew")
-        ttk.Button(out_box, text="浏览…", command=self._choose_output, width=8).grid(row=0, column=1, padx=(8, 0))
+        ttk.Button(out_box, text="浏览…", command=self._choose_output, width=8).grid(
+            row=0, column=1, padx=(8, 0)
+        )
 
         # 4. Cookie
         cookie_box = ttk.LabelFrame(
@@ -293,23 +322,47 @@ class App:
         buttons = tk.Frame(body, bg="#eef1f5")
         buttons.grid(row=4, column=0, sticky="ew", pady=(12, 8))
         self.start_btn = tk.Button(
-            buttons, text="开始统计", command=self._on_start,
-            bg="#1F4E79", fg="white", activebackground="#2E75B6", activeforeground="white",
-            relief="flat", padx=22, pady=8, cursor="hand2",
-            font=("Microsoft YaHei UI", 11, "bold"), state="disabled",
+            buttons,
+            text="开始统计",
+            command=self._on_start,
+            bg="#1F4E79",
+            fg="white",
+            activebackground="#2E75B6",
+            activeforeground="white",
+            relief="flat",
+            padx=22,
+            pady=8,
+            cursor="hand2",
+            font=("Microsoft YaHei UI", 11, "bold"),
+            state="disabled",
         )
         self.start_btn.pack(side="left")
         self.stop_btn = tk.Button(
-            buttons, text="停止", command=self._on_stop,
-            bg="#e5e9f0", fg="#334155", activebackground="#d5dbe5",
-            relief="flat", padx=16, pady=8, cursor="hand2",
-            font=("Microsoft YaHei UI", 10), state="disabled",
+            buttons,
+            text="停止",
+            command=self._on_stop,
+            bg="#e5e9f0",
+            fg="#334155",
+            activebackground="#d5dbe5",
+            relief="flat",
+            padx=16,
+            pady=8,
+            cursor="hand2",
+            font=("Microsoft YaHei UI", 10),
+            state="disabled",
         )
         self.stop_btn.pack(side="left", padx=(10, 0))
         self.help_btn = tk.Button(
-            buttons, text="使用说明", command=self._open_readme,
-            bg="#eef1f5", fg="#1F4E79", activebackground="#eef1f5",
-            relief="flat", padx=10, pady=8, cursor="hand2",
+            buttons,
+            text="使用说明",
+            command=self._open_readme,
+            bg="#eef1f5",
+            fg="#1F4E79",
+            activebackground="#eef1f5",
+            relief="flat",
+            padx=10,
+            pady=8,
+            cursor="hand2",
             font=("Microsoft YaHei UI", 10, "underline"),
         )
         self.help_btn.pack(side="right")
@@ -320,9 +373,17 @@ class App:
         log_box.columnconfigure(0, weight=1)
         log_box.rowconfigure(0, weight=1)
         self.log_text = tk.Text(
-            log_box, height=16, wrap="word", font=("Microsoft YaHei UI", 9),
-            relief="flat", highlightthickness=1, highlightbackground="#c9d2df",
-            bg="#fbfcfe", padx=8, pady=6, state="disabled",
+            log_box,
+            height=16,
+            wrap="word",
+            font=("Microsoft YaHei UI", 9),
+            relief="flat",
+            highlightthickness=1,
+            highlightbackground="#c9d2df",
+            bg="#fbfcfe",
+            padx=8,
+            pady=6,
+            state="disabled",
         )
         self.log_text.grid(row=0, column=0, sticky="nsew")
         scroll = ttk.Scrollbar(log_box, orient="vertical", command=self.log_text.yview)
@@ -383,7 +444,9 @@ class App:
         # 只保留有效的 k=v 片段
         keep = [part.strip() for part in re.split(r"[;\n\r]+", text) if "=" in part]
         if not keep:
-            messagebox.showwarning("剪贴板内容不像 Cookie", "剪贴板里没有找到 k=v 形式的 Cookie，请重新复制。", parent=self.root)
+            messagebox.showwarning(
+                "剪贴板内容不像 Cookie", "剪贴板里没有找到 k=v 形式的 Cookie，请重新复制。", parent=self.root
+            )
             return
         self.cookie_var.set("; ".join(keep))
         self._append_log("已从剪贴板粘贴 Cookie。", "ok")
@@ -416,7 +479,9 @@ class App:
             try:
                 os.startfile(self.last_output)  # type: ignore[attr-defined]
             except OSError as error:
-                messagebox.showerror("打不开文件", f"{error}\n\n文件位置：{self.last_output}", parent=self.root)
+                messagebox.showerror(
+                    "打不开文件", f"{error}\n\n文件位置：{self.last_output}", parent=self.root
+                )
 
     # ------------------------------------------------------- 参与者与成分
     def _aggregate_users(self):
@@ -458,26 +523,40 @@ class App:
         self.people_users = []
         bar = tk.Frame(self.tab_people, bg="#ffffff", padx=12, pady=8)
         bar.pack(fill="x")
-        tk.Label(bar, text="点一行查看这个人的最近发言和关注的贴吧", bg="#ffffff",
-                 fg="#6b7280", font=("Microsoft YaHei UI", 9)).pack(side="left")
-        tk.Label(bar, text="   条数：", bg="#ffffff", fg="#475569",
-                 font=("Microsoft YaHei UI", 9)).pack(side="left")
+        tk.Label(
+            bar,
+            text="点一行查看这个人的最近发言和关注的贴吧",
+            bg="#ffffff",
+            fg="#6b7280",
+            font=("Microsoft YaHei UI", 9),
+        ).pack(side="left")
+        tk.Label(bar, text="   条数：", bg="#ffffff", fg="#475569", font=("Microsoft YaHei UI", 9)).pack(
+            side="left"
+        )
         self.post_count_var = tk.StringVar(value="50")
-        ttk.Spinbox(bar, from_=5, to=1000, increment=10, width=6,
-                    textvariable=self.post_count_var).pack(side="left")
+        ttk.Spinbox(bar, from_=5, to=1000, increment=10, width=6, textvariable=self.post_count_var).pack(
+            side="left"
+        )
         self.post_date_mode_var = tk.StringVar(value="近期")
-        ttk.Combobox(bar, values=("近期", "指定日期"), textvariable=self.post_date_mode_var,
-                     width=9, state="readonly").pack(side="left", padx=(6, 0))
+        ttk.Combobox(
+            bar, values=("近期", "指定日期"), textvariable=self.post_date_mode_var, width=9, state="readonly"
+        ).pack(side="left", padx=(6, 0))
         self.post_start_var = tk.StringVar()
         self.post_end_var = tk.StringVar()
         self.post_date_row = tk.Frame(self.tab_people, bg="#ffffff", padx=12, pady=4)
         self.post_start_parts = self._date_group(self.post_date_row, "开始", 3)
         self.post_end_parts = self._date_group(self.post_date_row, "结束")
-        tk.Label(self.post_date_row, text="  贴近：", bg="#ffffff", fg="#475569",
-                 font=("Microsoft YaHei UI", 9)).pack(side="left")
+        tk.Label(
+            self.post_date_row, text="  贴近：", bg="#ffffff", fg="#475569", font=("Microsoft YaHei UI", 9)
+        ).pack(side="left")
         self.post_prefer_var = tk.StringVar(value="贴近结束日期")
-        ttk.Combobox(self.post_date_row, values=("贴近结束日期", "贴近开始日期"),
-                     textvariable=self.post_prefer_var, width=12, state="readonly").pack(side="left")
+        ttk.Combobox(
+            self.post_date_row,
+            values=("贴近结束日期", "贴近开始日期"),
+            textvariable=self.post_prefer_var,
+            width=12,
+            state="readonly",
+        ).pack(side="left")
         for _var in (*self.post_start_parts, *self.post_end_parts):
             _var.trace_add("write", lambda *_: self._on_post_parts_changed())
         self.post_date_mode_var.trace_add("write", lambda *_: self._on_post_date_changed())
@@ -491,8 +570,7 @@ class App:
         ttk.Button(bar, text="在浏览器打开主页", command=self._open_current_profile, width=16).pack(
             side="left", padx=(8, 0)
         )
-        self.people_hint = tk.Label(bar, text="", bg="#ffffff", fg="#8a94a6",
-                                    font=("Microsoft YaHei UI", 9))
+        self.people_hint = tk.Label(bar, text="", bg="#ffffff", fg="#8a94a6", font=("Microsoft YaHei UI", 9))
         self.people_hint.pack(side="right")
 
         paned = ttk.PanedWindow(self.tab_people, orient="horizontal")
@@ -504,10 +582,26 @@ class App:
         paned.add(right, weight=3)
 
         columns = ("mark", "name", "username", "uid", "level", "floor", "comment", "total")
-        headings = {"mark": "标记", "name": "昵称", "username": "用户名", "uid": "用户ID",
-                    "level": "等级", "floor": "楼层", "comment": "楼中楼", "total": "合计"}
-        widths = {"mark": 70, "name": 120, "username": 100, "uid": 110, "level": 55,
-                  "floor": 48, "comment": 58, "total": 48}
+        headings = {
+            "mark": "标记",
+            "name": "昵称",
+            "username": "用户名",
+            "uid": "用户ID",
+            "level": "等级",
+            "floor": "楼层",
+            "comment": "楼中楼",
+            "total": "合计",
+        }
+        widths = {
+            "mark": 70,
+            "name": 120,
+            "username": 100,
+            "uid": 110,
+            "level": 55,
+            "floor": 48,
+            "comment": 58,
+            "total": 48,
+        }
         self.people_tree = ttk.Treeview(left, columns=columns, show="headings")
         for col in columns:
             self.people_tree.heading(col, text=headings[col])
@@ -525,27 +619,36 @@ class App:
         self._person_popup = tk.Menu(self.people_tree, tearoff=0)
         self._person_popup.add_command(label="复制整行", command=self._copy_person_row)
         self._person_popup.add_command(label="复制昵称", command=lambda: self._copy_person_field("name"))
-        self._person_popup.add_command(label="复制用户名", command=lambda: self._copy_person_field("username"))
+        self._person_popup.add_command(
+            label="复制用户名", command=lambda: self._copy_person_field("username")
+        )
         self._person_popup.add_command(label="复制用户ID", command=lambda: self._copy_person_field("uid"))
         self._person_popup.add_separator()
         self._person_popup.add_command(label="浏览器打开主页", command=self._open_current_profile)
 
         traffic = tk.Frame(right, bg="#fbfcfe")
         traffic.pack(fill="x", padx=6, pady=(2, 0))
-        tk.Label(traffic, text="红绿灯：", bg="#fbfcfe", fg="#6b7280",
-                 font=("Microsoft YaHei UI", 9)).pack(side="left")
+        tk.Label(traffic, text="红绿灯：", bg="#fbfcfe", fg="#6b7280", font=("Microsoft YaHei UI", 9)).pack(
+            side="left"
+        )
         self.traffic_labels = {}
         for key, color in (("ban", "#dc2626"), ("warn", "#f59e0b"), ("safe", "#16a34a")):
-            label = tk.Label(traffic, text="●", fg="#d1d5db", bg="#fbfcfe",
-                             font=("Microsoft YaHei UI", 14))
+            label = tk.Label(traffic, text="●", fg="#d1d5db", bg="#fbfcfe", font=("Microsoft YaHei UI", 14))
             label.pack(side="left", padx=(2, 0))
             self.traffic_labels[key] = (label, color)
-        self.traffic_text = tk.Label(traffic, text="", bg="#fbfcfe", fg="#6b7280",
-                                     font=("Microsoft YaHei UI", 9))
+        self.traffic_text = tk.Label(
+            traffic, text="", bg="#fbfcfe", fg="#6b7280", font=("Microsoft YaHei UI", 9)
+        )
         self.traffic_text.pack(side="left", padx=(8, 0))
 
-        self.profile_status = tk.Label(right, text="选择左边一个人查看详情", anchor="w",
-                                       bg="#fbfcfe", fg="#6b7280", font=("Microsoft YaHei UI", 9))
+        self.profile_status = tk.Label(
+            right,
+            text="选择左边一个人查看详情",
+            anchor="w",
+            bg="#fbfcfe",
+            fg="#6b7280",
+            font=("Microsoft YaHei UI", 9),
+        )
         self.profile_status.pack(fill="x", padx=6, pady=(4, 4))
 
         body_paned = ttk.PanedWindow(right, orient="horizontal")
@@ -555,8 +658,13 @@ class App:
         body_paned.add(forum_frame, weight=1)
         body_paned.add(post_frame, weight=2)
 
-        tk.Label(forum_frame, text="关注的贴吧（双击打开）", bg="#fbfcfe", fg="#475569",
-                 font=("Microsoft YaHei UI", 9, "bold")).pack(anchor="w")
+        tk.Label(
+            forum_frame,
+            text="关注的贴吧（双击打开）",
+            bg="#fbfcfe",
+            fg="#475569",
+            font=("Microsoft YaHei UI", 9, "bold"),
+        ).pack(anchor="w")
         self.profile_forum_tree = ttk.Treeview(
             forum_frame, columns=("bar", "level"), show="headings", height=12
         )
@@ -568,14 +676,25 @@ class App:
         self.profile_forum_tree.bind("<Double-1>", lambda _event: self._open_profile_forum())
         self._configure_colors(self.profile_forum_tree)
         self._make_sortable(self.profile_forum_tree, {"bar": "贴吧", "level": "等级"})
-        self.profile_forum_note = tk.Label(forum_frame, text="", bg="#fbfcfe", fg="#b45309",
-                                           wraplength=260, justify="left",
-                                           font=("Microsoft YaHei UI", 8))
+        self.profile_forum_note = tk.Label(
+            forum_frame,
+            text="",
+            bg="#fbfcfe",
+            fg="#b45309",
+            wraplength=260,
+            justify="left",
+            font=("Microsoft YaHei UI", 8),
+        )
         self.profile_forum_note.pack(fill="x", pady=(2, 0))
         self._profile_forum_names = {}
 
-        tk.Label(post_frame, text="最近发言（双击打开帖子）", bg="#fbfcfe", fg="#475569",
-                 font=("Microsoft YaHei UI", 9, "bold")).pack(anchor="w")
+        tk.Label(
+            post_frame,
+            text="最近发言（双击打开帖子）",
+            bg="#fbfcfe",
+            fg="#475569",
+            font=("Microsoft YaHei UI", 9, "bold"),
+        ).pack(anchor="w")
         self.profile_post_tree = ttk.Treeview(
             post_frame, columns=("time", "type", "bar", "title", "content"), show="headings", height=12
         )
@@ -592,8 +711,10 @@ class App:
         self.profile_post_tree.pack(fill="both", expand=True)
         self.profile_post_tree.bind("<Double-1>", lambda _event: self._open_profile_post())
         self._configure_colors(self.profile_post_tree)
-        self._make_sortable(self.profile_post_tree,
-                            {"time": "日期", "type": "类型", "bar": "贴吧", "title": "标题", "content": "内容"})
+        self._make_sortable(
+            self.profile_post_tree,
+            {"time": "日期", "type": "类型", "bar": "贴吧", "title": "标题", "content": "内容"},
+        )
         self._profile_post_urls = {}
 
         self.post_nb.bind("<<NotebookTabChanged>>", self._on_tab_changed)
@@ -622,19 +743,35 @@ class App:
                 year -= 1
             day = min(base.day, calendar.monthrange(year, month)[1])
             base = base.replace(year=year, month=month, day=day)
-        tk.Label(parent, text=f"{label}", bg="#ffffff", fg="#475569",
-                 font=("Microsoft YaHei UI", 9)).pack(side="left")
+        tk.Label(parent, text=f"{label}", bg="#ffffff", fg="#475569", font=("Microsoft YaHei UI", 9)).pack(
+            side="left"
+        )
         year_var = tk.StringVar(value=str(base.year))
         month_var = tk.StringVar(value=f"{base.month:02d}")
         day_var = tk.StringVar(value=f"{base.day:02d}")
-        ttk.Combobox(parent, values=[str(year) for year in range(2003, datetime.now().year + 2)],
-                     textvariable=year_var, width=5, state="readonly").pack(side="left")
+        ttk.Combobox(
+            parent,
+            values=[str(year) for year in range(2003, datetime.now().year + 2)],
+            textvariable=year_var,
+            width=5,
+            state="readonly",
+        ).pack(side="left")
         tk.Label(parent, text="年", bg="#ffffff").pack(side="left")
-        ttk.Combobox(parent, values=[f"{month:02d}" for month in range(1, 13)],
-                     textvariable=month_var, width=3, state="readonly").pack(side="left")
+        ttk.Combobox(
+            parent,
+            values=[f"{month:02d}" for month in range(1, 13)],
+            textvariable=month_var,
+            width=3,
+            state="readonly",
+        ).pack(side="left")
         tk.Label(parent, text="月", bg="#ffffff").pack(side="left")
-        ttk.Combobox(parent, values=[f"{day:02d}" for day in range(1, 32)],
-                     textvariable=day_var, width=3, state="readonly").pack(side="left")
+        ttk.Combobox(
+            parent,
+            values=[f"{day:02d}" for day in range(1, 32)],
+            textvariable=day_var,
+            width=3,
+            state="readonly",
+        ).pack(side="left")
         tk.Label(parent, text="日", bg="#ffffff").pack(side="left")
         return year_var, month_var, day_var
 
@@ -773,7 +910,8 @@ class App:
         if getattr(self, "_auto_filling", False) or getattr(self, "_auto_filled", False):
             return
         missing = [
-            user for user in self.people_users
+            user
+            for user in self.people_users
             if not user.get("level") and (user.get("uid") or user.get("username"))
         ]
         if not missing or not self.last_threads:
@@ -798,36 +936,55 @@ class App:
     def _build_lookup_tab(self) -> None:
         bar = tk.Frame(self.tab_lookup, bg="#ffffff", padx=12, pady=8)
         bar.pack(fill="x")
-        tk.Label(bar, text="查询方式：", bg="#ffffff", fg="#475569",
-                 font=("Microsoft YaHei UI", 9)).pack(side="left")
+        tk.Label(bar, text="查询方式：", bg="#ffffff", fg="#475569", font=("Microsoft YaHei UI", 9)).pack(
+            side="left"
+        )
         self.lookup_mode_var = tk.StringVar(value="用户名")
-        ttk.Combobox(bar, values=("用户名", "用户ID", "昵称"), textvariable=self.lookup_mode_var,
-                     width=8, state="readonly").pack(side="left")
-        tk.Label(bar, text="  内容：", bg="#ffffff", fg="#475569",
-                 font=("Microsoft YaHei UI", 9)).pack(side="left")
+        ttk.Combobox(
+            bar,
+            values=("用户名", "用户ID", "昵称"),
+            textvariable=self.lookup_mode_var,
+            width=8,
+            state="readonly",
+        ).pack(side="left")
+        tk.Label(bar, text="  内容：", bg="#ffffff", fg="#475569", font=("Microsoft YaHei UI", 9)).pack(
+            side="left"
+        )
         self.lookup_query_var = tk.StringVar()
-        entry = ttk.Entry(bar, textvariable=self.lookup_query_var, width=24,
-                          font=("Microsoft YaHei UI", 10))
+        entry = ttk.Entry(bar, textvariable=self.lookup_query_var, width=24, font=("Microsoft YaHei UI", 10))
         entry.pack(side="left", padx=(4, 0))
         entry.bind("<Return>", lambda _event: self._on_lookup())
-        tk.Label(bar, text="  条数：", bg="#ffffff", fg="#475569",
-                 font=("Microsoft YaHei UI", 9)).pack(side="left")
+        tk.Label(bar, text="  条数：", bg="#ffffff", fg="#475569", font=("Microsoft YaHei UI", 9)).pack(
+            side="left"
+        )
         self.lookup_count_var = tk.StringVar(value="50")
-        ttk.Spinbox(bar, from_=5, to=1000, increment=10, width=6,
-                    textvariable=self.lookup_count_var).pack(side="left")
+        ttk.Spinbox(bar, from_=5, to=1000, increment=10, width=6, textvariable=self.lookup_count_var).pack(
+            side="left"
+        )
         self.lookup_date_mode_var = tk.StringVar(value="近期")
-        ttk.Combobox(bar, values=("近期", "指定日期"), textvariable=self.lookup_date_mode_var,
-                     width=9, state="readonly").pack(side="left", padx=(6, 0))
+        ttk.Combobox(
+            bar,
+            values=("近期", "指定日期"),
+            textvariable=self.lookup_date_mode_var,
+            width=9,
+            state="readonly",
+        ).pack(side="left", padx=(6, 0))
         self.lookup_start_var = tk.StringVar()
         self.lookup_end_var = tk.StringVar()
         self.lookup_date_row = tk.Frame(self.tab_lookup, bg="#ffffff", padx=12, pady=4)
         self.lookup_start_parts = self._date_group(self.lookup_date_row, "开始", 3)
         self.lookup_end_parts = self._date_group(self.lookup_date_row, "结束")
-        tk.Label(self.lookup_date_row, text="  贴近：", bg="#ffffff", fg="#475569",
-                 font=("Microsoft YaHei UI", 9)).pack(side="left")
+        tk.Label(
+            self.lookup_date_row, text="  贴近：", bg="#ffffff", fg="#475569", font=("Microsoft YaHei UI", 9)
+        ).pack(side="left")
         self.lookup_prefer_var = tk.StringVar(value="贴近结束日期")
-        ttk.Combobox(self.lookup_date_row, values=("贴近结束日期", "贴近开始日期"),
-                     textvariable=self.lookup_prefer_var, width=12, state="readonly").pack(side="left")
+        ttk.Combobox(
+            self.lookup_date_row,
+            values=("贴近结束日期", "贴近开始日期"),
+            textvariable=self.lookup_prefer_var,
+            width=12,
+            state="readonly",
+        ).pack(side="left")
         for _var in (*self.lookup_start_parts, *self.lookup_end_parts):
             _var.trace_add("write", lambda *_: self._on_lookup_parts_changed())
         self.lookup_start_var.set(self._group_date(self.lookup_start_parts))
@@ -835,22 +992,24 @@ class App:
         self.lookup_date_mode_var.trace_add("write", lambda *_: self._on_lookup_date_changed())
         ttk.Button(bar, text="查询", command=self._on_lookup, width=8).pack(side="left", padx=(8, 0))
         ttk.Button(bar, text="复制全部", command=self._copy_lookup, width=8).pack(side="left", padx=(6, 0))
-        self.lookup_status = tk.Label(bar, text="", bg="#ffffff", fg="#8a94a6",
-                                      font=("Microsoft YaHei UI", 9))
+        self.lookup_status = tk.Label(
+            bar, text="", bg="#ffffff", fg="#8a94a6", font=("Microsoft YaHei UI", 9)
+        )
         self.lookup_status.pack(side="right")
 
         self.lookup_traffic_labels = {}
         for key, color in (("ban", "#dc2626"), ("warn", "#f59e0b"), ("safe", "#16a34a")):
-            label = tk.Label(bar, text="●", fg="#d1d5db", bg="#ffffff",
-                             font=("Microsoft YaHei UI", 14))
+            label = tk.Label(bar, text="●", fg="#d1d5db", bg="#ffffff", font=("Microsoft YaHei UI", 14))
             label.pack(side="right", padx=(0, 2))
             self.lookup_traffic_labels[key] = (label, color)
-        self.lookup_traffic_text = tk.Label(bar, text="", bg="#ffffff", fg="#6b7280",
-                                            font=("Microsoft YaHei UI", 9))
+        self.lookup_traffic_text = tk.Label(
+            bar, text="", bg="#ffffff", fg="#6b7280", font=("Microsoft YaHei UI", 9)
+        )
         self.lookup_traffic_text.pack(side="right", padx=(0, 8))
 
-        self.lookup_info = tk.Label(self.tab_lookup, text="", anchor="w", bg="#eef1f5",
-                                    fg="#334155", font=("Microsoft YaHei UI", 10))
+        self.lookup_info = tk.Label(
+            self.tab_lookup, text="", anchor="w", bg="#eef1f5", fg="#334155", font=("Microsoft YaHei UI", 10)
+        )
         self.lookup_info.pack(fill="x", padx=12, pady=(0, 4))
 
         paned = ttk.PanedWindow(self.tab_lookup, orient="horizontal")
@@ -860,11 +1019,14 @@ class App:
         right = tk.Frame(paned)
         paned.add(left, weight=1)
         paned.add(right, weight=2)
-        tk.Label(left, text="关注的贴吧（双击打开贴吧）", bg="#eef1f5", fg="#475569",
-                 font=("Microsoft YaHei UI", 9, "bold")).pack(anchor="w")
-        self.lookup_forum_tree = ttk.Treeview(
-            left, columns=("bar", "level"), show="headings", height=14
-        )
+        tk.Label(
+            left,
+            text="关注的贴吧（双击打开贴吧）",
+            bg="#eef1f5",
+            fg="#475569",
+            font=("Microsoft YaHei UI", 9, "bold"),
+        ).pack(anchor="w")
+        self.lookup_forum_tree = ttk.Treeview(left, columns=("bar", "level"), show="headings", height=14)
         self.lookup_forum_tree.heading("bar", text="贴吧")
         self.lookup_forum_tree.heading("level", text="等级")
         self.lookup_forum_tree.column("bar", width=150, anchor="w")
@@ -873,14 +1035,25 @@ class App:
         self.lookup_forum_tree.bind("<Double-1>", lambda _event: self._open_lookup_forum())
         self._configure_colors(self.lookup_forum_tree)
         self._make_sortable(self.lookup_forum_tree, {"bar": "贴吧", "level": "等级"})
-        self.lookup_forum_note = tk.Label(left, text="", bg="#eef1f5", fg="#b45309",
-                                          wraplength=280, justify="left",
-                                          font=("Microsoft YaHei UI", 8))
+        self.lookup_forum_note = tk.Label(
+            left,
+            text="",
+            bg="#eef1f5",
+            fg="#b45309",
+            wraplength=280,
+            justify="left",
+            font=("Microsoft YaHei UI", 8),
+        )
         self.lookup_forum_note.pack(fill="x", pady=(2, 0))
         self._lookup_forum_names = {}
 
-        tk.Label(right, text="最近发言（双击打开帖子）", bg="#eef1f5", fg="#475569",
-                 font=("Microsoft YaHei UI", 9, "bold")).pack(anchor="w")
+        tk.Label(
+            right,
+            text="最近发言（双击打开帖子）",
+            bg="#eef1f5",
+            fg="#475569",
+            font=("Microsoft YaHei UI", 9, "bold"),
+        ).pack(anchor="w")
         self.lookup_post_tree = ttk.Treeview(
             right, columns=("time", "type", "bar", "title", "content"), show="headings", height=14
         )
@@ -897,8 +1070,10 @@ class App:
         self.lookup_post_tree.pack(fill="both", expand=True)
         self.lookup_post_tree.bind("<Double-1>", lambda _event: self._open_lookup_post())
         self._configure_colors(self.lookup_post_tree)
-        self._make_sortable(self.lookup_post_tree,
-                            {"time": "日期", "type": "类型", "bar": "贴吧", "title": "标题", "content": "内容"})
+        self._make_sortable(
+            self.lookup_post_tree,
+            {"time": "日期", "type": "类型", "bar": "贴吧", "title": "标题", "content": "内容"},
+        )
         self._lookup_post_urls = {}
 
     def _open_lookup_forum(self) -> None:
@@ -976,11 +1151,23 @@ class App:
                 if not info:
                     info = resolve_user(fetcher, query, mode)
                 if not info.get("uid"):
-                    self._post(("lookup_ready", None, f"按「{mode}」没有找到这个人（昵称可能不唯一，试试用户名或用户ID）"))
+                    self._post(
+                        (
+                            "lookup_ready",
+                            None,
+                            f"按「{mode}」没有找到这个人（昵称可能不唯一，试试用户名或用户ID）",
+                        )
+                    )
                     return
                 profile = fetch_user_profile(
-                    fetcher, info["uid"], info["username"], info["portrait"], "",
-                    count, start_date, end_date,
+                    fetcher,
+                    info["uid"],
+                    info["username"],
+                    info["portrait"],
+                    "",
+                    count,
+                    start_date,
+                    end_date,
                     "start" if "开始" in self.lookup_prefer_var.get() else "end",
                 )
                 profile["nickname"] = profile.get("nickname") or info.get("nickname") or ""
@@ -1009,15 +1196,27 @@ class App:
         for index, forum in enumerate(combined):
             iid = str(index)
             forum_tree.insert(
-                "", "end", iid=iid,
-                values=(forum["name"], f"Lv.{forum['level']}" if forum.get("level") else "-"), tags=self._row_tags(forum["name"], "forum")
+                "",
+                "end",
+                iid=iid,
+                values=(forum["name"], f"Lv.{forum['level']}" if forum.get("level") else "-"),
+                tags=self._row_tags(forum["name"], "forum"),
             )
             self._lookup_forum_names[iid] = forum["name"]
         for index, post in enumerate(posts):
             iid = str(index)
             post_tree.insert(
-                "", "end", iid=iid,
-                values=(post.get("time") or "", post.get("type") or "", post.get("bar") or "", post.get("title") or "", post.get("content") or ""), tags=self._row_tags(post.get("bar"), "posts")
+                "",
+                "end",
+                iid=iid,
+                values=(
+                    post.get("time") or "",
+                    post.get("type") or "",
+                    post.get("bar") or "",
+                    post.get("title") or "",
+                    post.get("content") or "",
+                ),
+                tags=self._row_tags(post.get("bar"), "posts"),
             )
             self._lookup_post_urls[iid] = post.get("url") or ""
         self.lookup_forum_note.configure(text=self._forum_note(profile))
@@ -1048,7 +1247,12 @@ class App:
         risk = " · 关注列表隐藏，未命中禁止时标黄" if hidden_follows else ""
         try:
             self.lookup_traffic_text.configure(
-                text=((f"{label}：{hit_bar}" if hit_bar and hit_bar != "关注列表隐藏" else label) if hit_level else "未命中") + risk
+                text=(
+                    (f"{label}：{hit_bar}" if hit_bar and hit_bar != "关注列表隐藏" else label)
+                    if hit_level
+                    else "未命中"
+                )
+                + risk
             )
         except tk.TclError:
             pass
@@ -1075,16 +1279,21 @@ class App:
             self.people_tree.delete(item)
         for index, user in enumerate(users):
             user["_iid"] = str(index)
-            self.people_tree.insert("", "end", iid=str(index), values=(
-                "⚪",
-                encode_display(user["name"]),
-                user["username"] or "-",
-                user["uid"] or "-",
-                f"Lv.{user['level']}" if user["level"] else "-",
-                user["floor"],
-                user["comment"],
-                user["total"],
-            ))
+            self.people_tree.insert(
+                "",
+                "end",
+                iid=str(index),
+                values=(
+                    "⚪",
+                    encode_display(user["name"]),
+                    user["username"] or "-",
+                    user["uid"] or "-",
+                    f"Lv.{user['level']}" if user["level"] else "-",
+                    user["floor"],
+                    user["comment"],
+                    user["total"],
+                ),
+            )
         with_level = sum(1 for user in users if user.get("level"))
         self.people_hint.configure(text=f"v{VERSION} · 共 {len(users)} 人 · 有等级 {with_level}")
         self.profile_status.configure(text="选择左边一个人查看详情")
@@ -1130,7 +1339,9 @@ class App:
         tk.Label(
             box,
             text="黑名单：每行一个贴吧名（带不带“吧”都行），命中后按 红 > 黄 > 绿 标记。",
-            bg="#eef1f5", fg="#475569", font=("Microsoft YaHei UI", 9),
+            bg="#eef1f5",
+            fg="#475569",
+            font=("Microsoft YaHei UI", 9),
         ).pack(anchor="w", pady=(0, 8))
         self.blacklist_editors = {}
         for key, title in (("safe", "安全（绿色）"), ("warn", "警告（黄色）"), ("ban", "禁止（红色）")):
@@ -1145,8 +1356,9 @@ class App:
         ttk.Button(bar, text="保存黑名单", command=self._save_blacklist_from_tab).pack(side="left")
         ttk.Button(bar, text="导入 Excel", command=self._import_blacklist).pack(side="left", padx=(8, 0))
         ttk.Button(bar, text="导出 Excel", command=self._export_blacklist).pack(side="left", padx=(8, 0))
-        self.settings_hint = tk.Label(bar, text="", bg="#eef1f5", fg="#15803d",
-                                      font=("Microsoft YaHei UI", 9))
+        self.settings_hint = tk.Label(
+            bar, text="", bg="#eef1f5", fg="#15803d", font=("Microsoft YaHei UI", 9)
+        )
         self.settings_hint.pack(side="left", padx=(10, 0))
         self._build_help_tab()
 
@@ -1154,8 +1366,11 @@ class App:
         box = tk.Frame(self.tab_general, bg="#eef1f5", padx=16, pady=12)
         box.pack(fill="both", expand=True)
         tk.Label(
-            box, text="表格标色：命中黑名单时，给对应表格的行加背景色（红 / 黄 / 绿）。",
-            bg="#eef1f5", fg="#475569", font=("Microsoft YaHei UI", 9),
+            box,
+            text="表格标色：命中黑名单时，给对应表格的行加背景色（红 / 黄 / 绿）。",
+            bg="#eef1f5",
+            fg="#475569",
+            font=("Microsoft YaHei UI", 9),
         ).pack(anchor="w", pady=(0, 10))
         self.setting_vars = {}
         for key, text in (
@@ -1164,11 +1379,17 @@ class App:
             ("color_posts", "在「最近发言」表格里标色"),
         ):
             var = tk.BooleanVar(value=bool(self.settings.get(key, True)))
-            ttk.Checkbutton(box, text=text, variable=var,
-                            command=self._on_settings_changed).pack(anchor="w", pady=4)
+            ttk.Checkbutton(box, text=text, variable=var, command=self._on_settings_changed).pack(
+                anchor="w", pady=4
+            )
             self.setting_vars[key] = var
-        self.general_hint = tk.Label(box, text="改完立即生效（已打开的数据会自动重画）",
-                                     bg="#eef1f5", fg="#8a94a6", font=("Microsoft YaHei UI", 9))
+        self.general_hint = tk.Label(
+            box,
+            text="改完立即生效（已打开的数据会自动重画）",
+            bg="#eef1f5",
+            fg="#8a94a6",
+            font=("Microsoft YaHei UI", 9),
+        )
         self.general_hint.pack(anchor="w", pady=(10, 0))
 
     def _on_settings_changed(self) -> None:
@@ -1182,9 +1403,7 @@ class App:
             except (IndexError, ValueError):
                 user = None
             if user:
-                cached = getattr(self, "_profile_cache", {}).get(
-                    user["uid"] or f"name:{user['name']}"
-                )
+                cached = getattr(self, "_profile_cache", {}).get(user["uid"] or f"name:{user['name']}")
                 if cached:
                     self._render_profile(user, cached)
         if getattr(self, "_last_lookup_profile", None):
@@ -1194,8 +1413,16 @@ class App:
     def _build_help_tab(self) -> None:
         frame = tk.Frame(self.tab_help, bg="#eef1f5", padx=10, pady=10)
         frame.pack(fill="both", expand=True)
-        text = tk.Text(frame, wrap="word", font=("Microsoft YaHei UI", 9),
-                       relief="flat", padx=10, pady=8, bg="#fbfcfe", state="disabled")
+        text = tk.Text(
+            frame,
+            wrap="word",
+            font=("Microsoft YaHei UI", 9),
+            relief="flat",
+            padx=10,
+            pady=8,
+            bg="#fbfcfe",
+            state="disabled",
+        )
         scroll = ttk.Scrollbar(frame, orient="vertical", command=text.yview)
         text.configure(yscrollcommand=scroll.set)
         text.pack(side="left", fill="both", expand=True)
@@ -1232,8 +1459,11 @@ class App:
 
     def _export_blacklist(self) -> None:
         path = filedialog.asksaveasfilename(
-            parent=self.root, title="导出黑名单", defaultextension=".xlsx",
-            initialfile="贴吧黑名单.xlsx", filetypes=[("Excel 表格", "*.xlsx")],
+            parent=self.root,
+            title="导出黑名单",
+            defaultextension=".xlsx",
+            initialfile="贴吧黑名单.xlsx",
+            filetypes=[("Excel 表格", "*.xlsx")],
         )
         if not path:
             return
@@ -1245,7 +1475,8 @@ class App:
 
     def _import_blacklist(self) -> None:
         path = filedialog.askopenfilename(
-            parent=self.root, title="导入黑名单",
+            parent=self.root,
+            title="导入黑名单",
             filetypes=[("Excel 表格", "*.xlsx"), ("所有文件", "*.*")],
         )
         if not path:
@@ -1280,23 +1511,45 @@ class App:
     def _build_grid_tab(self) -> None:
         bar = tk.Frame(self.tab_grid, bg="#ffffff", padx=12, pady=8)
         bar.pack(fill="x")
-        tk.Label(bar, text="表格可排序、双击打开链接、Ctrl+C 复制", bg="#ffffff", fg="#6b7280",
-                 font=("Microsoft YaHei UI", 9)).pack(side="left")
+        tk.Label(
+            bar,
+            text="表格可排序、双击打开链接、Ctrl+C 复制",
+            bg="#ffffff",
+            fg="#6b7280",
+            font=("Microsoft YaHei UI", 9),
+        ).pack(side="left")
         self.export_btn = tk.Button(
-            bar, text="导出 Excel", command=self._export_now,
-            bg="#e5e9f0", fg="#334155", activebackground="#d5dbe5",
-            relief="flat", padx=14, pady=6, cursor="hand2", font=("Microsoft YaHei UI", 10),
+            bar,
+            text="导出 Excel",
+            command=self._export_now,
+            bg="#e5e9f0",
+            fg="#334155",
+            activebackground="#d5dbe5",
+            relief="flat",
+            padx=14,
+            pady=6,
+            cursor="hand2",
+            font=("Microsoft YaHei UI", 10),
         )
         self.export_btn.pack(side="left", padx=(10, 0))
         self.open_btn = tk.Button(
-            bar, text="打开 Excel", command=self._open_result,
-            bg="#e5e9f0", fg="#334155", activebackground="#d5dbe5",
-            relief="flat", padx=14, pady=6, cursor="hand2",
-            font=("Microsoft YaHei UI", 10), state="disabled",
+            bar,
+            text="打开 Excel",
+            command=self._open_result,
+            bg="#e5e9f0",
+            fg="#334155",
+            activebackground="#d5dbe5",
+            relief="flat",
+            padx=14,
+            pady=6,
+            cursor="hand2",
+            font=("Microsoft YaHei UI", 10),
+            state="disabled",
         )
         self.open_btn.pack(side="left", padx=(8, 0))
-        self.grid_hint = tk.Label(bar, text="抓取完成后这里会显示表格", bg="#ffffff", fg="#8a94a6",
-                                  font=("Microsoft YaHei UI", 9))
+        self.grid_hint = tk.Label(
+            bar, text="抓取完成后这里会显示表格", bg="#ffffff", fg="#8a94a6", font=("Microsoft YaHei UI", 9)
+        )
         self.grid_hint.pack(side="right")
 
         self.grid_nb = ttk.Notebook(self.tab_grid)
@@ -1321,39 +1574,71 @@ class App:
             return ""
 
         user_rows = [
-            [index, item["name"], item["username"], item["uid"], item["level"], item["badge"],
-             item["floor_count"], item["comment_count"], item["total"]]
+            [
+                index,
+                item["name"],
+                item["username"],
+                item["uid"],
+                item["level"],
+                item["badge"],
+                item["floor_count"],
+                item["comment_count"],
+                item["total"],
+            ]
             for index, item in enumerate(stats, start=1)
         ]
         self._add_grid_tab(
-            self.grid_nb, "回复统计",
+            self.grid_nb,
+            "回复统计",
             ["#", "昵称", "用户名", "用户ID", "等级", "头衔", "楼层", "楼中楼", "合计"],
-            user_rows, urls=[user_url(item) for item in stats],
+            user_rows,
+            urls=[user_url(item) for item in stats],
         )
         floor_rows = [
-            [floor.post_no, floor.author, floor.author_name, floor.author_id, floor.level,
-             floor.badge, floor.content]
+            [
+                floor.post_no,
+                floor.author,
+                floor.author_name,
+                floor.author_id,
+                floor.level,
+                floor.badge,
+                floor.content,
+            ]
             for floor in thread.floors
         ]
         self._add_grid_tab(
-            self.grid_nb, "楼层明细",
-            ["楼层", "昵称", "用户名", "用户ID", "等级", "头衔", "内容"], floor_rows,
+            self.grid_nb,
+            "楼层明细",
+            ["楼层", "昵称", "用户名", "用户ID", "等级", "头衔", "内容"],
+            floor_rows,
             urls=[f"https://tieba.baidu.com/p/{thread.meta.tid}?pid={floor.pid}" for floor in thread.floors],
         )
         comment_rows = [
-            [comment.floor_no, comment.author, comment.author_name, comment.author_id,
-             comment.level, comment.content]
+            [
+                comment.floor_no,
+                comment.author,
+                comment.author_name,
+                comment.author_id,
+                comment.level,
+                comment.content,
+            ]
             for comment in thread.comments
         ]
         self._add_grid_tab(
-            self.grid_nb, "楼中楼明细",
-            ["所在楼层", "回复者", "用户名", "用户ID", "等级", "内容"], comment_rows,
-            urls=[f"https://tieba.baidu.com/p/{thread.meta.tid}?pid={comment.pid}" for comment in thread.comments],
+            self.grid_nb,
+            "楼中楼明细",
+            ["所在楼层", "回复者", "用户名", "用户ID", "等级", "内容"],
+            comment_rows,
+            urls=[
+                f"https://tieba.baidu.com/p/{thread.meta.tid}?pid={comment.pid}"
+                for comment in thread.comments
+            ],
         )
         self.grid_hint.configure(text=f"帖子：{thread.meta.title or thread.meta.tid}")
 
-    def _add_grid_tab(self, notebook, title: str, headers: List[str], rows: List[list],
-                      urls: List[str] = None) -> None:
+    def _add_grid_tab(
+        self, notebook, title: str, headers: List[str], rows: List[list], urls: List[str] = None
+    ) -> None:
         urls = list(urls or [])
         frame = tk.Frame(notebook)
         notebook.add(frame, text=f"  {title}  ")
@@ -1450,7 +1735,9 @@ class App:
         tk.Label(
             win,
             text="每行一个贴吧名（带不带“吧”都可以）。用户在这些吧发过言，就会打上对应颜色标记。",
-            bg="#f5f7fa", fg="#6b7280", font=("Microsoft YaHei UI", 9),
+            bg="#f5f7fa",
+            fg="#6b7280",
+            font=("Microsoft YaHei UI", 9),
         ).pack(anchor="w", padx=12, pady=(10, 4))
         body = tk.Frame(win, bg="#f5f7fa")
         body.pack(fill="both", expand=True, padx=12)
@@ -1585,9 +1872,15 @@ class App:
                 if user.get("uid") or user.get("username"):
                     try:
                         profile = fetch_user_profile(
-                            fetcher, user.get("uid") or "", user.get("username") or "",
-                            user.get("portrait") or "", self._user_bar(user), count,
-                            start_date, end_date, prefer,
+                            fetcher,
+                            user.get("uid") or "",
+                            user.get("username") or "",
+                            user.get("portrait") or "",
+                            self._user_bar(user),
+                            count,
+                            start_date,
+                            end_date,
+                            prefer,
                         )
                     except Exception as error:  # noqa: BLE001
                         profile = {"ok": False, "error": str(error)}
@@ -1639,7 +1932,11 @@ class App:
                 values[0] = "⚪"
             if level:
                 values[4] = f"Lv.{level}"
-            self.people_tree.item(iid, values=values, tags=(hit_level,) if hit_level and self.settings.get("color_people", True) else ())
+            self.people_tree.item(
+                iid,
+                values=values,
+                tags=(hit_level,) if hit_level and self.settings.get("color_people", True) else (),
+            )
         except tk.TclError:
             pass
 
@@ -1661,8 +1958,14 @@ class App:
             try:
                 fetcher = Fetcher(cookie=parse_cookie_input(self.cookie_var.get()), delay=0.3, verbose=False)
                 profile = fetch_user_profile(
-                    fetcher, user["uid"], user["username"], user["portrait"], bar_name,
-                    count, start_date, end_date,
+                    fetcher,
+                    user["uid"],
+                    user["username"],
+                    user["portrait"],
+                    bar_name,
+                    count,
+                    start_date,
+                    end_date,
                     "start" if "开始" in self.post_prefer_var.get() else "end",
                 )
             except Exception as error:  # noqa: BLE001
@@ -1806,16 +2109,28 @@ class App:
         for index, forum in enumerate(combined):
             iid = str(index)
             forum_tree.insert(
-                "", "end", iid=iid,
-                values=(forum["name"], f"Lv.{forum['level']}" if forum.get("level") else "-"), tags=self._row_tags(forum["name"], "forum")
+                "",
+                "end",
+                iid=iid,
+                values=(forum["name"], f"Lv.{forum['level']}" if forum.get("level") else "-"),
+                tags=self._row_tags(forum["name"], "forum"),
             )
             self._profile_forum_names[iid] = forum["name"]
 
         for index, post in enumerate(posts):
             iid = str(index)
             post_tree.insert(
-                "", "end", iid=iid,
-                values=(post.get("time") or "", post.get("type") or "", post.get("bar") or "", post.get("title") or "", post.get("content") or ""), tags=self._row_tags(post.get("bar"), "posts")
+                "",
+                "end",
+                iid=iid,
+                values=(
+                    post.get("time") or "",
+                    post.get("type") or "",
+                    post.get("bar") or "",
+                    post.get("title") or "",
+                    post.get("content") or "",
+                ),
+                tags=self._row_tags(post.get("bar"), "posts"),
             )
             self._profile_post_urls[iid] = post.get("url") or ""
         self.profile_forum_note.configure(text=self._forum_note(profile, self._user_bar(user), level or ""))
@@ -1835,7 +2150,12 @@ class App:
         risk = " · 关注列表隐藏，未命中禁止时标黄" if hidden_follows else ""
         try:
             self.traffic_text.configure(
-                text=((f"{label}：{hit_bar}" if hit_bar and hit_bar != "关注列表隐藏" else label) if hit_level else "未命中任何名单") + risk
+                text=(
+                    (f"{label}：{hit_bar}" if hit_bar and hit_bar != "关注列表隐藏" else label)
+                    if hit_level
+                    else "未命中任何名单"
+                )
+                + risk
             )
         except tk.TclError:
             pass
@@ -1847,7 +2167,11 @@ class App:
                     values[0] = f"{marker(hit_level)} {label}" + (" ⚠" if hidden_follows else "")
                 else:
                     values[0] = "⚪"
-                self.people_tree.item(iid, values=values, tags=(hit_level,) if hit_level and self.settings.get("color_people", True) else ())
+                self.people_tree.item(
+                    iid,
+                    values=values,
+                    tags=(hit_level,) if hit_level and self.settings.get("color_people", True) else (),
+                )
             except tk.TclError:
                 pass
 
@@ -1880,7 +2204,11 @@ class App:
             except ValueError:
                 bad.append(token)
         if not urls:
-            messagebox.showwarning("缺少链接", "请先粘贴至少一个帖子链接，例如：\nhttps://tieba.baidu.com/p/1234567890", parent=self.root)
+            messagebox.showwarning(
+                "缺少链接",
+                "请先粘贴至少一个帖子链接，例如：\nhttps://tieba.baidu.com/p/1234567890",
+                parent=self.root,
+            )
             return
         if bad:
             messagebox.showwarning(
@@ -1910,7 +2238,9 @@ class App:
 
         cookie = parse_cookie_input(self.cookie_var.get())
         if not cookie.get("BDUSS"):
-            self._append_log("未填写 Cookie：使用游客模式（公开帖子 / 每层前 10 条楼中楼；等级、关注可能不全）", "muted")
+            self._append_log(
+                "未填写 Cookie：使用游客模式（公开帖子 / 每层前 10 条楼中楼；等级、关注可能不全）", "muted"
+            )
         if cookie and self.remember_var.get():
             if save_cookie(self.cookie_var.get().strip()):
                 self._append_log("已记住 Cookie（本机加密保存），下次会自动填入。", "muted")
@@ -1981,7 +2311,9 @@ class App:
                     self._post(("log", f"    ! {warning}", "muted"))
 
             if not completed:
-                self._post(("error", "没有抓到任何帖子。\n\n可能原因：帖子被删、链接不对，或者被安全验证拦截。"))
+                self._post(
+                    ("error", "没有抓到任何帖子。\n\n可能原因：帖子被删、链接不对，或者被安全验证拦截。")
+                )
                 return
 
             if export:
@@ -2082,8 +2414,10 @@ class App:
             done = getattr(self, "_batch_done", 0)
             total = getattr(self, "_batch_total", 0)
             self.people_hint.configure(text=f"已刷新 {done}/{total} 人的红绿灯")
-            self._append_log(("已停止" if cancelled else "完成") + f"一键红绿灯：刷新 {done} 人。",
-                             "muted" if cancelled else "ok")
+            self._append_log(
+                ("已停止" if cancelled else "完成") + f"一键红绿灯：刷新 {done} 人。",
+                "muted" if cancelled else "ok",
+            )
         elif kind == "profile_ready":
             _, key, user, profile = message
             self._profile_cache[key] = profile
@@ -2128,7 +2462,10 @@ class App:
             self._set_running(False)
             self.status_var.set("被安全验证拦截")
             self._append_log(f"\n✗ {detail}", "err")
-            self._append_log("请点「如何获取？」，按说明复制 Cookie，粘贴后点「从剪贴板粘贴」或直接粘贴，再点「开始统计」。", "err")
+            self._append_log(
+                "请点「如何获取？」，按说明复制 Cookie，粘贴后点「从剪贴板粘贴」或直接粘贴，再点「开始统计」。",
+                "err",
+            )
             self.cookie_entry.focus_set()
             messagebox.showwarning(
                 "被安全验证拦截",
@@ -2195,12 +2532,27 @@ def _selftest() -> int:
         thread = ThreadData(
             meta=ThreadMeta(tid="1", title="自检", url="https://tieba.baidu.com/p/1"),
             floors=[
-                Floor(post_no=1, pid="2", author="测试用户", author_id="1", posted_at=None,
-                      content="你好", reply_num=1, is_op=True)
+                Floor(
+                    post_no=1,
+                    pid="2",
+                    author="测试用户",
+                    author_id="1",
+                    posted_at=None,
+                    content="你好",
+                    reply_num=1,
+                    is_op=True,
+                )
             ],
             comments=[
-                Comment(floor_no=1, floor_author="测试用户", pid="9", author="回复者",
-                        author_id="2", posted_at=None, content="回复内容")
+                Comment(
+                    floor_no=1,
+                    floor_author="测试用户",
+                    pid="9",
+                    author="回复者",
+                    author_id="2",
+                    posted_at=None,
+                    content="回复内容",
+                )
             ],
         )
         export_workbook(out, [thread])
@@ -2235,44 +2587,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

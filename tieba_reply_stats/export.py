@@ -119,9 +119,7 @@ def write_table(
             _fill_cell(cell, col, value)
             cell.font = BOLD_FONT
             cell.fill = TOTAL_FILL
-            cell.border = Border(
-                left=THIN, right=THIN, bottom=THIN, top=Side(style="medium", color="B4C6E7")
-            )
+            cell.border = Border(left=THIN, right=THIN, bottom=THIN, top=Side(style="medium", color="B4C6E7"))
 
     ws.freeze_panes = "A2"
     return row_index
@@ -207,7 +205,7 @@ def _user_rows(thread: ThreadData, include_op: bool = True) -> List[list]:
                 item["comment_count"],
                 item["total"],
                 item["total"] / total,
-                f'{item["first_floor"]}楼' if item["first_floor"] else "-",
+                f"{item['first_floor']}楼" if item["first_floor"] else "-",
             ]
         )
     return rows
@@ -328,9 +326,7 @@ def _write_thread(
     floor_links = []
     for floor in thread.floors:
         profile = profile_url(floor.author_name, floor.portrait)
-        floor_links.append(
-            {2: profile, 3: profile, 9: post_url(thread.meta.tid, floor.pid)}
-        )
+        floor_links.append({2: profile, 3: profile, 9: post_url(thread.meta.tid, floor.pid)})
     sheet = workbook.create_sheet(f"{prefix}楼层明细")
     sheet.sheet_properties.tabColor = TAB_COLORS[1]
     write_table(sheet, FLOOR_COLS, floor_rows, links=floor_links)
@@ -352,9 +348,7 @@ def _write_thread(
     comment_links = []
     for comment in thread.comments:
         profile = profile_url(comment.author_name, comment.portrait)
-        comment_links.append(
-            {3: profile, 4: profile, 9: post_url(thread.meta.tid, comment.pid)}
-        )
+        comment_links.append({3: profile, 4: profile, 9: post_url(thread.meta.tid, comment.pid)})
     sheet = workbook.create_sheet(f"{prefix}楼中楼明细")
     sheet.sheet_properties.tabColor = TAB_COLORS[2]
     write_table(sheet, COMMENT_COLS, comment_rows, links=comment_links)
@@ -480,8 +474,15 @@ def _write_overview(workbook: Workbook, threads: List[ThreadData], include_op: b
         Col("回复合计", 13, "center", fmt="0"),
     ]
     rows = [
-        [rank, item["name"], item["uid"] or "-", item["threads"], item["floors"], item["comments"],
-         item["floors"] + item["comments"]]
+        [
+            rank,
+            item["name"],
+            item["uid"] or "-",
+            item["threads"],
+            item["floors"],
+            item["comments"],
+            item["floors"] + item["comments"],
+        ]
         for rank, item in enumerate(ranked, start=1)
     ]
     write_table(sheet, cols, rows)

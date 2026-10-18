@@ -32,9 +32,7 @@ TAG_RE = re.compile(r"<[^>]+>")
 ATTR_ALT_RE = re.compile(r'alt="([^"]*)"', re.I)
 REPLY_TO_RE = re.compile(r"回复\s*(?:<a[^>]*>)?\s*@?([^<>:@：\n]{1,40}?)\s*(?:</a>)?\s*[:：]")
 AT_RE = re.compile(r"@([\w\u4e00-\u9fa5·\-]{1,30})")
-DATE_RE = re.compile(
-    r"(\d{4})[-/](\d{1,2})[-/](\d{1,2})(?:[ T]+(\d{1,2}):(\d{2})(?::(\d{2}))?)?"
-)
+DATE_RE = re.compile(r"(\d{4})[-/](\d{1,2})[-/](\d{1,2})(?:[ T]+(\d{1,2}):(\d{2})(?::(\d{2}))?)?")
 SHORT_DATE_RE = re.compile(r"(\d{1,2})[-/](\d{1,2})\s+(\d{1,2}):(\d{2})(?::(\d{2}))?")
 
 
@@ -226,9 +224,7 @@ def _extract_floors(tree, html_text: str) -> List[Floor]:
         nodes = tree.xpath('//*[@data-field][contains(@class,"l_post")]')
         if not nodes:
             nodes = [
-                node
-                for node in tree.xpath("//*[@data-field]")
-                if "post_no" in (node.get("data-field") or "")
+                node for node in tree.xpath("//*[@data-field]") if "post_no" in (node.get("data-field") or "")
             ]
 
     floors: List[Floor] = []
@@ -270,9 +266,7 @@ def _floor_from_node(node, tree) -> Optional[Floor]:
 
     pid = str(content.get("post_id") or node.get("data-pid") or "")
     content_html = ""
-    parts = node.xpath(
-        './/div[contains(concat(" ", normalize-space(@class), " "), " d_post_content ")]'
-    )
+    parts = node.xpath('.//div[contains(concat(" ", normalize-space(@class), " "), " d_post_content ")]')
     if not parts:
         parts = node.xpath('.//div[contains(@class,"j_d_post_content")]')
     if not parts and tree is not None and pid:
@@ -449,7 +443,7 @@ def _strip_reply_prefix(content_html: str) -> Tuple[str, str]:
         # 只有「回复」前面没有实质文字（可能只是 <span> 之类的标签）时才当作回复前缀
         if not strip_html(content_html[: match.start()]).strip():
             reply_to = html_lib.unescape(match.group(1)).strip()
-            return reply_to, content_html[match.end():].lstrip()
+            return reply_to, content_html[match.end() :].lstrip()
     return "", content_html
 
 
@@ -484,10 +478,7 @@ def _comment_from_dict(data: dict, floor: Floor) -> Optional[Comment]:
 
     author = data.get("author") if isinstance(data.get("author"), dict) else {}
     username = str(
-        data.get("username")
-        or data.get("user_name")
-        or (author or {}).get("user_name")
-        or ""
+        data.get("username") or data.get("user_name") or (author or {}).get("user_name") or ""
     ).strip()
     name = str(data.get("show_nickname") or (author or {}).get("user_nickname") or "").strip() or username
     uid = str(data.get("user_id") or (author or {}).get("user_id") or "")
@@ -547,7 +538,7 @@ def _comments_from_html(payload: str, floor: Floor) -> List[Comment]:
         data = _loads(node.get("data-field"))
         pid = str(data.get("spid") or "")
         if not pid:
-            anchor = node.xpath('.//a[@name]')
+            anchor = node.xpath(".//a[@name]")
             if anchor:
                 pid = anchor[0].get("name") or ""
         author = str(data.get("showname") or "").strip()
@@ -560,9 +551,7 @@ def _comments_from_html(payload: str, floor: Floor) -> List[Comment]:
                 author = at[0].text_content().strip()
 
         content_nodes = node.xpath('.//*[contains(@class,"lzl_content_main")]')
-        content_html = (
-            lxml.html.tostring(content_nodes[0], encoding="unicode") if content_nodes else ""
-        )
+        content_html = lxml.html.tostring(content_nodes[0], encoding="unicode") if content_nodes else ""
         time_nodes = node.xpath('.//*[contains(@class,"lzl_time")]')
         when = time_nodes[0].text_content().strip() if time_nodes else ""
 

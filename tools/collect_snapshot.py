@@ -42,6 +42,7 @@ DEFAULT_DB = os.path.join(ROOT, "snapshots")
 
 # --------------------------------------------------------------------- protobuf
 
+
 def _varint(value: int) -> bytes:
     out = bytearray()
     while True:
@@ -86,13 +87,13 @@ def _fields(data: bytes):
             value, index = _read_varint(data, index)
         elif wire == 2:
             length, index = _read_varint(data, index)
-            value = data[index:index + length]
+            value = data[index : index + length]
             index += length
         elif wire == 5:
-            value = data[index:index + 4]
+            value = data[index : index + 4]
             index += 4
         elif wire == 1:
-            value = data[index:index + 8]
+            value = data[index : index + 8]
             index += 8
         else:
             return
@@ -124,17 +125,21 @@ def _text(data: bytes, number: int) -> Optional[str]:
 
 
 def _profile_request(uid: int, bduss: str) -> bytes:
-    common = b"".join([
-        _fv(1, 2),
-        _fb(2, b"12.64.1.1"),
-        _fb(10, bduss.encode()),
-    ])
-    data = b"".join([
-        _fv(1, uid),
-        _fv(2, 1),
-        _fv(6, 1),
-        _fb(9, common),
-    ])
+    common = b"".join(
+        [
+            _fv(1, 2),
+            _fb(2, b"12.64.1.1"),
+            _fb(10, bduss.encode()),
+        ]
+    )
+    data = b"".join(
+        [
+            _fv(1, uid),
+            _fv(2, 1),
+            _fv(6, 1),
+            _fb(9, common),
+        ]
+    )
     return _fb(1, data)
 
 
@@ -143,10 +148,14 @@ def fetch_profile(uid: int, bduss: str) -> Dict:
     boundary = "----snap" + uuid.uuid4().hex
     payload = _profile_request(uid, bduss)
     body = (
-        f"--{boundary}\r\n"
-        'Content-Disposition: form-data; name="data"; filename="blob"\r\n'
-        "Content-Type: application/octet-stream\r\n\r\n"
-    ).encode() + payload + f"\r\n--{boundary}--\r\n".encode()
+        (
+            f"--{boundary}\r\n"
+            'Content-Disposition: form-data; name="data"; filename="blob"\r\n'
+            "Content-Type: application/octet-stream\r\n\r\n"
+        ).encode()
+        + payload
+        + f"\r\n--{boundary}--\r\n".encode()
+    )
     request = urllib.request.Request(
         "http://tiebac.baidu.com/c/u/user/profile",
         data=body,
@@ -190,6 +199,7 @@ def fetch_profile(uid: int, bduss: str) -> Dict:
 
 # --------------------------------------------------------------------- follow list
 
+
 def _sign(params: Dict[str, object]) -> Dict[str, object]:
     data = sorted((str(k), str(v)) for k, v in params.items())
     md5 = hashlib.md5()
@@ -209,12 +219,14 @@ def fetch_self_follows(fetcher: Fetcher) -> List[Dict]:
     forums: List[Dict] = []
     page = 1
     while page <= 5:
-        params = _sign({
-            "BDUSS": bduss,
-            "_client_version": "12.64.1.1",
-            "page_no": page,
-            "page_size": 400,
-        })
+        params = _sign(
+            {
+                "BDUSS": bduss,
+                "_client_version": "12.64.1.1",
+                "page_no": page,
+                "page_size": 400,
+            }
+        )
         request = urllib.request.Request(
             "https://tiebac.baidu.com/c/f/forum/like",
             data=urllib.parse.urlencode(params).encode(),
@@ -234,12 +246,14 @@ def fetch_self_follows(fetcher: Fetcher) -> List[Dict]:
             break
         for item in items:
             if item.get("name"):
-                forums.append({
-                    "name": item["name"],
-                    "level": int(item.get("level_id") or 0),
-                    "exp": int(item.get("cur_score") or 0),
-                    "fid": item.get("id"),
-                })
+                forums.append(
+                    {
+                        "name": item["name"],
+                        "level": int(item.get("level_id") or 0),
+                        "exp": int(item.get("cur_score") or 0),
+                        "fid": item.get("id"),
+                    }
+                )
         if len(items) < 400:
             break
         page += 1
@@ -247,6 +261,7 @@ def fetch_self_follows(fetcher: Fetcher) -> List[Dict]:
 
 
 # --------------------------------------------------------------------- storage
+
 
 def _now() -> str:
     return datetime.now(timezone.utc).astimezone().isoformat(timespec="seconds")
@@ -307,22 +322,36 @@ def main() -> int:
             bar = bar[:-1]
         if level in (None, "", 0, "0") and source != "like_forum":
             return
-        row = {"ts": ts, "uid": str(uid), "bar": str(bar),
-               "level": int(level) if level not in (None, "") else None,
-               "exp": int(exp) if exp not in (None, "") else None, "source": source}
+        row = {
+            "ts": ts,
+            "uid": str(uid),
+            "bar": str(bar),
+            "level": int(level) if level not in (None, "") else None,
+            "exp": int(exp) if exp not in (None, "") else None,
+            "source": source,
+        }
         if extra:
             row.update(extra)
         bar_rows.append(row)
 
-    def add_user(uid, username="", nickname="", post_num=None, priv_like=None,
-                 fans=None, concern=None, source=""):
+    def add_user(
+        uid, username="", nickname="", post_num=None, priv_like=None, fans=None, concern=None, source=""
+    ):
         if not uid:
             return
-        user_rows.append({
-            "ts": ts, "uid": str(uid), "username": username or "",
-            "nickname": nickname or "", "post_num": post_num, "priv_like": priv_like,
-            "fans": fans, "concern": concern, "source": source,
-        })
+        user_rows.append(
+            {
+                "ts": ts,
+                "uid": str(uid),
+                "username": username or "",
+                "nickname": nickname or "",
+                "post_num": post_num,
+                "priv_like": priv_like,
+                "fans": fans,
+                "concern": concern,
+                "source": source,
+            }
+        )
 
     # 1. self follow list (full)
     try:
@@ -336,8 +365,12 @@ def main() -> int:
     try:
         me = fetcher.get_json("https://tieba.baidu.com/i/sys/user_json?ie=utf-8")
         self_uid = str(me.get("id") or "")
-        add_user(self_uid, me.get("raw_name") or "", (me.get("creator") or {}).get("name_show") or "",
-                 source="user_json")
+        add_user(
+            self_uid,
+            me.get("raw_name") or "",
+            (me.get("creator") or {}).get("name_show") or "",
+            source="user_json",
+        )
     except Exception as error:  # noqa: BLE001
         print("[warn] self id:", error)
 
@@ -361,8 +394,7 @@ def main() -> int:
             print(f"[warn] levels {tid}:", error)
         print(f"[thread] {tid} {forum}: {len(thread.floors)} floors")
         for floor in thread.floors[: args.max_floors]:
-            add_bar(floor.author_id, forum, floor.level, source="thread_floor",
-                    extra={"pid": floor.pid})
+            add_bar(floor.author_id, forum, floor.level, source="thread_floor", extra={"pid": floor.pid})
             add_user(floor.author_id, floor.author_name, floor.author, source="thread_floor")
 
     # 3. seed users: panel + profile proto
@@ -411,8 +443,10 @@ def main() -> int:
             concern=profile.get("concern"),
             source="panel+profile",
         )
-        print(f"[user] {username or target_uid}: panel={len(panel.get('forums') or [])} "
-              f"likeForum={len(profile.get('forums') or [])} priv_like={profile.get('priv_like')}")
+        print(
+            f"[user] {username or target_uid}: panel={len(panel.get('forums') or [])} "
+            f"likeForum={len(profile.get('forums') or [])} priv_like={profile.get('priv_like')}"
+        )
 
     # 4. merge + write
     bar_path = os.path.join(args.out, "user_bars.jsonl")

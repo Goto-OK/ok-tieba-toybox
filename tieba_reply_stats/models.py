@@ -13,17 +13,17 @@ class Floor:
 
     post_no: int
     pid: str
-    author: str               # 显示名（昵称 user_nickname，浏览时最先看到）
-    author_name: str = ""     # 用户名（原始 user_name，如 “吧友1384”）
+    author: str  # 显示名（昵称 user_nickname，浏览时最先看到）
+    author_name: str = ""  # 用户名（原始 user_name，如 “吧友1384”）
     author_id: str = ""
-    portrait: str = ""        # 头像标识，用于查询用户资料
+    portrait: str = ""  # 头像标识，用于查询用户资料
     posted_at: Optional[datetime] = None
     content: str = ""
-    reply_num: int = 0        # 楼中楼回复数（页面里的 comment_num）
-    is_op: bool = False       # 是否楼主
+    reply_num: int = 0  # 楼中楼回复数（页面里的 comment_num）
+    is_op: bool = False  # 是否楼主
     is_deleted: bool = False
-    level: str = ""           # 本吧等级（数字字符串，如 "9"）
-    badge: str = ""           # 本吧头衔名（如 "瘟疫摇篮"）
+    level: str = ""  # 本吧等级（数字字符串，如 "9"）
+    badge: str = ""  # 本吧头衔名（如 "瘟疫摇篮"）
 
     @property
     def floor_label(self) -> str:
@@ -37,15 +37,15 @@ class Comment:
     floor_no: int
     floor_author: str
     pid: str
-    author: str               # 显示名（昵称）
-    author_name: str = ""     # 用户名（原始）
+    author: str  # 显示名（昵称）
+    author_name: str = ""  # 用户名（原始）
     author_id: str = ""
-    portrait: str = ""        # 头像标识
+    portrait: str = ""  # 头像标识
     posted_at: Optional[datetime] = None
     content: str = ""
-    reply_to: str = ""        # 被回复人
+    reply_to: str = ""  # 被回复人
     is_op: bool = False
-    level: str = ""           # 本吧等级（能对上楼层作者时补全）
+    level: str = ""  # 本吧等级（能对上楼层作者时补全）
 
 
 @dataclass
@@ -85,8 +85,13 @@ class ThreadData:
         buckets: Dict[str, dict] = {}
 
         def touch(
-            name: str, uid: str, floor_no: int, level: str = "", badge: str = "",
-            username: str = "", portrait: str = "",
+            name: str,
+            uid: str,
+            floor_no: int,
+            level: str = "",
+            badge: str = "",
+            username: str = "",
+            portrait: str = "",
         ) -> dict:
             level = str(level or "").strip()
             if level in ("0", "None"):
@@ -123,16 +128,25 @@ class ThreadData:
             if not include_op and floor.post_no == 1:
                 continue
             bucket = touch(
-                floor.author, floor.author_id, floor.post_no,
-                floor.level, floor.badge, floor.author_name, floor.portrait,
+                floor.author,
+                floor.author_id,
+                floor.post_no,
+                floor.level,
+                floor.badge,
+                floor.author_name,
+                floor.portrait,
             )
             bucket["floor_count"] += 1
             bucket["total"] += 1
 
         for comment in self.comments:
             bucket = touch(
-                comment.author, comment.author_id, comment.floor_no,
-                level=comment.level, username=comment.author_name, portrait=comment.portrait,
+                comment.author,
+                comment.author_id,
+                comment.floor_no,
+                level=comment.level,
+                username=comment.author_name,
+                portrait=comment.portrait,
             )
             bucket["comment_count"] += 1
             bucket["total"] += 1

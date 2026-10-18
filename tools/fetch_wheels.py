@@ -58,7 +58,8 @@ def main() -> None:
             print(f"=== {pkg} index ERR {error}")
             continue
         candidates = [
-            item for item in data.get("files", [])
+            item
+            for item in data.get("files", [])
             if item.get("filename", "").endswith(".whl") and want in item.get("filename", "")
         ]
         if only:

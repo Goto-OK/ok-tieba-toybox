@@ -7,18 +7,20 @@ def _content(text: str) -> bytes:
 
 
 def build_response() -> bytes:
-    post = b"".join([
-        _fv(2, 123),                 # thread_id
-        _fv(3, 111),                 # post_id
-        _fv(5, 1700000000),          # create_time
-        _fb(6, "测试吧".encode()),    # forum_name
-        _fb(7, "测试标题".encode()),  # title
-        _fv(17, 5),                  # reply_num
-        _fv(18, 1001),               # user_id
-        _fb(10, "alice".encode()),   # user_name
-        _fb(35, "Alice".encode()),   # name_show
-        _fb(49, _content("正文")),
-    ])
+    post = b"".join(
+        [
+            _fv(2, 123),  # thread_id
+            _fv(3, 111),  # post_id
+            _fv(5, 1700000000),  # create_time
+            _fb(6, "测试吧".encode()),  # forum_name
+            _fb(7, "测试标题".encode()),  # title
+            _fv(17, 5),  # reply_num
+            _fv(18, 1001),  # user_id
+            _fb(10, "alice".encode()),  # user_name
+            _fb(35, "Alice".encode()),  # name_show
+            _fb(49, _content("正文")),
+        ]
+    )
     return _fb(2, _fb(1, post))
 
 

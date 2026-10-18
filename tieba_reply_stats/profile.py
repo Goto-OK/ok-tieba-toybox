@@ -33,9 +33,41 @@ PORTRAIT_RE = re.compile(r"[?&]id=(tb\.[0-9A-Za-z._-]+)")
 
 
 _MOJIBAKE_HINTS = (
-    "锟斤拷", "杩", "橀", "吂", "姹", "熸", "湀", "浣", "犲", "鐨", "鏄", "涓",
-    "浜", "鍜", "寮", "鍙", "璇", "鍚", "闂", "棰", "绔", "鎴", "戠", "瓒",
-    "娓", "爜", "銆", "傚", "姛", "鑳", "芥", "槸", "寰", "堝", "啋",
+    "锟斤拷",
+    "杩",
+    "橀",
+    "吂",
+    "姹",
+    "熸",
+    "湀",
+    "浣",
+    "犲",
+    "鐨",
+    "鏄",
+    "涓",
+    "浜",
+    "鍜",
+    "寮",
+    "鍙",
+    "璇",
+    "鍚",
+    "闂",
+    "棰",
+    "绔",
+    "鎴",
+    "戠",
+    "瓒",
+    "娓",
+    "爜",
+    "銆",
+    "傚",
+    "姛",
+    "鑳",
+    "芥",
+    "槸",
+    "寰",
+    "堝",
+    "啋",
 )
 _WEIRD_RE = re.compile(r"[\u0080-\u07ff\ue000-\uf8ff]")
 
@@ -71,8 +103,7 @@ def search_user_by_nickname(fetcher, nickname: str) -> Dict:
         items = (data.get("exactMatch") or []) + (data.get("fuzzyMatch") or [])
         for item in items:
             names = {
-                str(item.get(key) or "").strip().lower()
-                for key in ("name", "user_nickname", "show_nickname")
+                str(item.get(key) or "").strip().lower() for key in ("name", "user_nickname", "show_nickname")
             }
             if target not in names:
                 continue
@@ -80,7 +111,9 @@ def search_user_by_nickname(fetcher, nickname: str) -> Dict:
             return {
                 "uid": str(item.get("id") or ""),
                 "username": username,
-                "nickname": _fix_mojibake(str(item.get("user_nickname") or item.get("show_nickname") or username)),
+                "nickname": _fix_mojibake(
+                    str(item.get("user_nickname") or item.get("show_nickname") or username)
+                ),
                 "portrait": str(item.get("portrait") or "").split("?")[0].rstrip("/").rsplit("/", 1)[-1],
             }
         if not data.get("has_more"):
@@ -218,9 +251,7 @@ def fetch_follow_forums(fetcher, user_id: str, max_pages: int = 3) -> Dict:
 
 def _strip_tags(text) -> str:
     if isinstance(text, list):
-        text = "".join(
-            str(item.get("text") or "") for item in text if isinstance(item, dict)
-        )
+        text = "".join(str(item.get("text") or "") for item in text if isinstance(item, dict))
     text = str(text or "")
     text = re.sub(r"<[^>]+>", "", text)
     return re.sub(r"\s+", " ", text).strip()
@@ -269,16 +300,18 @@ def fetch_user_posts(
             return
         if end and day and day > end:
             return
-        posts.append({
-            "tid": str(tid),
-            "title": title,
-            "bar": bar or "",
-            "time": day.strftime("%Y-%m-%d") if day else "",
-            "ts": ts,
-            "type": kind,
-            "content": content[:120],
-            "url": f"https://tieba.baidu.com/p/{tid}",
-        })
+        posts.append(
+            {
+                "tid": str(tid),
+                "title": title,
+                "bar": bar or "",
+                "time": day.strftime("%Y-%m-%d") if day else "",
+                "ts": ts,
+                "type": kind,
+                "content": content[:120],
+                "url": f"https://tieba.baidu.com/p/{tid}",
+            }
+        )
 
     # 1) replies: old PC feed (type=2)
     page = 1
@@ -333,8 +366,15 @@ def fetch_user_posts(
     thread_items = userpost_pb.fetch_user_threads(fetcher, uid, 3) if uid else []
     if thread_items:
         for item in thread_items:
-            add_post(item.get("tid"), item.get("pid"), item.get("title"), item.get("forum"),
-                     item.get("ts"), "主题帖", item.get("content"))
+            add_post(
+                item.get("tid"),
+                item.get("pid"),
+                item.get("title"),
+                item.get("forum"),
+                item.get("ts"),
+                "主题帖",
+                item.get("content"),
+            )
     elif portrait:
         # fallback: old PC feed type=1
         page = 1
@@ -364,8 +404,15 @@ def fetch_user_posts(
                 thread = item.get("thread_info") or {}
                 tid = str(thread.get("tid") or thread.get("id") or "")
                 ts = int(thread.get("create_time") or thread.get("last_time_int") or 0)
-                add_post(tid, "", thread.get("title") or "", thread.get("fname") or "", ts,
-                         "主题帖", _strip_tags(thread.get("abstract") or ""))
+                add_post(
+                    tid,
+                    "",
+                    thread.get("title") or "",
+                    thread.get("fname") or "",
+                    ts,
+                    "主题帖",
+                    _strip_tags(thread.get("abstract") or ""),
+                )
             if not data.get("has_more"):
                 break
             page += 1
@@ -393,10 +440,9 @@ def fetch_user_profile(
         portrait = pb.get("portrait") or fetch_portrait(fetcher, username)
     follow = fetch_follow_forums(fetcher, user_id)
     posts = (
-        fetch_user_posts(
-            fetcher, portrait, post_count, start_date, end_date, prefer, uid=user_id
-        )
-        if portrait or user_id else []
+        fetch_user_posts(fetcher, portrait, post_count, start_date, end_date, prefer, uid=user_id)
+        if portrait or user_id
+        else []
     )
     panel = fetch_panel(fetcher, username)
 
@@ -420,8 +466,7 @@ def fetch_user_profile(
             level = int(forum.get("level") or 0)
             old = merged.get(name)
             if old is None or level > int(old.get("level") or 0):
-                merged[name] = {"name": name, "level": level,
-                                "level_name": forum.get("level_name") or ""}
+                merged[name] = {"name": name, "level": level, "level_name": forum.get("level_name") or ""}
         hidden_forums = sorted(merged.values(), key=lambda item: item.get("level") or 0, reverse=True)
         if not level_in_bar:
             for forum in hidden_forums:
@@ -450,4 +495,3 @@ def fetch_user_profile(
         "post_num": pb.get("post_num") or panel.get("post_num"),
         "profile_url": PROFILE_URL.format(un=quote(username)) if username else "",
     }
-

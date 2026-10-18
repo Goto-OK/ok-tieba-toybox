@@ -32,7 +32,7 @@ def build_parser() -> argparse.ArgumentParser:
             "示例：\n"
             "  python tieba_stats.py https://tieba.baidu.com/p/1234567890\n"
             "  python tieba_stats.py 1234567890 -o 统计.xlsx --delay 1.5\n"
-            "  python tieba_stats.py <url1> <url2> --no-comments --cookie \"BDUSS=...; STOKEN=...\"\n"
+            '  python tieba_stats.py <url1> <url2> --no-comments --cookie "BDUSS=...; STOKEN=..."\n'
         ),
     )
     parser.add_argument("urls", nargs="+", help="帖子链接或帖子 ID，可一次传入多个")
@@ -82,7 +82,7 @@ def _retry_with_cookie(error, raw, fetcher, options, cookies) -> Optional[Thread
     if cookies:
         return None
     if not sys.stdin.isatty():
-        print("当前不是交互终端，请改用 --cookie \"浏览器里的 Cookie\" 重试。")
+        print('当前不是交互终端，请改用 --cookie "浏览器里的 Cookie" 重试。')
         return None
     print("请用浏览器打开该帖子，F12 → Network → 复制请求头里的整行 Cookie，粘贴到这里。")
     try:

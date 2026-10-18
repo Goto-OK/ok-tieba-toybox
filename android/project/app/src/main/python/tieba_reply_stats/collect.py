@@ -26,13 +26,13 @@ class CollectCancelled(RuntimeError):
 
 @dataclass
 class CollectOptions:
-    max_pages: int = 0              # 0 表示抓完全部
+    max_pages: int = 0  # 0 表示抓完全部
     include_comments: bool = True
-    max_comment_pages: int = 30     # 单层楼中楼最多翻多少页（防止异常死循环）
-    enrich_levels: bool = False     # 为只回楼中楼、没发过楼层的用户补全等级（较慢）
-    pb_levels: bool = True          # 用新版网页接口补全楼层/楼中楼等级（较快，默认开）
+    max_comment_pages: int = 30  # 单层楼中楼最多翻多少页（防止异常死循环）
+    enrich_levels: bool = False  # 为只回楼中楼、没发过楼层的用户补全等级（较慢）
+    pb_levels: bool = True  # 用新版网页接口补全楼层/楼中楼等级（较快，默认开）
     verbose: bool = True
-    log: Optional[Callable[[str], None]] = None      # 自定义输出（GUI 用）
+    log: Optional[Callable[[str], None]] = None  # 自定义输出（GUI 用）
     should_stop: Optional[Callable[[], bool]] = None  # 返回 True 时中断抓取
 
 
@@ -232,9 +232,7 @@ def _collect_comments(
     for pn in sorted(pages):
         _check_stop(options)
         try:
-            payload = fetcher.get_json(
-                total_comment_url(tid, thread.meta.fid, pn), name=f"total_{tid}_{pn}"
-            )
+            payload = fetcher.get_json(total_comment_url(tid, thread.meta.fid, pn), name=f"total_{tid}_{pn}")
             got = parse_total_comment(payload, floors_by_pid)
         except CaptchaError:
             raise
@@ -254,9 +252,7 @@ def _collect_comments(
         _check_stop(options)
         have = floor_have.get(floor.post_no, 0)
         if have < floor.reply_num:
-            more = _fetch_floor_comments(
-                tid, floor, fetcher, options, log, set(collected.keys()), have
-            )
+            more = _fetch_floor_comments(tid, floor, fetcher, options, log, set(collected.keys()), have)
             for comment in more:
                 if comment.pid and comment.pid not in collected:
                     collected[comment.pid] = comment

@@ -127,9 +127,7 @@ def fetch_nested_users(fetcher, tid: str, floors, log=None) -> Dict[str, Dict[st
             continue
         offset = 0
         for _ in range(60):
-            params = _sign(
-                {"post_id": floor.pid, "thread_id": tid, "offset": offset, "_client_type": 20}
-            )
+            params = _sign({"post_id": floor.pid, "thread_id": tid, "offset": offset, "_client_type": 20})
             try:
                 payload = fetcher.post_json(NESTED_URL, params, name=f"nested_{floor.pid}_{offset}")
             except Exception:  # noqa: BLE001
@@ -226,4 +224,3 @@ def fill_thread_levels(thread, fetcher, log=None) -> int:
             mapping.update(nested)
             filled += apply(nested)
     return filled
-
