@@ -1236,7 +1236,10 @@ class App:
                 tags=self._row_tags(post.get("bar"), "posts"),
             )
             self._lookup_post_urls[iid] = post.get("url") or ""
-        self.lookup_forum_note.configure(text=self._forum_note(profile))
+        forum_note = self._forum_note(profile)
+        if self.mode_var.get() == "guest":
+            forum_note += "（免登录：关注列表可能不完整）"
+        self.lookup_forum_note.configure(text=forum_note)
 
         info = (
             f"昵称 {encode_display(profile.get('nickname')) or '未知'} | 用户名 {profile.get('username') or '未知'} | "
@@ -1250,6 +1253,8 @@ class App:
             info += f" | 关注数 {profile['concern']}"
         if profile.get("post_num"):
             info += f" | 发帖 {profile['post_num']}"
+        if self.mode_var.get() == "guest":
+            info += " | 免登录：关注列表可能不完整"
         # 查用户页只做资料查看，不参与本地标记
         hit_level, hit_bar = "", ""
         hidden_follows = False
@@ -1307,7 +1312,10 @@ class App:
                 ),
             )
         with_level = sum(1 for user in users if user.get("level"))
-        self.people_hint.configure(text=f"v{VERSION} · 共 {len(users)} 人 · 有等级 {with_level}")
+        mode_note = ""
+        if self._risk_enabled():
+            mode_note = " · 红绿灯：仅发言" if self.mode_var.get() == "guest" else " · 红绿灯：发言+关注"
+        self.people_hint.configure(text=f"v{VERSION} · 共 {len(users)} 人 · 有等级 {with_level}{mode_note}")
         self.profile_status.configure(text="选择左边一个人查看详情")
         for tree in (self.profile_forum_tree, self.profile_post_tree):
             for item in tree.get_children():
@@ -1349,7 +1357,10 @@ class App:
             except tk.TclError:
                 pass
         if hasattr(self, "batch_btn"):
-            self.batch_btn.configure(state="normal" if enabled else "disabled")
+            text = "一键红绿灯"
+            if enabled and self.mode_var.get() == "guest":
+                text = "一键红绿灯（仅发言）"
+            self.batch_btn.configure(state="normal" if enabled else "disabled", text=text)
 
     def _on_risk_toggle(self) -> None:
         enabled = bool(self.risk_var.get())
@@ -1408,6 +1419,7 @@ class App:
                 if login
                 else "公开帖子 · 每层前 10 条楼中楼 · 红绿灯只看发言"
             )
+        self._apply_risk_ui()
 
     def _on_mode_select(self) -> None:
         mode = self.mode_var.get()
@@ -2351,7 +2363,10 @@ class App:
                 tags=self._row_tags(post.get("bar"), "posts"),
             )
             self._profile_post_urls[iid] = post.get("url") or ""
-        self.profile_forum_note.configure(text=self._forum_note(profile, self._user_bar(user), level or ""))
+        forum_note = self._forum_note(profile, self._user_bar(user), level or "")
+        if self.mode_var.get() == "guest":
+            forum_note += "（免登录：关注列表可能不完整）"
+        self.profile_forum_note.configure(text=forum_note)
 
         # 本地标记：默认关闭；免登录只看本帖发言，登录才看关注列表
         if not self._risk_enabled():
