@@ -108,6 +108,7 @@ tieba-reply-stats/
 ```bash
 python -m pip install -e ".[dev]"
 python -m ruff check .              # 代码规范检查
+python -m mypy                     # 类型检查
 python -m pytest                   # 单元测试（离线）
 python tests/selftest.py           # 端到端自测（离线 fixtures）
 python tieba_gui.py                # 桌面 GUI

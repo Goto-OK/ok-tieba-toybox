@@ -10,6 +10,7 @@ python -m pip install -e ".[dev]"
 
 ```bash
 python -m ruff check .
+python -m mypy
 python -m pytest
 python tests/selftest.py
 python scripts/sync_android.py --check

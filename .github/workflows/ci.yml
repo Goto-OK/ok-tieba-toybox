@@ -23,6 +23,9 @@ jobs:
       - name: Lint
         run: python -m ruff check .
 
+      - name: Type check
+        run: python -m mypy
+
       - name: Unit tests
         run: python -m pytest
 

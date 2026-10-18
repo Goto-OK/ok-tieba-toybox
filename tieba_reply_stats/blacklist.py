@@ -143,7 +143,7 @@ def import_xlsx(path: str) -> Dict[str, List[str]]:
         return {"safe": [], "warn": [], "ban": []}
     workbook = load_workbook(path, read_only=True, data_only=True)
     sheet = workbook.active
-    result = {"safe": [], "warn": [], "ban": []}
+    result: Dict[str, List[str]] = {"safe": [], "warn": [], "ban": []}
     for row in sheet.iter_rows(values_only=True):
         if not row:
             continue

@@ -10,6 +10,7 @@ from __future__ import annotations
 import os
 import re
 import sys
+import tempfile
 from urllib.parse import parse_qs, urlparse
 
 BASE = os.path.dirname(os.path.abspath(__file__))
@@ -155,7 +156,7 @@ def test_export(render: bool):
     fetcher = FixtureFetcher(load_fixtures())
     thread = collect_thread(URL, fetcher, CollectOptions(verbose=False))
 
-    sample_dir = os.path.join(ROOT, "sample")
+    sample_dir = os.path.join(ROOT, "sample") if render else tempfile.mkdtemp(prefix="tieba-selftest-")
     os.makedirs(sample_dir, exist_ok=True)
     path = os.path.join(sample_dir, "贴吧回复统计示例.xlsx")
     export_workbook(path, [thread])

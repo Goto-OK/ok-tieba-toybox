@@ -6,7 +6,7 @@ import argparse
 import os
 import sys
 from datetime import datetime
-from typing import List, Optional
+from typing import Any, List, Optional, cast
 
 from .collect import CollectError, CollectOptions, collect_thread, extract_tid
 from .export import export_workbook
@@ -109,10 +109,12 @@ def _retry_with_cookie(error, raw, fetcher, options, cookies) -> Optional[Thread
 
 
 def main(argv: Optional[List[str]] = None) -> int:
-    if hasattr(sys.stdout, "reconfigure"):
+    stdout = cast(Any, sys.stdout)
+    stderr = cast(Any, sys.stderr)
+    if hasattr(stdout, "reconfigure"):
         try:
-            sys.stdout.reconfigure(encoding="utf-8", errors="replace")
-            sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+            stdout.reconfigure(encoding="utf-8", errors="replace")
+            stderr.reconfigure(encoding="utf-8", errors="replace")
         except Exception:  # noqa: BLE001 - 个别 Windows 控制台不支持重设编码
             pass
 
@@ -156,6 +158,7 @@ def main(argv: Optional[List[str]] = None) -> int:
             continue
         if verbose:
             print()
+        thread: Optional[ThreadData] = None
         try:
             thread = collect_thread(raw, fetcher, options)
         except CaptchaError as error:

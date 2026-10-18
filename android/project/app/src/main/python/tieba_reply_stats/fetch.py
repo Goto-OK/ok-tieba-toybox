@@ -403,4 +403,4 @@ class Fetcher:
 
     def cookie_dict(self) -> Dict[str, str]:
         """返回当前 Cookie 的 {name: value} 副本（给需要表单签名的接口用）。"""
-        return {cookie.name: cookie.value for cookie in self.jar}
+        return {cookie.name: cookie.value or "" for cookie in self.jar}

@@ -57,6 +57,7 @@ python -m pip install -e ".[dev]"
 
 ```bash
 python -m ruff check .
+python -m mypy
 python -m pytest
 python tests/selftest.py
 python scripts/sync_android.py --check
@@ -94,6 +95,7 @@ python scripts/sync_android.py --check
 ## 10. 完成定义（DoD）
 
 - [ ] `ruff check` 通过
+- [ ] `mypy` 通过
 - [ ] `pytest` 通过
 - [ ] `selftest` 通过
 - [ ] 相关文档/CHANGELOG 已更新

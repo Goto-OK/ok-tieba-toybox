@@ -164,16 +164,16 @@ def fill_thread_levels(thread, fetcher, log=None) -> int:
     mapping = fetch_page_users(fetcher, tid, log=log)
 
     def apply(users: Dict[str, Dict[str, str]]) -> int:
-        by_name = {}
-        by_nick = {}
-        by_portrait = {}
-        for info in users.values():
-            if info.get("name"):
-                by_name.setdefault(info["name"], info)
-            if info.get("nick"):
-                by_nick.setdefault(info["nick"], info)
-            if info.get("portrait"):
-                by_portrait.setdefault(info["portrait"], info)
+        by_name: Dict[str, Dict[str, str]] = {}
+        by_nick: Dict[str, Dict[str, str]] = {}
+        by_portrait: Dict[str, Dict[str, str]] = {}
+        for user_info in users.values():
+            if user_info.get("name"):
+                by_name.setdefault(user_info["name"], user_info)
+            if user_info.get("nick"):
+                by_nick.setdefault(user_info["nick"], user_info)
+            if user_info.get("portrait"):
+                by_portrait.setdefault(user_info["portrait"], user_info)
 
         def lookup(author_id: str, username: str, nick: str, portrait: str) -> Optional[Dict[str, str]]:
             portrait_key = str(portrait or "").split("?")[0]

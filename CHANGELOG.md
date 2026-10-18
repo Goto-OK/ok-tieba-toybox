@@ -16,6 +16,7 @@
 - `ruff` 全量通过，配置排除 Android 生成副本；
 - 新增 GitHub Actions CI（Windows：ruff + pytest + selftest）；
 - 新增 pre-commit ruff 钩子；
+- 接入 mypy 类型检查，核心包 0 错误；
 - 用 `Fetcher.online` 能力标记替代 `type(fetcher) is Fetcher` 判断。
 
 ## [1.2.0] - 2026-10-18
