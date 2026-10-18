@@ -18,7 +18,9 @@
 
 桌面模式 UI 已完成：`a08f1d9 feat: add desktop guest/login chooser and mode persistence`。
 
-红绿灯分支与默认关闭已完成：`a656a70 feat: gate risk marks and judge guest lights by posts only`（28 个测试通过）。
+红绿灯分支与默认关闭已完成：`a656a70 feat: gate risk marks and judge guest lights by posts only`。
+
+文案与导出已完成：`20b3651 feat: rename lookup and marks, record mode in export`。
 
 ### 核心
 
@@ -50,8 +52,8 @@
 - [ ] 登录模式保持完整资料与关注列表
 - [x] 红绿灯默认关闭，设置里开启后才显示
 - [x] 开启时弹免责提示
-- [ ] UI 文案：查成分 → 查用户，黑名单 → 本地标记
-- [ ] 关闭时导出不带红绿灯/标记
+- [x] UI 文案：查成分 → 查用户，黑名单 → 本地标记
+- [x] 关闭时导出不带红绿灯/标记
 
 ### CLI / 导出
 
