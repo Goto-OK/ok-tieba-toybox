@@ -14,7 +14,9 @@
 
 规范已完成并提交：`docs: define explicit guest/login modes and guest light rules`。
 
-核心已完成：`b77a8f8 feat: add explicit guest/login mode to collection core`（25 个测试通过）。
+核心已完成：`b77a8f8 feat: add explicit guest/login mode to collection core`。
+
+桌面模式 UI 已完成：`a08f1d9 feat: add desktop guest/login chooser and mode persistence`（28 个测试通过）。
 
 ### 核心
 
@@ -26,12 +28,12 @@
 
 ### 桌面 GUI
 
-- [ ] 首次启动「选择使用方式」弹窗：两张卡片、默认免登录、记住选择
-- [ ] 「抓取」页顶部常驻 `[免登录] [登录]` 分段选择器 + 当前能力提示
-- [ ] 免登录时 Cookie 输入框禁用但保留内容
-- [ ] 登录模式无 Cookie 时展开/聚焦 Cookie 区并提示，不开始
-- [ ] 模式写入 `settings.json`，重启恢复
-- [ ] 状态栏 / 运行日志显示本次模式
+- [x] 首次启动「选择使用方式」弹窗：两张卡片、默认免登录、记住选择
+- [x] 「抓取」页顶部常驻 `[免登录] [登录]` 分段选择器 + 当前能力提示
+- [x] 免登录时 Cookie 输入框禁用但保留内容
+- [x] 登录模式无 Cookie 时展开/聚焦 Cookie 区并提示，不开始
+- [x] 模式写入 `settings.json`，重启恢复
+- [x] 状态栏 / 运行日志显示本次模式
 
 ### 红绿灯
 
@@ -71,7 +73,7 @@
 - [x] 免登录忽略 Cookie
 - [ ] 免登录红绿灯只使用发言吧，不产生黄灯
 - [ ] 登录红绿灯隐藏关注标黄规则不回归
-- [ ] 设置持久化模式
+- [x] 设置持久化模式
 - [ ] 现有 pytest / selftest 全绿
 
 ### 文档
