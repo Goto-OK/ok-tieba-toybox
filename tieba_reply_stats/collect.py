@@ -26,6 +26,7 @@ class CollectCancelled(RuntimeError):
 
 @dataclass
 class CollectOptions:
+    mode: str = "guest"  # guest / login，必须显式指定
     max_pages: int = 0  # 0 表示抓完全部
     include_comments: bool = True
     max_comment_pages: int = 30  # 单层楼中楼最多翻多少页（防止异常死循环）
@@ -95,11 +96,19 @@ def collect_thread(url: str, fetcher: Fetcher, options: CollectOptions) -> Threa
 
     _check_stop(options)
     log(f"[帖子 {tid}] {source_url}")
-    if getattr(fetcher, "online", True) and not fetcher.cookie_dict().get("BDUSS"):
+    mode = (options.mode or "guest").strip().lower()
+    if mode not in ("guest", "login"):
+        raise ValueError(f"未知抓取模式：{options.mode!r}（只支持 guest / login）")
+    if mode == "guest":
         from .page_pb import collect_thread_anon
 
-        log("  未提供 Cookie，使用游客模式（公开帖子 / 每层前 10 条楼中楼）")
-        return collect_thread_anon(source_url, fetcher, options)
+        log("  模式：免登录（公开帖子 / 每层前 10 条楼中楼）")
+        data = collect_thread_anon(source_url, fetcher, options)
+        data.meta.mode = "guest"
+        return data
+    if not fetcher.cookie_dict().get("BDUSS"):
+        raise CollectError("登录模式需要 Cookie（至少包含 BDUSS）。请切换到免登录模式，或先填写 Cookie。")
+    log("  模式：登录（完整楼中楼 / 关注 / 等级）")
     first = fetcher.get(thread_page_url(tid, 1), name=f"thread_{tid}_p1")
     meta, floors = parse_thread_page(first.text, source_url, tid)
     if not floors:
@@ -167,6 +176,7 @@ def collect_thread(url: str, fetcher: Fetcher, options: CollectOptions) -> Threa
             url=source_url,
             total_page=total_page or pages_fetched,
             reply_num=meta.reply_num,
+            mode="login",
         ),
         floors=sorted(floors_by_no.values(), key=lambda item: item.post_no),
         pages_fetched=pages_fetched,

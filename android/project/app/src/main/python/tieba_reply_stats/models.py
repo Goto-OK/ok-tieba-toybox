@@ -57,6 +57,7 @@ class ThreadMeta:
     url: str = ""
     total_page: int = 0
     reply_num: int = 0
+    mode: str = ""  # guest / login
 
 
 @dataclass

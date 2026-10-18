@@ -270,8 +270,17 @@ def build_request(
     return _fb(1, data)
 
 
-def _request(fetcher, tid: str, pn: int, rn: int, with_comments: bool, comment_rn: int) -> bytes:
-    bduss = fetcher.cookie_dict().get("BDUSS", "") if fetcher is not None else ""
+def _request(
+    fetcher,
+    tid: str,
+    pn: int,
+    rn: int,
+    with_comments: bool,
+    comment_rn: int,
+    bduss: Optional[str] = None,
+) -> bytes:
+    if bduss is None:
+        bduss = fetcher.cookie_dict().get("BDUSS", "") if fetcher is not None else ""
     payload = build_request(tid, pn, rn, with_comments, comment_rn, bduss)
     boundary = "-*_r1999"
     body = (
@@ -293,9 +302,15 @@ def _request(fetcher, tid: str, pn: int, rn: int, with_comments: bool, comment_r
 
 
 def fetch_page(
-    fetcher, tid: str, pn: int = 1, with_comments: bool = True, rn: int = 30, comment_rn: int = 10
+    fetcher,
+    tid: str,
+    pn: int = 1,
+    with_comments: bool = True,
+    rn: int = 30,
+    comment_rn: int = 10,
+    bduss: Optional[str] = None,
 ) -> Dict:
-    raw = _request(fetcher, tid, pn, rn, with_comments, comment_rn)
+    raw = _request(fetcher, tid, pn, rn, with_comments, comment_rn, bduss)
     return parse_response(raw, with_comments)
 
 
@@ -343,7 +358,7 @@ def collect_thread_anon(url: str, fetcher, options) -> ThreadData:
     from .collect import extract_tid
 
     tid = extract_tid(url)
-    first = fetch_page(fetcher, tid, 1, options.include_comments, 30, 10)
+    first = fetch_page(fetcher, tid, 1, options.include_comments, 30, 10, bduss="")
     thread = first["thread"]
     page = first["page"]
     meta = ThreadMeta(
@@ -354,6 +369,7 @@ def collect_thread_anon(url: str, fetcher, options) -> ThreadData:
         url=url,
         total_page=page.get("total") or 1,
         reply_num=thread.get("reply_num") or 0,
+        mode="guest",
     )
     floors: List[Floor] = []
     comments: List[Comment] = []
@@ -407,7 +423,7 @@ def collect_thread_anon(url: str, fetcher, options) -> ThreadData:
         if options.should_stop and options.should_stop():
             break
         try:
-            add_page(fetch_page(fetcher, tid, pn, options.include_comments, 30, 10))
+            add_page(fetch_page(fetcher, tid, pn, options.include_comments, 30, 10, bduss=""))
         except Exception as error:  # noqa: BLE001
             if options.log:
                 options.log(f"  第 {pn} 页失败：{error}")

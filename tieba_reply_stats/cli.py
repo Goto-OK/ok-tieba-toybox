@@ -49,6 +49,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="为只回楼中楼的用户补全本吧等级（较慢，每人多一次查询）",
     )
     parser.add_argument("--max-comment-pages", type=int, default=30, help="单层楼中楼最多翻页数（默认 30）")
+    parser.add_argument(
+        "--mode",
+        choices=("guest", "login"),
+        help="抓取模式；默认免登录，传 --cookie 且未指定时自动登录",
+    )
     parser.add_argument("--cookie", help="浏览器里复制的 Cookie 字符串")
     parser.add_argument("--cookie-file", help="Cookie 文件（k=v 文本或 Netscape cookies.txt）")
     parser.add_argument("--proxy", help="代理地址，如 http://127.0.0.1:7890")
@@ -128,6 +133,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         print(error)
         return 2
 
+    mode = args.mode or ("login" if cookies.get("BDUSS") else "guest")
     fetcher = Fetcher(
         cookie=cookies,
         user_agent=args.user_agent or DEFAULT_UA,
@@ -141,6 +147,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         verbose=verbose,
     )
     options = CollectOptions(
+        mode=mode,
         max_pages=max(0, args.max_pages),
         include_comments=not args.no_comments,
         enrich_levels=args.enrich_levels,

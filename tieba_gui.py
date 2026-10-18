@@ -2251,6 +2251,7 @@ class App:
                 self._append_log("Cookie 保存失败，本次仍可正常使用。", "muted")
 
         options = CollectOptions(
+            mode="login" if cookie.get("BDUSS") else "guest",
             include_comments=self.comments_var.get(),
             enrich_levels=True,
             pb_levels=True,

@@ -34,7 +34,7 @@ class FixtureFetcher(Fetcher):
     """不联网，按 URL 返回本地样本。"""
 
     def __init__(self, fixtures):
-        super().__init__(delay=0, retries=1, verbose=False)
+        super().__init__(cookie={"BDUSS": "fixture"}, delay=0, retries=1, verbose=False)
         self.online = False
         self.fixtures = fixtures
 
@@ -79,7 +79,7 @@ def test_helpers():
 
 def test_collect():
     fetcher = FixtureFetcher(load_fixtures())
-    thread = collect_thread(URL, fetcher, CollectOptions(verbose=False))
+    thread = collect_thread(URL, fetcher, CollectOptions(mode="login", verbose=False))
 
     check(thread.meta.tid == TID, "tid")
     check(thread.meta.title == "测试帖子标题", f"标题：{thread.meta.title!r}")
@@ -154,7 +154,7 @@ def test_export(render: bool):
     from openpyxl import load_workbook
 
     fetcher = FixtureFetcher(load_fixtures())
-    thread = collect_thread(URL, fetcher, CollectOptions(verbose=False))
+    thread = collect_thread(URL, fetcher, CollectOptions(mode="login", verbose=False))
 
     sample_dir = os.path.join(ROOT, "sample") if render else tempfile.mkdtemp(prefix="tieba-selftest-")
     os.makedirs(sample_dir, exist_ok=True)
@@ -188,7 +188,7 @@ def test_export(render: bool):
     check(comment_sheet["I2"].value not in (None, ""), f"楼中楼内容不为空：{comment_sheet['I2'].value!r}")
 
     # 多帖导出
-    second = collect_thread(URL, fetcher, CollectOptions(verbose=False))
+    second = collect_thread(URL, fetcher, CollectOptions(mode="login", verbose=False))
     path2 = os.path.join(sample_dir, "多帖汇总示例.xlsx")
     export_workbook(path2, [thread, second])
     book2 = load_workbook(path2)

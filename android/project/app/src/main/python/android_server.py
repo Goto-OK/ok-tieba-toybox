@@ -190,6 +190,7 @@ def _run_job(payload: dict) -> None:
         _log(f"开始抓取，共 {len(urls)} 个帖子" + ("" if cookie else "（游客模式：无 Cookie）"))
         fetcher = Fetcher(cookie=parse_cookie_input(cookie), delay=0.6, verbose=False)
         options = CollectOptions(
+            mode="login" if cookie else "guest",
             max_pages=int(payload.get("max_pages") or 0),
             include_comments=bool(payload.get("comments", True)),
             max_comment_pages=int(payload.get("max_comment_pages") or 30),
