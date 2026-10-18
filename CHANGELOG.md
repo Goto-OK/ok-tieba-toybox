@@ -17,7 +17,9 @@
 - 新增 GitHub Actions CI（Windows：ruff + pytest + selftest）；
 - 新增 pre-commit ruff 钩子；
 - 接入 mypy 类型检查，核心包 0 错误；
-- 用 `Fetcher.online` 能力标记替代 `type(fetcher) is Fetcher` 判断。
+- 用 `Fetcher.online` 能力标记替代 `type(fetcher) is Fetcher` 判断；
+- 新增 `requirements.lock` / `requirements-dev.lock`，固定运行时与开发工具版本；
+- GUI 纳入 mypy 检查。
 
 ## [1.2.0] - 2026-10-18
 

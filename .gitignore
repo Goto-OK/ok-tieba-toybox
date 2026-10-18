@@ -10,6 +10,8 @@ venv/
 .mypy_cache/
 
 # Local configuration / secrets
+pip-unpack-*/
+pip-ephem-wheel-cache-*/
 .env
 cookie*.json
 *.cookie

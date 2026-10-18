@@ -7,12 +7,17 @@
 
 - Python **3.10+**（CI 用 3.12）；
 - 依赖：`openpyxl`、`lxml`（Android 用自带的 BeautifulSoup 兼容层）；
-- 开发工具：`pytest`、`ruff`；
+- 开发工具：`pytest`、`ruff`、`mypy`；
+- 运行时版本锁定在 `requirements.lock`，开发环境用 `requirements-dev.lock`；
 - 统一 UTF-8、LF；`.bat` / `.ps1` 用 CRLF。
 
 ```bash
-python -m pip install -e ".[dev]"
+python -m pip install -r requirements-dev.lock
+python -m pip install -e . --no-deps
 ```
+
+修改依赖后：更新 `requirements.txt` / `pyproject.toml` 的范围，在干净环境安装，
+重新生成两个 `.lock` 文件，并在 CI 验证。
 
 ## 2. 代码风格
 

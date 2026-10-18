@@ -17,7 +17,7 @@ import traceback
 import webbrowser
 from datetime import datetime
 from tkinter import filedialog, messagebox, ttk
-from typing import List
+from typing import Any, Callable, Dict, List, Optional
 from urllib.parse import quote
 
 from tieba_reply_stats.blacklist import (
@@ -519,8 +519,8 @@ class App:
         return users
 
     def _build_people_tab(self) -> None:
-        self._profile_cache = {}
-        self.people_users = []
+        self._profile_cache: Dict[str, Dict[str, Any]] = {}
+        self.people_users: List[Dict[str, Any]] = []
         bar = tk.Frame(self.tab_people, bg="#ffffff", padx=12, pady=8)
         bar.pack(fill="x")
         tk.Label(
@@ -686,7 +686,7 @@ class App:
             font=("Microsoft YaHei UI", 8),
         )
         self.profile_forum_note.pack(fill="x", pady=(2, 0))
-        self._profile_forum_names = {}
+        self._profile_forum_names: Dict[str, str] = {}
 
         tk.Label(
             post_frame,
@@ -715,7 +715,7 @@ class App:
             self.profile_post_tree,
             {"time": "日期", "type": "类型", "bar": "贴吧", "title": "标题", "content": "内容"},
         )
-        self._profile_post_urls = {}
+        self._profile_post_urls: Dict[str, str] = {}
 
         self.post_nb.bind("<<NotebookTabChanged>>", self._on_tab_changed)
 
@@ -832,7 +832,7 @@ class App:
 
     def _make_sortable(self, tree, headers) -> None:
         """点表头在升序/降序之间切换。"""
-        state = {"column": None, "reverse": False}
+        state: Dict[str, Any] = {"column": None, "reverse": False}
 
         def sort_by(column: str) -> None:
             if state["column"] == column:
@@ -840,7 +840,7 @@ class App:
             else:
                 state["column"] = column
                 state["reverse"] = False
-            reverse = state["reverse"]
+            reverse = bool(state["reverse"])
 
             def key(item):
                 value = tree.set(item, column)
@@ -1045,7 +1045,7 @@ class App:
             font=("Microsoft YaHei UI", 8),
         )
         self.lookup_forum_note.pack(fill="x", pady=(2, 0))
-        self._lookup_forum_names = {}
+        self._lookup_forum_names: Dict[str, str] = {}
 
         tk.Label(
             right,
@@ -1074,7 +1074,7 @@ class App:
             self.lookup_post_tree,
             {"time": "日期", "type": "类型", "bar": "贴吧", "title": "标题", "content": "内容"},
         )
-        self._lookup_post_urls = {}
+        self._lookup_post_urls: Dict[str, str] = {}
 
     def _open_lookup_forum(self) -> None:
         selection = self.lookup_forum_tree.selection()
@@ -1637,7 +1637,7 @@ class App:
         self.grid_hint.configure(text=f"帖子：{thread.meta.title or thread.meta.tid}")
 
     def _add_grid_tab(
-        self, notebook, title: str, headers: List[str], rows: List[list], urls: List[str] = None
+        self, notebook, title: str, headers: List[str], rows: List[list], urls: Optional[List[str]] = None
     ) -> None:
         urls = list(urls or [])
         frame = tk.Frame(notebook)
@@ -1653,11 +1653,11 @@ class App:
             else:
                 width = 80
             tree.column(columns[index], width=width, anchor="w" if header in ("内容", "昵称") else "center")
-        tree.links = {}
+        tree.links = {}  # type: ignore[attr-defined]
         for row_index, row in enumerate(rows):
             values = ["" if value is None else value for value in row]
             iid = tree.insert("", "end", values=values)
-            tree.links[iid] = urls[row_index] if row_index < len(urls) else ""
+            tree.links[iid] = urls[row_index] if row_index < len(urls) else ""  # type: ignore[attr-defined]
         yscroll = ttk.Scrollbar(frame, orient="vertical", command=tree.yview)
         xscroll = ttk.Scrollbar(frame, orient="horizontal", command=tree.xview)
         tree.configure(yscrollcommand=yscroll.set, xscrollcommand=xscroll.set)
@@ -1670,7 +1670,7 @@ class App:
         def open_row(_event=None) -> None:
             selection = tree.selection()
             if selection:
-                url = tree.links.get(selection[0])
+                url = tree.links.get(selection[0])  # type: ignore[attr-defined]
                 if url:
                     webbrowser.open(url)
 
@@ -1697,7 +1697,7 @@ class App:
 
         tree.bind("<Button-3>", show_menu)
 
-        sort_state = {"column": None, "reverse": False}
+        sort_state: Dict[str, Any] = {"column": None, "reverse": False}
 
         def sort_by(column: str) -> None:
             if sort_state["column"] == column:
@@ -1705,7 +1705,7 @@ class App:
             else:
                 sort_state["column"] = column
                 sort_state["reverse"] = False
-            reverse = sort_state["reverse"]
+            reverse = bool(sort_state["reverse"])
 
             def key(item):
                 value = tree.set(item, column)
@@ -1724,8 +1724,11 @@ class App:
                     arrow = " ▼" if reverse else " ▲"
                 tree.heading(columns[index], text=header + arrow)
 
+        def make_command(column: str) -> Callable[[], None]:
+            return lambda: sort_by(column)
+
         for index, header in enumerate(headers):
-            tree.heading(columns[index], command=lambda column=columns[index]: sort_by(column))
+            tree.heading(columns[index], command=make_command(columns[index]))
 
     def _open_blacklist_dialog(self) -> None:
         win = tk.Toplevel(self.root)

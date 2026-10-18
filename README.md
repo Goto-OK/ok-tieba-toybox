@@ -106,7 +106,8 @@ tieba-reply-stats/
 ## 开发
 
 ```bash
-python -m pip install -e ".[dev]"
+python -m pip install -r requirements-dev.lock
+python -m pip install -e . --no-deps
 python -m ruff check .              # 代码规范检查
 python -m mypy                     # 类型检查
 python -m pytest                   # 单元测试（离线）
@@ -119,6 +120,7 @@ python tieba_stats.py --help       # CLI
 `pyproject.toml` 动态读取，`assets/version_info.txt` 由构建脚本生成。
 
 依赖：`openpyxl`、`lxml`（Android 使用自带的 `lxml.html` 兼容层，基于 BeautifulSoup）。
+运行时版本锁定在 `requirements.lock`，开发工具锁定在 `requirements-dev.lock`。
 
 ### 构建
 

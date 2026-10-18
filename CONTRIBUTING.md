@@ -3,7 +3,8 @@
 ## 环境
 
 ```bash
-python -m pip install -e ".[dev]"
+python -m pip install -r requirements-dev.lock
+python -m pip install -e . --no-deps
 ```
 
 ## 提交前检查
