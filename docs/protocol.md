@@ -137,7 +137,7 @@ pn=26, common=27`。
 
 | 路径 | 参数 |
 |---|---|
-| `/api/start` | `urls[]`、`cookie`、`max_pages`、`comments`、`export` |
+| `/api/start` | `urls[]`、`mode`（`guest`/`login`）、`cookie`、`max_pages`、`comments`、`export`；`mode=login` 时 Cookie 必须含 `BDUSS` |
 | `/api/stop` | 无 |
 | `/api/cookie` | `cookie` |
 | `/api/blacklist` | `safe[]`、`warn[]`、`ban[]` |

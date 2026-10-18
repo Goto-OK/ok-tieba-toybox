@@ -96,11 +96,40 @@ uid/username/nickname
 ### 3.4 红绿灯
 
 ```text
-bars = 发言吧 + 关注吧 + 隐藏恢复吧
+guest:
+  bars = 本帖发言吧
+  → classify(ban > warn > safe)
+  → 无命中 = 白灯
+  → 不查关注，不触发“隐藏关注标黄”
+
+login:
+  bars = 发言吧 + 关注吧 + 隐藏恢复吧
   → classify(ban > warn > safe)
   → 若关注隐藏且未命中 ban：升级为 warn 并加 ⚠
   → 行标记 + 行底色
 ```
+
+`_profile_hit` / `_batch_refresh_marks` 都接收 `mode`：
+免登录分支不调用资料/关注接口，直接用帖子里的发言吧。
+
+### 3.5 模式选择
+
+```text
+启动
+  → 读取设置中的 mode（guest / login，默认 guest）
+  → 界面渲染模式选择与能力提示
+  → 开始抓取：
+       guest → 忽略 Cookie，走 page_pb（匿名）
+       login → 校验 BDUSS，走网页/登录 protobuf
+  → 状态栏 / 日志 / 导出标注本次模式
+```
+
+约束：
+
+- 模式由用户显式选择，`collect_thread` 不再根据 `BDUSS` 是否存在隐式分流；
+- 免登录模式下不得读取或发送 Cookie；
+- 登录模式缺少 `BDUSS` 时直接报错，不降级；
+- 结果对象记录 `mode`，供导出和界面显示。
 
 ## 4. 平台差异
 
