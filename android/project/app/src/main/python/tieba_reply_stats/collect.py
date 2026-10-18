@@ -36,6 +36,10 @@ class CollectOptions:
     should_stop: Optional[Callable[[], bool]] = None  # 返回 True 时中断抓取
 
 
+def _noop_log(*_args) -> None:
+    return None
+
+
 def extract_tid(raw: str) -> str:
     """从各种贴吧链接/ID 中取出 tid。"""
     text = (raw or "").strip()
@@ -87,11 +91,11 @@ def collect_thread(url: str, fetcher: Fetcher, options: CollectOptions) -> Threa
     elif options.verbose:
         log = print
     else:
-        log = lambda *_args: None
+        log = _noop_log
 
     _check_stop(options)
     log(f"[帖子 {tid}] {source_url}")
-    if type(fetcher) is Fetcher and not fetcher.cookie_dict().get("BDUSS"):
+    if getattr(fetcher, "online", True) and not fetcher.cookie_dict().get("BDUSS"):
         from .page_pb import collect_thread_anon
 
         log("  未提供 Cookie，使用游客模式（公开帖子 / 每层前 10 条楼中楼）")

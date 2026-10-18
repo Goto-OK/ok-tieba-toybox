@@ -1,5 +1,5 @@
 from tieba_reply_stats import userpost_pb
-from tieba_reply_stats.userpost_pb import _fb, _fv, _msg, _num, _text
+from tieba_reply_stats.userpost_pb import _fb, _fv, _msg, _num
 
 
 def _content(text: str) -> bytes:

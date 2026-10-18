@@ -171,6 +171,7 @@ class Fetcher:
         self.dump_dir = dump_dir
         self.refresh = refresh
         self.verbose = verbose
+        self.online = True
         self._dump_counter = 0
 
         self.jar = http.cookiejar.CookieJar()

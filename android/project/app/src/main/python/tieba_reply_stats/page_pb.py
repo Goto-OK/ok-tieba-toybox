@@ -20,7 +20,6 @@ from __future__ import annotations
 
 import re
 import urllib.request
-import uuid
 from datetime import datetime
 from typing import Dict, List, Optional
 

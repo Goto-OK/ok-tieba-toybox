@@ -12,15 +12,26 @@ import queue
 import re
 import sys
 import threading
+import tkinter as tk
 import traceback
 import webbrowser
 from datetime import datetime
+from tkinter import filedialog, messagebox, ttk
 from typing import List
 from urllib.parse import quote
 
-import tkinter as tk
-from tkinter import filedialog, messagebox, ttk
-
+from tieba_reply_stats.blacklist import (
+    classify,
+    load_blacklist,
+    marker,
+    save_blacklist,
+)
+from tieba_reply_stats.blacklist import (
+    export_xlsx as export_blacklist_xlsx,
+)
+from tieba_reply_stats.blacklist import (
+    import_xlsx as import_blacklist_xlsx,
+)
 from tieba_reply_stats.collect import (
     CollectCancelled,
     CollectError,
@@ -29,21 +40,12 @@ from tieba_reply_stats.collect import (
     enrich_user_levels,
     extract_tid,
 )
-from tieba_reply_stats.blacklist import (
-    classify,
-    export_xlsx as export_blacklist_xlsx,
-    import_xlsx as import_blacklist_xlsx,
-    load_blacklist,
-    marker,
-    save_blacklist,
-)
-from tieba_reply_stats.settings import load_settings, save_settings
-from tieba_reply_stats.pbapi import fill_thread_levels
 from tieba_reply_stats.cookie_store import clear_cookie, load_cookie, save_cookie
 from tieba_reply_stats.export import export_workbook
 from tieba_reply_stats.fetch import CaptchaError, Fetcher, FetchError, ThreadGoneError, parse_cookie_input
+from tieba_reply_stats.pbapi import fill_thread_levels
 from tieba_reply_stats.profile import fetch_user_profile, resolve_user
-
+from tieba_reply_stats.settings import load_settings, save_settings
 from tieba_reply_stats.version import __version__ as VERSION
 
 APP_TITLE = "贴吧楼层回复统计"
@@ -1784,7 +1786,7 @@ class App:
             level = str(user.get("level") or "").strip()
             if level in ("0", "None"):
                 level = ""
-        level_name = profile.get("bar_level_name") or user["badge"]
+
         if level:
             self._apply_level_to_threads(user, level)
         if level and not user.get("level"):

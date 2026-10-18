@@ -11,7 +11,12 @@
   `parse_response`，可以离线测试二进制协议；
 - 版本号收敛到 `tieba_reply_stats/version.py`，`pyproject.toml` 动态读取，
   `assets/version_info.txt` 由 `scripts/write_version_info.py` 生成；
-- 构建脚本自动读取版本并生成 version_info。
+- 构建脚本自动读取版本并生成 version_info；
+- 新增 `docs/standards.md` 与 `CONTRIBUTING.md`，统一代码/测试/Git 规范；
+- `ruff` 全量通过，配置排除 Android 生成副本；
+- 新增 GitHub Actions CI（Windows：ruff + pytest + selftest）；
+- 新增 pre-commit ruff 钩子；
+- 用 `Fetcher.online` 能力标记替代 `type(fetcher) is Fetcher` 判断。
 
 ## [1.2.0] - 2026-10-18
 

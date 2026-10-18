@@ -18,6 +18,7 @@ sys.path.insert(0, ROOT)
 sys.path.insert(0, BASE)
 
 import build_fixtures  # noqa: E402
+
 from tieba_reply_stats.collect import CollectOptions, collect_thread, extract_tid  # noqa: E402
 from tieba_reply_stats.export import export_workbook  # noqa: E402
 from tieba_reply_stats.fetch import Fetcher, parse_cookie_input  # noqa: E402
@@ -33,6 +34,7 @@ class FixtureFetcher(Fetcher):
 
     def __init__(self, fixtures):
         super().__init__(delay=0, retries=1, verbose=False)
+        self.online = False
         self.fixtures = fixtures
 
     def _fetch_bytes(self, url, headers, data=None):

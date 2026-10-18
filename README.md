@@ -106,8 +106,8 @@ tieba-reply-stats/
 ## 开发
 
 ```bash
-pip install -r requirements.txt
-pip install pytest                 # 或 pip install -e ".[dev]"
+python -m pip install -e ".[dev]"
+python -m ruff check .              # 代码规范检查
 python -m pytest                   # 单元测试（离线）
 python tests/selftest.py           # 端到端自测（离线 fixtures）
 python tieba_gui.py                # 桌面 GUI
@@ -144,6 +144,8 @@ python scripts/sync_android.py
 - [架构与数据流](docs/architecture.md)
 - [接口与协议](docs/protocol.md)
 - [发布流程](docs/release.md)
+- [开发规范](docs/standards.md)
+- [参与开发](CONTRIBUTING.md)
 - [更新日志](CHANGELOG.md)
 - [用户使用说明](使用说明.txt)
 - [Android 说明](android/README.md)

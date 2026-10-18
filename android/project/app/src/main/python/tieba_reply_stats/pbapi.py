@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-from typing import Dict, List, Optional
+from typing import Dict, Optional
 
 PC_SALT = b"36770b1f34c9bbf2e7d1a99d2b82fa9e"
 PB_PAGE_URL = "https://tieba.baidu.com/c/f/pb/page_pc"

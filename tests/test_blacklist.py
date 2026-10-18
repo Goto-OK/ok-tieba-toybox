@@ -1,6 +1,5 @@
 from tieba_reply_stats.blacklist import classify, marker
 
-
 DATA = {"safe": ["好吧"], "warn": ["有点坏"], "ban": ["坏吧"]}
 
 
