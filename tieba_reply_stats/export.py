@@ -372,6 +372,7 @@ def _write_info(workbook: Workbook, thread: ThreadData, prefix: str, generated_a
         ("回复总数", len(thread.floors) + len(thread.comments)),
         ("参与用户数", len(thread.user_stats())),
         ("抓取页数", thread.pages_fetched),
+        ("抓取模式", {"guest": "免登录", "login": "登录"}.get(thread.meta.mode, "未知")),
         ("抓取时间", generated_at.strftime("%Y-%m-%d %H:%M:%S")),
         ("数据完整性", "完整" if thread.complete else "部分缺失（见备注）"),
         ("备注", "\n".join(thread.warnings) if thread.warnings else "无"),

@@ -168,6 +168,10 @@ def test_export(render: bool):
         f"工作表：{book.sheetnames}",
     )
 
+    info_sheet = book["帖子信息"]
+    info = {row[0].value: row[1].value for row in info_sheet.iter_rows(min_row=1, max_col=2)}
+    check(info.get("抓取模式") == "登录", f"导出抓取模式：{info.get('抓取模式')!r}")
+
     stats_sheet = book["回复统计"]
     check(stats_sheet["A1"].value == "排名", "表头")
     check(stats_sheet["B1"].value == "昵称" and stats_sheet["C1"].value == "用户名", "昵称/用户名列")

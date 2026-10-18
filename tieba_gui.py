@@ -206,7 +206,7 @@ class App:
         self.tab_lookup = tk.Frame(self.notebook, bg="#eef1f5")
         self.tab_settings = tk.Frame(self.notebook, bg="#eef1f5")
         self.notebook.add(self.tab_posts, text="  帖子统计  ")
-        self.notebook.add(self.tab_lookup, text="  查成分  ")
+        self.notebook.add(self.tab_lookup, text="  查用户  ")
         self.notebook.add(self.tab_settings, text="  设置  ")
 
         self.post_nb = ttk.Notebook(self.tab_posts)
@@ -499,7 +499,7 @@ class App:
                     "打不开文件", f"{error}\n\n文件位置：{self.last_output}", parent=self.root
                 )
 
-    # ------------------------------------------------------- 参与者与成分
+    # ------------------------------------------------------- 参与者与查用户
     def _aggregate_users(self):
         buckets = {}
         for thread in self.last_threads:
@@ -1509,7 +1509,7 @@ class App:
         self.tab_blacklist = tk.Frame(inner, bg="#eef1f5")
         self.tab_help = tk.Frame(inner, bg="#eef1f5")
         inner.add(self.tab_general, text="  通用  ")
-        inner.add(self.tab_blacklist, text="  黑名单  ")
+        inner.add(self.tab_blacklist, text="  本地标记  ")
         inner.add(self.tab_help, text="  使用说明  ")
         self._build_general_tab()
 
@@ -1517,7 +1517,7 @@ class App:
         box.pack(fill="both", expand=True)
         tk.Label(
             box,
-            text="黑名单：每行一个贴吧名（带不带“吧”都行），命中后按 红 > 黄 > 绿 标记。",
+            text="本地标记：每行一个贴吧名（带不带“吧”都行），命中后按 红 > 黄 > 绿 标记。",
             bg="#eef1f5",
             fg="#475569",
             font=("Microsoft YaHei UI", 9),
@@ -1532,7 +1532,7 @@ class App:
             self.blacklist_editors[key] = editor
         bar = tk.Frame(box, bg="#eef1f5")
         bar.pack(fill="x", pady=(8, 0))
-        ttk.Button(bar, text="保存黑名单", command=self._save_blacklist_from_tab).pack(side="left")
+        ttk.Button(bar, text="保存本地标记", command=self._save_blacklist_from_tab).pack(side="left")
         ttk.Button(bar, text="导入 Excel", command=self._import_blacklist).pack(side="left", padx=(8, 0))
         ttk.Button(bar, text="导出 Excel", command=self._export_blacklist).pack(side="left", padx=(8, 0))
         self.settings_hint = tk.Label(
@@ -1546,7 +1546,7 @@ class App:
         box.pack(fill="both", expand=True)
         tk.Label(
             box,
-            text="表格标色：命中黑名单时，给对应表格的行加背景色（红 / 黄 / 绿）。",
+            text="表格标色：命中本地标记时，给对应表格的行加背景色（红 / 黄 / 绿）。",
             bg="#eef1f5",
             fg="#475569",
             font=("Microsoft YaHei UI", 9),
@@ -1643,7 +1643,7 @@ class App:
         if save_blacklist(data):
             self.blacklist = data
             self.settings_hint.configure(text="已保存")
-            self._append_log("黑名单已保存。", "ok")
+            self._append_log("本地标记已保存。", "ok")
         else:
             self.settings_hint.configure(text="保存失败")
 
@@ -1656,23 +1656,23 @@ class App:
     def _export_blacklist(self) -> None:
         path = filedialog.asksaveasfilename(
             parent=self.root,
-            title="导出黑名单",
+            title="导出本地标记",
             defaultextension=".xlsx",
-            initialfile="贴吧黑名单.xlsx",
+            initialfile="贴吧本地标记.xlsx",
             filetypes=[("Excel 表格", "*.xlsx")],
         )
         if not path:
             return
         if export_blacklist_xlsx(path, self._blacklist_from_editors()):
             self.settings_hint.configure(text=f"已导出：{os.path.basename(path)}")
-            self._append_log(f"黑名单已导出：{path}", "ok")
+            self._append_log(f"本地标记已导出：{path}", "ok")
         else:
             messagebox.showerror("导出失败", "无法写入文件，请换个位置重试。", parent=self.root)
 
     def _import_blacklist(self) -> None:
         path = filedialog.askopenfilename(
             parent=self.root,
-            title="导入黑名单",
+            title="导入本地标记",
             filetypes=[("Excel 表格", "*.xlsx"), ("所有文件", "*.*")],
         )
         if not path:
@@ -1690,7 +1690,7 @@ class App:
         if not messagebox.askyesno(
             "确认导入",
             f"读到：安全 {len(data['safe'])} 个、警告 {len(data['warn'])} 个、"
-            f"禁止 {len(data['ban'])} 个。\n\n会覆盖当前黑名单，继续吗？",
+            f"禁止 {len(data['ban'])} 个。\n\n会覆盖当前本地标记，继续吗？",
             parent=self.root,
         ):
             return
@@ -1700,7 +1700,7 @@ class App:
                 editor.delete("1.0", "end")
                 editor.insert("1.0", "\n".join(data[key]))
             self.settings_hint.configure(text="已导入")
-            self._append_log(f"黑名单已导入：{path}", "ok")
+            self._append_log(f"本地标记已导入：{path}", "ok")
         else:
             messagebox.showerror("导入失败", "保存失败，请检查配置目录权限。", parent=self.root)
 
@@ -1928,7 +1928,7 @@ class App:
 
     def _open_blacklist_dialog(self) -> None:
         win = tk.Toplevel(self.root)
-        win.title("贴吧黑名单设置")
+        win.title("贴吧本地标记设置")
         win.geometry("640x580")
         win.configure(bg="#f5f7fa")
         tk.Label(
@@ -1956,10 +1956,10 @@ class App:
             }
             if save_blacklist(data):
                 self.blacklist = data
-                self._append_log("黑名单已保存。", "ok")
+                self._append_log("本地标记已保存。", "ok")
                 win.destroy()
             else:
-                messagebox.showerror("保存失败", "无法写入黑名单配置文件。", parent=win)
+                messagebox.showerror("保存失败", "无法写入本地标记配置文件。", parent=win)
 
         ttk.Button(win, text="保存", command=save).pack(pady=10)
 

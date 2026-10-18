@@ -19,9 +19,7 @@ def test_mode_defaults_to_guest(monkeypatch, tmp_path):
 
 def test_mode_roundtrip(monkeypatch, tmp_path):
     _use_tmp(monkeypatch, tmp_path)
-    assert settings_module.save_settings(
-        {"mode": "login", "mode_chosen": True, "risk_enabled": True}
-    )
+    assert settings_module.save_settings({"mode": "login", "mode_chosen": True, "risk_enabled": True})
     loaded = settings_module.load_settings()
     assert loaded["mode"] == "login"
     assert loaded["mode_chosen"] is True
