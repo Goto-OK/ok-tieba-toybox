@@ -150,6 +150,7 @@ class App:
             self.cookie_var.set(saved)
             self._append_log("已自动填入上次保存的 Cookie（如果失效，请重新粘贴一次）。", "muted")
         self._apply_mode_ui()
+        self._apply_risk_ui()
         self.root.after(250, self._maybe_choose_mode)
 
     # ------------------------------------------------------------------ UI
@@ -597,6 +598,7 @@ class App:
         paned.add(right, weight=3)
 
         columns = ("mark", "name", "username", "uid", "level", "floor", "comment", "total")
+        self.people_columns = columns
         headings = {
             "mark": "标记",
             "name": "昵称",
@@ -1248,14 +1250,9 @@ class App:
             info += f" | 关注数 {profile['concern']}"
         if profile.get("post_num"):
             info += f" | 发帖 {profile['post_num']}"
-        bars = [post.get("bar") for post in posts if post.get("bar")]
-        bars += [forum["name"] for forum in combined]
-        hit_level, hit_bar = classify(bars, getattr(self, "blacklist", {}))
-        hidden_follows = self._hidden_follows(profile)
-        if hidden_follows and hit_level != "ban":
-            if hit_level != "warn":
-                hit_bar = "关注列表隐藏"
-            hit_level = "warn"
+        # 查用户页只做资料查看，不参与本地标记
+        hit_level, hit_bar = "", ""
+        hidden_follows = False
         label = {"ban": "禁止", "warn": "警告", "safe": "安全"}.get(hit_level, "")
         for key, (traffic_label, traffic_color) in getattr(self, "lookup_traffic_labels", {}).items():
             traffic_label.configure(fg=traffic_color if key == hit_level else "#d1d5db")
@@ -1265,7 +1262,7 @@ class App:
                 text=(
                     (f"{label}：{hit_bar}" if hit_bar and hit_bar != "关注列表隐藏" else label)
                     if hit_level
-                    else "未命中"
+                    else "查用户页不参与本地标记"
                 )
                 + risk
             )
@@ -1299,7 +1296,7 @@ class App:
                 "end",
                 iid=str(index),
                 values=(
-                    "⚪",
+                    "⚪" if self._risk_enabled() else "",
                     encode_display(user["name"]),
                     user["username"] or "-",
                     user["uid"] or "-",
@@ -1337,6 +1334,41 @@ class App:
         username = user.get("username") or ""
         if username:
             webbrowser.open("https://tieba.baidu.com/home/main?un=" + quote(username))
+
+    # ------------------------------------------------------------- risk marks
+    def _risk_enabled(self) -> bool:
+        return bool(self.settings.get("risk_enabled", False))
+
+    def _apply_risk_ui(self) -> None:
+        enabled = self._risk_enabled()
+        if hasattr(self, "people_tree"):
+            columns = getattr(self, "people_columns", ())
+            display = columns if enabled else [column for column in columns if column != "mark"]
+            try:
+                self.people_tree.configure(displaycolumns=display)
+            except tk.TclError:
+                pass
+        if hasattr(self, "batch_btn"):
+            self.batch_btn.configure(state="normal" if enabled else "disabled")
+
+    def _on_risk_toggle(self) -> None:
+        enabled = bool(self.risk_var.get())
+        if enabled:
+            ok = messagebox.askyesno(
+                "启用本地标记",
+                """本地标记只用于你自己的记录，请勿用于挂人、骚扰或公开曝光。
+
+确认启用？""",
+                parent=self.root,
+            )
+            if not ok:
+                self.risk_var.set(False)
+                return
+        self.settings["risk_enabled"] = enabled
+        save_settings(self.settings)
+        self._apply_risk_ui()
+        if getattr(self, "people_users", None):
+            self._refresh_people()
 
     # ------------------------------------------------------------------ mode
     def _build_mode_bar(self, parent) -> None:
@@ -1519,6 +1551,23 @@ class App:
             fg="#475569",
             font=("Microsoft YaHei UI", 9),
         ).pack(anchor="w", pady=(0, 10))
+        risk_box = ttk.LabelFrame(box, text=" 本地标记（红绿灯） ")
+        risk_box.pack(fill="x", pady=(0, 10))
+        self.risk_var = tk.BooleanVar(value=bool(self.settings.get("risk_enabled", False)))
+        ttk.Checkbutton(
+            risk_box,
+            text="启用本地标记与红绿灯（默认关闭）",
+            variable=self.risk_var,
+            command=self._on_risk_toggle,
+        ).pack(anchor="w")
+        tk.Label(
+            risk_box,
+            text="仅用于本地记录，请勿用于挂人、骚扰或公开曝光。",
+            bg="#eef1f5",
+            fg="#8a94a6",
+            font=("Microsoft YaHei UI", 8),
+        ).pack(anchor="w", padx=20, pady=(2, 0))
+
         self.setting_vars = {}
         for key, text in (
             ("color_people", "在参与者列表里标色"),
@@ -2000,6 +2049,13 @@ class App:
             self._batch_cancel = True
             self.batch_btn.configure(text="正在停止…")
             return
+        if not self._risk_enabled():
+            messagebox.showinfo(
+                "本地标记未启用",
+                "先在「设置 → 通用」里启用本地标记与红绿灯。",
+                parent=self.root,
+            )
+            return
         if not getattr(self, "people_users", None):
             messagebox.showinfo("还没有数据", "先点「开始统计」抓一个帖子。", parent=self.root)
             return
@@ -2016,10 +2072,13 @@ class App:
 
         def worker():
             fetcher = Fetcher(cookie=parse_cookie_input(self.cookie_var.get()), delay=0.3, verbose=False)
+            guest = self.mode_var.get() == "guest"
             for index, user in enumerate(users):
                 if self._batch_cancel:
                     break
-                if user.get("uid") or user.get("username"):
+                if guest:
+                    profile = {"ok": True, "guest_only": True}
+                elif user.get("uid") or user.get("username"):
                     try:
                         profile = fetch_user_profile(
                             fetcher,
@@ -2045,6 +2104,11 @@ class App:
         return bool(profile.get("followed_private")) or profile.get("priv_like") == 3
 
     def _profile_hit(self, profile, extra_bars=None):
+        if not self._risk_enabled():
+            return "", ""
+        if self.mode_var.get() == "guest":
+            bars = [bar for bar in (extra_bars or []) if bar]
+            return classify(bars, getattr(self, "blacklist", {}))
         bars = [post.get("bar") for post in profile.get("recent_posts") or [] if post.get("bar")]
         bars += [forum["name"] for forum in self._merge_forum_lists(profile)]
         if extra_bars:
@@ -2057,6 +2121,8 @@ class App:
         return hit_level, hit_bar
 
     def _apply_batch_mark(self, user, profile) -> None:
+        if not self._risk_enabled():
+            return
         iid = user.get("_iid")
         if iid is None:
             return
@@ -2175,6 +2241,8 @@ class App:
         tree.tag_configure("safe", background="#dcfce7")
 
     def _row_tags(self, bar, kind: str):
+        if not self._risk_enabled():
+            return ()
         key = "color_forum" if kind == "forum" else "color_posts"
         if not getattr(self, "settings", {}).get(key, True):
             return ()
@@ -2285,15 +2353,22 @@ class App:
             self._profile_post_urls[iid] = post.get("url") or ""
         self.profile_forum_note.configure(text=self._forum_note(profile, self._user_bar(user), level or ""))
 
-        # 黑名单标记：发言 + 关注列表一起看，严格 红 > 黄 > 绿
-        bars = [post.get("bar") for post in posts if post.get("bar")]
-        bars += [forum["name"] for forum in combined]
-        hit_level, hit_bar = classify(bars, getattr(self, "blacklist", {}))
-        hidden_follows = self._hidden_follows(profile)
-        if hidden_follows and hit_level != "ban":
-            if hit_level != "warn":
-                hit_bar = "关注列表隐藏"
-            hit_level = "warn"
+        # 本地标记：默认关闭；免登录只看本帖发言，登录才看关注列表
+        if not self._risk_enabled():
+            hit_level, hit_bar = "", ""
+            hidden_follows = False
+        elif self.mode_var.get() == "guest":
+            hit_level, hit_bar = classify([self._user_bar(user)], getattr(self, "blacklist", {}))
+            hidden_follows = False
+        else:
+            bars = [post.get("bar") for post in posts if post.get("bar")]
+            bars += [forum["name"] for forum in combined]
+            hit_level, hit_bar = classify(bars, getattr(self, "blacklist", {}))
+            hidden_follows = self._hidden_follows(profile)
+            if hidden_follows and hit_level != "ban":
+                if hit_level != "warn":
+                    hit_bar = "关注列表隐藏"
+                hit_level = "warn"
         label = {"ban": "禁止", "warn": "警告", "safe": "安全"}.get(hit_level, "")
         for traffic_key, (traffic_label, traffic_color) in getattr(self, "traffic_labels", {}).items():
             traffic_label.configure(fg=traffic_color if traffic_key == hit_level else "#d1d5db")

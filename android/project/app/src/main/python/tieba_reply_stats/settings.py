@@ -15,6 +15,7 @@ DEFAULTS: Dict[str, Any] = {
     "color_posts": True,
     "mode": "guest",  # guest / login
     "mode_chosen": False,  # 是否已完成首次选择
+    "risk_enabled": False,  # 本地标记 / 红绿灯，默认关闭
 }
 
 
