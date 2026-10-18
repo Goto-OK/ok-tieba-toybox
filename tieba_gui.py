@@ -137,6 +137,8 @@ class App:
         self._auto_filled = False
         self.blacklist = load_blacklist()
         self.settings = load_settings()
+        self.mode_chosen = bool(self.settings.get("mode_chosen", False))
+        self.mode_var = tk.StringVar(value=str(self.settings.get("mode", "guest")))
 
         self._build_ui()
         self._set_output(default_output_path())
@@ -147,6 +149,8 @@ class App:
         if saved:
             self.cookie_var.set(saved)
             self._append_log("已自动填入上次保存的 Cookie（如果失效，请重新粘贴一次）。", "muted")
+        self._apply_mode_ui()
+        self.root.after(250, self._maybe_choose_mode)
 
     # ------------------------------------------------------------------ UI
     def _build_ui(self) -> None:
@@ -212,6 +216,8 @@ class App:
         self.post_nb.add(self.tab_fetch, text="  抓取  ")
         self.post_nb.add(self.tab_grid, text="  表格查看  ")
         self.post_nb.add(self.tab_people, text="  参与者  ")
+
+        self._build_mode_bar(self.tab_fetch)
 
         body = tk.Frame(self.tab_fetch, bg="#eef1f5", padx=16, pady=12)
         body.pack(fill="both", expand=True)
@@ -302,21 +308,30 @@ class App:
         self.cookie_var = tk.StringVar()
         self.cookie_entry = ttk.Entry(cookie_box, textvariable=self.cookie_var, show="•", font=text_font)
         self.cookie_entry.grid(row=0, column=0, sticky="ew")
-        ttk.Button(cookie_box, text="从剪贴板粘贴", command=self._paste_cookie, width=14).grid(
-            row=0, column=1, padx=(8, 0)
+        self.cookie_paste_btn = ttk.Button(
+            cookie_box, text="从剪贴板粘贴", command=self._paste_cookie, width=14
         )
-        ttk.Button(cookie_box, text="如何获取？", command=self._show_cookie_help, width=10).grid(
-            row=0, column=2, padx=(6, 0)
+        self.cookie_paste_btn.grid(row=0, column=1, padx=(8, 0))
+        self.cookie_help_btn = ttk.Button(
+            cookie_box, text="如何获取？", command=self._show_cookie_help, width=10
         )
-        ttk.Button(cookie_box, text="清除", command=self._clear_cookie, width=7).grid(
-            row=0, column=3, padx=(6, 0)
-        )
+        self.cookie_help_btn.grid(row=0, column=2, padx=(6, 0))
+        self.cookie_clear_btn = ttk.Button(cookie_box, text="清除", command=self._clear_cookie, width=7)
+        self.cookie_clear_btn.grid(row=0, column=3, padx=(6, 0))
         self.remember_var = tk.BooleanVar(value=True)
-        ttk.Checkbutton(
+        self.remember_check = ttk.Checkbutton(
             cookie_box,
             text="记住 Cookie（用 Windows 账户加密保存在本机，只自己能用；下次自动填入）",
             variable=self.remember_var,
-        ).grid(row=1, column=0, columnspan=4, sticky="w", pady=(6, 0))
+        )
+        self.remember_check.grid(row=1, column=0, columnspan=4, sticky="w", pady=(6, 0))
+        self.cookie_controls = [
+            self.cookie_entry,
+            self.cookie_paste_btn,
+            self.cookie_help_btn,
+            self.cookie_clear_btn,
+            self.remember_check,
+        ]
 
         # 5. 按钮
         buttons = tk.Frame(body, bg="#eef1f5")
@@ -1323,6 +1338,138 @@ class App:
         if username:
             webbrowser.open("https://tieba.baidu.com/home/main?un=" + quote(username))
 
+    # ------------------------------------------------------------------ mode
+    def _build_mode_bar(self, parent) -> None:
+        bar = tk.Frame(parent, bg="#ffffff", padx=16, pady=8)
+        bar.pack(fill="x")
+        tk.Label(
+            bar,
+            text="使用方式：",
+            bg="#ffffff",
+            fg="#334155",
+            font=("Microsoft YaHei UI", 9, "bold"),
+        ).pack(side="left")
+        ttk.Radiobutton(
+            bar, text="免登录", value="guest", variable=self.mode_var, command=self._on_mode_select
+        ).pack(side="left", padx=(4, 0))
+        ttk.Radiobutton(
+            bar,
+            text="登录（Cookie）",
+            value="login",
+            variable=self.mode_var,
+            command=self._on_mode_select,
+        ).pack(side="left", padx=(12, 0))
+        self.mode_hint = tk.Label(bar, text="", bg="#ffffff", fg="#6b7280", font=("Microsoft YaHei UI", 8))
+        self.mode_hint.pack(side="left", padx=(12, 0))
+
+    def _apply_mode_ui(self) -> None:
+        login = self.mode_var.get() == "login"
+        state = "normal" if login else "disabled"
+        for widget in getattr(self, "cookie_controls", []):
+            try:
+                widget.configure(state=state)
+            except tk.TclError:
+                pass
+        if hasattr(self, "mode_hint"):
+            self.mode_hint.configure(
+                text="完整楼中楼 · 关注列表 · 完整资料"
+                if login
+                else "公开帖子 · 每层前 10 条楼中楼 · 红绿灯只看发言"
+            )
+
+    def _on_mode_select(self) -> None:
+        mode = self.mode_var.get()
+        self._set_mode(mode)
+        self._append_log(f"已切换为{'登录' if mode == 'login' else '免登录'}模式", "muted")
+
+    def _set_mode(self, mode: str, persist: bool = True) -> None:
+        mode = mode if mode in ("guest", "login") else "guest"
+        self.mode_var.set(mode)
+        if persist:
+            self.settings["mode"] = mode
+            self.settings["mode_chosen"] = True
+            save_settings(self.settings)
+        self._apply_mode_ui()
+
+    def _maybe_choose_mode(self) -> None:
+        if self.mode_chosen:
+            return
+        self._show_mode_dialog()
+
+    def _show_mode_dialog(self) -> None:
+        win = tk.Toplevel(self.root)
+        win.title("选择使用方式")
+        win.configure(bg="#ffffff")
+        win.resizable(False, False)
+        win.transient(self.root)
+        win.grab_set()
+        frame = tk.Frame(win, bg="#ffffff", padx=20, pady=16)
+        frame.pack(fill="both", expand=True)
+        tk.Label(
+            frame,
+            text="选择使用方式",
+            bg="#ffffff",
+            fg="#1f2937",
+            font=("Microsoft YaHei UI", 12, "bold"),
+        ).pack(anchor="w")
+        tk.Label(
+            frame,
+            text="之后可在「抓取」页顶部随时切换。",
+            bg="#ffffff",
+            fg="#6b7280",
+            font=("Microsoft YaHei UI", 8),
+        ).pack(anchor="w", pady=(2, 10))
+        choice = tk.StringVar(value=self.mode_var.get())
+        cards = tk.Frame(frame, bg="#ffffff")
+        cards.pack(fill="x")
+        for value, title, desc in (
+            ("guest", "免登录（推荐）", "公开帖子；楼中楼每层前 10 条；红绿灯只看发言"),
+            ("login", "登录（Cookie）", "完整楼中楼、关注列表、完整资料；需要 BDUSS"),
+        ):
+            row = tk.Frame(
+                cards,
+                bg="#f8fafc",
+                highlightthickness=1,
+                highlightbackground="#e2e8f0",
+                padx=10,
+                pady=8,
+            )
+            row.pack(fill="x", pady=4)
+            ttk.Radiobutton(row, text=title, value=value, variable=choice).pack(anchor="w")
+            tk.Label(
+                row,
+                text=desc,
+                bg="#f8fafc",
+                fg="#64748b",
+                font=("Microsoft YaHei UI", 8),
+            ).pack(anchor="w", padx=20)
+        remember = tk.BooleanVar(value=True)
+        ttk.Checkbutton(frame, text="记住选择（下次不再询问）", variable=remember).pack(
+            anchor="w", pady=(10, 8)
+        )
+        buttons = tk.Frame(frame, bg="#ffffff")
+        buttons.pack(fill="x")
+
+        def finish(mode: str) -> None:
+            chosen = bool(remember.get())
+            self.mode_chosen = chosen
+            self.settings["mode"] = mode
+            self.settings["mode_chosen"] = chosen
+            save_settings(self.settings)
+            self.mode_var.set(mode)
+            self._apply_mode_ui()
+            self._append_log(f"已选择{'登录' if mode == 'login' else '免登录'}模式", "muted")
+            win.destroy()
+
+        ttk.Button(buttons, text="先免登录", command=lambda: finish("guest")).pack(side="left")
+        ttk.Button(buttons, text="使用所选模式", command=lambda: finish(choice.get())).pack(side="right")
+        win.protocol("WM_DELETE_WINDOW", lambda: finish("guest"))
+        win.update_idletasks()
+        width, height = win.winfo_reqwidth(), win.winfo_reqheight()
+        x = self.root.winfo_rootx() + max(0, (self.root.winfo_width() - width) // 2)
+        y = self.root.winfo_rooty() + max(0, (self.root.winfo_height() - height) // 3)
+        win.geometry(f"+{x}+{y}")
+
     def _build_settings_tab(self) -> None:
         inner = ttk.Notebook(self.tab_settings)
         inner.pack(fill="both", expand=True, padx=6, pady=6)
@@ -2240,10 +2387,24 @@ class App:
         delay = min(5.0, max(0.3, delay))
 
         cookie = parse_cookie_input(self.cookie_var.get())
-        if not cookie.get("BDUSS"):
-            self._append_log(
-                "未填写 Cookie：使用游客模式（公开帖子 / 每层前 10 条楼中楼；等级、关注可能不全）", "muted"
+        mode = self.mode_var.get()
+        if mode == "login" and not cookie.get("BDUSS"):
+            answer = messagebox.askyesnocancel(
+                "登录模式需要 Cookie",
+                """登录模式至少需要 BDUSS。
+
+是：去填写 Cookie
+否：切换为免登录模式
+取消：先不抓取""",
+                parent=self.root,
             )
+            if answer is True:
+                self.cookie_entry.focus_set()
+            elif answer is False:
+                self._set_mode("guest")
+            return
+        if mode == "guest":
+            self._append_log("本次使用免登录模式：公开帖子，楼中楼每层前 10 条", "muted")
         if cookie and self.remember_var.get():
             if save_cookie(self.cookie_var.get().strip()):
                 self._append_log("已记住 Cookie（本机加密保存），下次会自动填入。", "muted")
@@ -2251,7 +2412,7 @@ class App:
                 self._append_log("Cookie 保存失败，本次仍可正常使用。", "muted")
 
         options = CollectOptions(
-            mode="login" if cookie.get("BDUSS") else "guest",
+            mode=mode,
             include_comments=self.comments_var.get(),
             enrich_levels=True,
             pb_levels=True,
