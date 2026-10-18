@@ -12,23 +12,30 @@
 ### Windows 桌面版（推荐）
 
 1. 双击 `贴吧回复统计.exe`；
-2. 粘贴帖子链接（每行一个，也可以直接填帖子 ID）；
-3. 选择是否抓楼中楼、是否导出 Excel；
-4. 点「开始统计」。
+2. 首次启动选择 **免登录（推荐）** 或 **登录（Cookie）**；
+3. 粘贴帖子链接（每行一个，也可以直接填帖子 ID）；
+4. 选择是否抓楼中楼、是否导出 Excel；
+5. 点「开始统计」。
 
-**不需要 Cookie** 也能抓公开帖子（游客模式）：
+**免登录**（不需要 Cookie）：
 
-- 楼层、每层前 10 条楼中楼、参与者、等级；
-- 用户最近发言、基本信息。
+- 公开帖子的楼层、每层前 10 条楼中楼、参与者、等级；
+- 最近发言、基本资料；
+- 红绿灯只看本帖发言。
 
-需要**完整楼中楼、关注列表、完整资料**时，再在「抓取」页填入 Cookie（含 `BDUSS`）。
+**登录**（需要 `BDUSS`）：
+
+- 完整楼中楼、关注列表、完整资料；
+- 红绿灯按“发言 + 关注”判定。
+
+模式可在「抓取」页顶部随时切换。
 
 ### 命令行
 
 ```bash
 python tieba_stats.py https://tieba.baidu.com/p/1234567890 -o 统计.xlsx
 python tieba_stats.py <url1> <url2> --no-comments
-python tieba_stats.py <url> --cookie "BDUSS=xxx; STOKEN=xxx"
+python tieba_stats.py <url> --mode login --cookie "BDUSS=xxx; STOKEN=xxx"
 ```
 
 ### Android

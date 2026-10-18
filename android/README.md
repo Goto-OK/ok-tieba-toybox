@@ -31,9 +31,9 @@ Android Activity（Java）
 
 Cookie 保存在 App 私有目录 `files/cookie.json`（明文，仅本机可用）。
 
-## 游客模式（无 Cookie）
+## 免登录模式（无 Cookie）
 
-Cookie 可以留空，直接抓公开帖子：
+Cookie 可以留空，直接抓公开帖子（当前 APK 仍按 Cookie 是否存在自动判断；桌面版已改为显式选择）：
 - 楼层、每层前 10 条楼中楼、参与者、等级；
 - 用户最近发言、基本信息。
 完整楼中楼（超过 10 条）、关注列表、完整资料仍需 Cookie。

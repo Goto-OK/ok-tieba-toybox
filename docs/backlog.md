@@ -22,6 +22,8 @@
 
 文案与导出已完成：`20b3651 feat: rename lookup and marks, record mode in export`。
 
+用户文档已更新：`使用说明.txt`、`README.md`、`android/README.md`。
+
 ### 核心
 
 - [x] `CollectOptions` 增加 `mode`（`guest` / `login`），`ThreadData.meta` 记录本次模式
@@ -82,8 +84,8 @@
 
 ### 文档
 
-- [ ] `使用说明.txt` 增加模式选择、能力差异、红绿灯差异
-- [ ] `README.md` 快速开始更新
+- [x] `使用说明.txt` 增加模式选择、能力差异、红绿灯差异
+- [x] `README.md` 快速开始更新
 - [ ] `CHANGELOG.md` 生成 1.3.0 条目
 
 ## P1 · 发布（等“出 exe / 出 APK”）
