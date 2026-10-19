@@ -8,6 +8,7 @@
 | [release.md](release.md) | 版本、构建、发布检查清单 |
 | [standards.md](standards.md) | 代码风格、测试、Git、完成定义 |
 | [spec-index.md](spec-index.md) | 规范入口（新会话先读） |
+| [spec-gaps.md](spec-gaps.md) | 规范冻结与实现差距 |
 | [ui-spec.md](ui-spec.md) | 界面规范 |
 | [code-map.md](code-map.md) | 代码地图与整理记录 |
 | [market-comparison.md](market-comparison.md) | 市面项目横向对比 |

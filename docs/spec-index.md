@@ -1,5 +1,7 @@
 # 规范索引
 
+> 2026-10-20 规范冻结；实现差距见 [spec-gaps.md](spec-gaps.md)。冻结后改规范需明确说明。
+
 用途：新会话/新任务先读这一份，再按需打开对应分类文档。  
 原则：**索引不复制正文，正文只有一个来源。**
 
@@ -39,6 +41,7 @@ spec-index.md
 | 功能草案 | [proposals.md](proposals.md) | 历史设计过程，不作规范 |
 | 代码地图 | [code-map.md](code-map.md) | 找模块、看代码边界 |
 | 竞品对比 | [market-comparison.md](market-comparison.md) | 横向对比、借鉴优先级 |
+| 规范冻结/差距 | [spec-gaps.md](spec-gaps.md) | 冻结范围、实现顺序 |
 
 ## 4. 功能地图
 
