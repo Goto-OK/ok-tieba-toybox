@@ -203,8 +203,12 @@ class App:
     # ------------------------------------------------------------------ UI
     def _build_ui(self) -> None:
         self.root.title(f"{APP_TITLE} v{VERSION}")
-        self.root.geometry("980x820")
-        self.root.minsize(840, 680)
+        screen_w = self.root.winfo_screenwidth()
+        screen_h = self.root.winfo_screenheight()
+        width = max(980, min(1240, screen_w - 80))
+        height = max(720, min(860, screen_h - 100))
+        self.root.geometry(f"{width}x{height}")
+        self.root.minsize(min(1000, screen_w - 40), min(680, screen_h - 80))
         self.root.configure(bg="#eef1f5")
 
         style = ttk.Style(self.root)
@@ -1931,8 +1935,6 @@ class App:
         win.geometry(f"+{x}+{y}")
 
     def _build_settings_tab(self) -> None:
-        style = ttk.Style(self.root)
-        style.layout("Side.TNotebook", [("Notebook.client", {"sticky": "nswe"})])
         wrap = tk.Frame(self.tab_settings, bg="#eef1f5")
         wrap.pack(fill="both", expand=True, padx=6, pady=6)
         sidebar = tk.Frame(wrap, bg="#ffffff", width=118)
@@ -1951,7 +1953,7 @@ class App:
             highlightthickness=0,
         )
         self.settings_nav.pack(fill="both", expand=True)
-        inner = ttk.Notebook(wrap, style="Side.TNotebook")
+        inner = tk.Frame(wrap, bg="#eef1f5")
         inner.pack(side="left", fill="both", expand=True)
         self.settings_inner = inner
         self.tab_general = tk.Frame(inner, bg="#eef1f5")
@@ -1959,21 +1961,21 @@ class App:
         self.tab_help = tk.Frame(inner, bg="#eef1f5")
         self.tab_storage = tk.Frame(inner, bg="#eef1f5")
         self.tab_about = tk.Frame(inner, bg="#eef1f5")
-        inner.add(self.tab_general, text="  通用  ")
-        inner.add(self.tab_blacklist, text="  本地标记  ")
-        inner.add(self.tab_storage, text="  结果与存储  ")
-        inner.add(self.tab_help, text="  使用说明  ")
-        inner.add(self.tab_about, text="  关于 / 帮助  ")
+        self.settings_pages = [
+            self.tab_general,
+            self.tab_blacklist,
+            self.tab_storage,
+            self.tab_help,
+            self.tab_about,
+        ]
         self._build_general_tab()
         self._build_storage_tab()
         self._build_about_tab()
-        for tab_id in inner.tabs():
-            inner.hide(tab_id)
         for label in ("常规", "本地标记", "结果与存储", "使用说明", "关于 / 帮助"):
             self.settings_nav.insert("end", f"  {label}")
         self.settings_nav.bind("<<ListboxSelect>>", self._on_settings_nav)
         self.settings_nav.selection_set(0)
-        self.settings_inner.select(0)
+        self._show_settings_page(0)
 
         box = tk.Frame(self.tab_blacklist, bg="#eef1f5", padx=16, pady=12)
         box.pack(fill="both", expand=True)
@@ -2003,9 +2005,12 @@ class App:
         self.settings_hint.pack(side="left", padx=(10, 0))
         self._build_help_tab()
 
-    def _hide_settings_tabs(self) -> None:
-        for tab_id in self.settings_inner.tabs():
-            self.settings_inner.hide(tab_id)
+    def _show_settings_page(self, index: int) -> None:
+        for position, page in enumerate(self.settings_pages):
+            if position == index:
+                page.pack(fill="both", expand=True)
+            else:
+                page.pack_forget()
 
     def _on_settings_start_changed(self) -> None:
         self.settings["settings_start"] = "last" if self.settings_start_var.get() == "上次分类" else "general"
@@ -2020,13 +2025,13 @@ class App:
         if 0 <= index < self.settings_nav.size():
             self.settings_nav.selection_clear(0, "end")
             self.settings_nav.selection_set(index)
-            self.settings_inner.select(index)
+            self._show_settings_page(index)
 
     def _on_settings_nav(self, _event=None) -> None:
         selection = self.settings_nav.curselection()
         if selection:
             self._last_settings_index = selection[0]
-            self.settings_inner.select(selection[0])
+            self._show_settings_page(selection[0])
 
     def _build_storage_tab(self) -> None:
         box = tk.Frame(self.tab_storage, bg="#eef1f5", padx=16, pady=12)
@@ -2219,14 +2224,71 @@ class App:
         messagebox.showinfo("已复制", "诊断信息已复制（不含 Cookie/昵称/正文）。", parent=self.root)
 
     def _show_quick_guide(self) -> None:
-        messagebox.showinfo(
-            "快速说明",
-            "1. 默认匿名，不需要 Cookie。\n"
-            "2. 红绿灯和本地标记默认开启，只记录在本机。\n"
-            "3. 关注增强默认关闭，需要时在设置里开启。\n"
-            "4. 仅用于本地记录，请勿用于挂人、骚扰或公开曝光。",
-            parent=self.root,
-        )
+        existing = getattr(self, "_guide_window", None)
+        try:
+            if existing is not None and existing.winfo_exists():
+                existing.lift()
+                return
+        except tk.TclError:
+            pass
+        win = tk.Toplevel(self.root)
+        self._guide_window = win
+        win.title("快速说明")
+        win.configure(bg="#ffffff")
+        win.resizable(False, False)
+        win.transient(self.root)
+        win.grab_set()
+        frame = tk.Frame(win, bg="#ffffff", padx=20, pady=16)
+        frame.pack(fill="both", expand=True)
+        tk.Label(
+            frame,
+            text="快速说明",
+            bg="#ffffff",
+            fg="#1F4E79",
+            font=("Microsoft YaHei UI", 13, "bold"),
+        ).pack(anchor="w")
+        lines = [
+            "默认匿名，不需要 Cookie。",
+            "红绿灯和本地标记默认开启，只记录在本机。",
+            "关注增强默认关闭；需要时到「设置 → 关注增强」开启。",
+            "仅用于本地记录，请勿用于挂人、骚扰或公开曝光。",
+        ]
+        for index, line in enumerate(lines, start=1):
+            tk.Label(
+                frame,
+                text=f"{index}. {line}",
+                bg="#ffffff",
+                fg="#334155",
+                font=("Microsoft YaHei UI", 10),
+                wraplength=470,
+                justify="left",
+                anchor="w",
+            ).pack(fill="x", pady=(8 if index == 1 else 4, 0))
+        buttons = tk.Frame(frame, bg="#ffffff")
+        buttons.pack(fill="x", pady=(16, 0))
+        ttk.Button(buttons, text="知道了", command=win.destroy, width=10).pack(side="right")
+        ttk.Button(
+            buttons,
+            text="查看使用说明",
+            command=lambda: self._open_help_from_guide(win),
+            width=14,
+        ).pack(side="right", padx=(0, 8))
+        win.bind("<Return>", lambda _event: win.destroy())
+        win.bind("<Escape>", lambda _event: win.destroy())
+        win.protocol("WM_DELETE_WINDOW", win.destroy)
+        win.update_idletasks()
+        width, height = win.winfo_reqwidth(), win.winfo_reqheight()
+        x = self.root.winfo_rootx() + max(0, (self.root.winfo_width() - width) // 2)
+        y = self.root.winfo_rooty() + max(0, (self.root.winfo_height() - height) // 3)
+        win.geometry(f"+{x}+{y}")
+        win.focus_set()
+
+    def _open_help_from_guide(self, win) -> None:
+        win.destroy()
+        self.notebook.select(self.tab_settings)
+        self.settings_nav.selection_clear(0, "end")
+        self.settings_nav.selection_set(3)
+        self._show_settings_page(3)
 
     def _maybe_onboarding(self) -> None:
         if self.settings.get("onboarding_seen"):
