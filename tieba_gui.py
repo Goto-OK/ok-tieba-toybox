@@ -16,10 +16,11 @@ import tkinter as tk
 import traceback
 import webbrowser
 from datetime import datetime
-from tkinter import filedialog, messagebox, ttk
+from tkinter import filedialog, messagebox, simpledialog, ttk
 from typing import Any, Callable, Dict, List, Optional
 from urllib.parse import quote
 
+from tieba_reply_stats.bawu_deleted import fetch_recover_info, fetch_recovers
 from tieba_reply_stats.blacklist import (
     classify,
     load_blacklist,
@@ -40,13 +41,19 @@ from tieba_reply_stats.collect import (
     enrich_user_levels,
     extract_tid,
 )
+from tieba_reply_stats.compare import MODES, compare_threads
+from tieba_reply_stats.config_backup import preview as backup_preview
+from tieba_reply_stats.config_backup import read_backup, write_backup
 from tieba_reply_stats.cookie_store import clear_cookie, load_cookie, save_cookie
 from tieba_reply_stats.export import export_workbook
 from tieba_reply_stats.fetch import CaptchaError, Fetcher, FetchError, ThreadGoneError, parse_cookie_input
+from tieba_reply_stats.filters import LEVEL_OPTIONS, MARK_OPTIONS, filter_users
 from tieba_reply_stats.follow_probe import candidate_bars, probe_forums
 from tieba_reply_stats.pbapi import fill_thread_levels
 from tieba_reply_stats.profile import fetch_user_profile, resolve_user
+from tieba_reply_stats.report import export_user_report, report_base
 from tieba_reply_stats.settings import load_settings, save_settings
+from tieba_reply_stats.stoken_store import load_stoken, save_stoken
 from tieba_reply_stats.version import __version__ as VERSION
 
 APP_TITLE = "贴吧楼层回复统计"
@@ -124,6 +131,13 @@ def resource_dir() -> str:
     if getattr(sys, "frozen", False):
         return os.path.dirname(sys.executable)
     return os.path.dirname(os.path.abspath(__file__))
+
+
+def _optional_int(text: str) -> Optional[int]:
+    try:
+        return int(str(text).strip())
+    except ValueError:
+        return None
 
 
 class App:
@@ -206,8 +220,10 @@ class App:
         self.tab_posts = tk.Frame(self.notebook, bg="#eef1f5")
         self.tab_lookup = tk.Frame(self.notebook, bg="#eef1f5")
         self.tab_settings = tk.Frame(self.notebook, bg="#eef1f5")
+        self.tab_bawu = tk.Frame(self.notebook, bg="#eef1f5")
         self.notebook.add(self.tab_posts, text="  帖子统计  ")
         self.notebook.add(self.tab_lookup, text="  查用户  ")
+        self.notebook.add(self.tab_bawu, text="  吧务  ")
         self.notebook.add(self.tab_settings, text="  设置  ")
 
         self.post_nb = ttk.Notebook(self.tab_posts)
@@ -288,6 +304,20 @@ class App:
             textvariable=self.delay_var,
         ).pack(side="left")
         tk.Label(delay_row, text=" 秒（越小越快，越大越稳；被拦截时调大一些）", fg="#8a94a6").pack(
+            side="left"
+        )
+        tk.Label(delay_row, text="  楼中楼：").pack(side="left")
+        self.comment_depth_var = tk.StringVar(value="全部")
+        ttk.Combobox(
+            delay_row,
+            values=("全部", "每层 10", "每层 50", "每层 100"),
+            textvariable=self.comment_depth_var,
+            width=9,
+            state="readonly",
+        ).pack(side="left")
+        tk.Label(delay_row, text=" 并发 ").pack(side="left")
+        self.comment_concurrency_var = tk.StringVar(value="1")
+        ttk.Spinbox(delay_row, from_=1, to=3, width=3, textvariable=self.comment_concurrency_var).pack(
             side="left"
         )
 
@@ -415,6 +445,7 @@ class App:
         self._build_people_tab()
         self._build_lookup_tab()
         self._build_settings_tab()
+        self._build_bawu_tab()
 
         self.url_text.focus_set()
         self.root.update_idletasks()
@@ -590,6 +621,49 @@ class App:
         self.people_hint = tk.Label(bar, text="", bg="#ffffff", fg="#8a94a6", font=("Microsoft YaHei UI", 9))
         self.people_hint.pack(side="right")
 
+        filter_bar = tk.Frame(self.tab_people, bg="#ffffff", padx=10, pady=6)
+        filter_bar.pack(fill="x", padx=10)
+        tk.Label(filter_bar, text="筛选：", bg="#ffffff", fg="#475569", font=("Microsoft YaHei UI", 9)).pack(
+            side="left"
+        )
+        self.people_keyword_var = tk.StringVar()
+        self.people_keyword_entry = ttk.Entry(filter_bar, textvariable=self.people_keyword_var, width=18)
+        self.people_keyword_entry.pack(side="left")
+        tk.Label(filter_bar, text=" 等级 ", bg="#ffffff", fg="#475569", font=("Microsoft YaHei UI", 9)).pack(
+            side="left"
+        )
+        self.people_level_var = tk.StringVar(value="全部")
+        self.people_level_box = ttk.Combobox(
+            filter_bar, values=LEVEL_OPTIONS, textvariable=self.people_level_var, width=9, state="readonly"
+        )
+        self.people_level_box.pack(side="left")
+        self.people_custom_frame = tk.Frame(filter_bar, bg="#ffffff")
+        self.people_min_var = tk.StringVar()
+        self.people_max_var = tk.StringVar()
+        ttk.Entry(self.people_custom_frame, textvariable=self.people_min_var, width=4).pack(side="left")
+        tk.Label(self.people_custom_frame, text="~", bg="#ffffff", fg="#475569").pack(side="left")
+        ttk.Entry(self.people_custom_frame, textvariable=self.people_max_var, width=4).pack(side="left")
+        tk.Label(filter_bar, text=" 标记 ", bg="#ffffff", fg="#475569", font=("Microsoft YaHei UI", 9)).pack(
+            side="left"
+        )
+        self.people_mark_var = tk.StringVar(value="全部")
+        self.people_mark_box = ttk.Combobox(
+            filter_bar, values=MARK_OPTIONS, textvariable=self.people_mark_var, width=6, state="disabled"
+        )
+        self.people_mark_box.pack(side="left")
+        ttk.Button(filter_bar, text="清除筛选", command=self._reset_people_filters, width=10).pack(
+            side="left", padx=(8, 0)
+        )
+
+        for var in (
+            self.people_keyword_var,
+            self.people_level_var,
+            self.people_mark_var,
+            self.people_min_var,
+            self.people_max_var,
+        ):
+            var.trace_add("write", lambda *_: self._on_people_filter_changed())
+
         paned = ttk.PanedWindow(self.tab_people, orient="horizontal")
         paned.pack(fill="both", expand=True, padx=10, pady=(0, 10))
         self.people_paned = paned
@@ -708,6 +782,9 @@ class App:
         self.profile_forum_note.pack(fill="x", pady=(2, 0))
         self.profile_probe_btn = ttk.Button(
             forum_frame, text="探测候选关注", command=self._probe_profile_forums, width=16
+        )
+        self.profile_report_btn = ttk.Button(
+            forum_frame, text="导出此人报告", command=self._export_profile_report, width=16
         )
         self._profile_forum_names: Dict[str, str] = {}
 
@@ -1075,6 +1152,9 @@ class App:
         self.lookup_probe_btn = ttk.Button(
             left, text="探测候选关注", command=self._probe_lookup_forums, width=16
         )
+        self.lookup_report_btn = ttk.Button(
+            left, text="导出报告", command=self._export_lookup_report, width=16
+        )
         self._lookup_forum_names: Dict[str, str] = {}
 
         tk.Label(
@@ -1353,6 +1433,7 @@ class App:
             info += " | ⚠ 关注列表隐藏，未命中禁止时标黄"
         self.lookup_info.configure(text=info)
         self.lookup_status.configure(text=f"{profile.get('username') or ''} · {len(posts)} 条发言")
+        self.lookup_report_btn.pack(anchor="w", pady=(4, 0))
         if self._hidden_follows(profile):
             self.lookup_probe_btn.pack(anchor="w", pady=(4, 0))
             self.lookup_probe_btn.configure(state="normal", text="探测候选关注")
@@ -1367,14 +1448,47 @@ class App:
         self.notebook.select(self.tab_posts)
         self.post_nb.select(self.tab_people)
 
+    def _on_people_filter_changed(self) -> None:
+        if getattr(self, "_filter_resetting", False):
+            return
+        if self.people_level_var.get() == "自定义":
+            self.people_custom_frame.pack(side="left", padx=(4, 0))
+        else:
+            self.people_custom_frame.pack_forget()
+        self._refresh_people()
+
+    def _reset_people_filters(self) -> None:
+        self._filter_resetting = True
+        try:
+            self.people_keyword_var.set("")
+            self.people_level_var.set("全部")
+            self.people_mark_var.set("全部")
+            self.people_min_var.set("")
+            self.people_max_var.set("")
+            self.people_custom_frame.pack_forget()
+        finally:
+            self._filter_resetting = False
+        self._refresh_people()
+
     def _refresh_people(self) -> None:
         users = self._aggregate_users()
         self.people_users = users
+        self._people_index = {id(user): index for index, user in enumerate(users)}
+        for index, user in enumerate(users):
+            user["_iid"] = str(index)
+        filtered = filter_users(
+            users,
+            keyword=self.people_keyword_var.get(),
+            level=self.people_level_var.get(),
+            mark=self.people_mark_var.get() if self._risk_enabled() else "全部",
+            min_level=_optional_int(self.people_min_var.get()),
+            max_level=_optional_int(self.people_max_var.get()),
+        )
         self._profile_cache = {}
         for item in self.people_tree.get_children():
             self.people_tree.delete(item)
-        for index, user in enumerate(users):
-            user["_iid"] = str(index)
+        for user in filtered:
+            index = self._people_index[id(user)]
             self.people_tree.insert(
                 "",
                 "end",
@@ -1390,11 +1504,13 @@ class App:
                     user["total"],
                 ),
             )
-        with_level = sum(1 for user in users if user.get("level"))
+        with_level = sum(1 for user in filtered if user.get("level"))
         mode_note = ""
         if self._risk_enabled():
             mode_note = " · 红绿灯：仅发言" if self.mode_var.get() == "guest" else " · 红绿灯：发言+关注"
-        self.people_hint.configure(text=f"v{VERSION} · 共 {len(users)} 人 · 有等级 {with_level}{mode_note}")
+        self.people_hint.configure(
+            text=f"v{VERSION} · 当前 {len(filtered)} / 共 {len(users)} 人 · 有等级 {with_level}{mode_note}"
+        )
         self.profile_status.configure(text="选择左边一个人查看详情")
         for tree in (self.profile_forum_tree, self.profile_post_tree):
             for item in tree.get_children():
@@ -1440,6 +1556,10 @@ class App:
             if enabled and self.mode_var.get() == "guest":
                 text = "一键红绿灯（仅发言）"
             self.batch_btn.configure(state="normal" if enabled else "disabled", text=text)
+        if hasattr(self, "people_mark_box"):
+            self.people_mark_box.configure(state="readonly" if enabled else "disabled")
+            if not enabled:
+                self.people_mark_var.set("全部")
 
     def _on_risk_toggle(self) -> None:
         enabled = bool(self.risk_var.get())
@@ -1593,6 +1713,143 @@ class App:
         y = self.root.winfo_rooty() + max(0, (self.root.winfo_height() - height) // 3)
         win.geometry(f"+{x}+{y}")
 
+    def _ask_stoken(self) -> None:
+        value = simpledialog.askstring("STOKEN", "粘贴 STOKEN（只保存在本机）", show="*", parent=self.root)
+        if not value:
+            return
+        if save_stoken(value.strip()):
+            self._append_log("STOKEN 已保存（本机加密）。", "ok")
+        else:
+            self._append_log("STOKEN 保存失败。", "muted")
+        self._update_stoken_label()
+
+    def _current_stoken(self) -> str:
+        return parse_cookie_input(self.cookie_var.get()).get("STOKEN", "") or (load_stoken() or "")
+
+    def _update_stoken_label(self) -> None:
+        if hasattr(self, "bawu_stoken_label"):
+            self.bawu_stoken_label.configure(
+                text="STOKEN：已检测到" if self._current_stoken() else "STOKEN：未检测到"
+            )
+
+    def _query_bawu(self) -> None:
+        forum = self.bawu_forum_var.get().strip()
+        user = self.bawu_user_var.get().strip()
+        if not forum or not user:
+            messagebox.showinfo("缺少参数", "请填写吧名和用户。", parent=self.root)
+            return
+        stoken = self._current_stoken()
+        if not stoken:
+            self._ask_stoken()
+            stoken = self._current_stoken()
+        if not stoken:
+            messagebox.showinfo("缺少 STOKEN", "吧务查询需要 STOKEN。", parent=self.root)
+            return
+        self._update_stoken_label()
+        self.bawu_detail.configure(state="normal")
+        self.bawu_detail.delete("1.0", "end")
+        self.bawu_detail.configure(state="disabled")
+
+        def worker() -> None:
+            cookies = parse_cookie_input(self.cookie_var.get())
+            cookies["STOKEN"] = stoken
+            fetcher = Fetcher(cookie=cookies, delay=0.4, verbose=False)
+            try:
+                uid = user if user.isdigit() else ""
+                if not uid:
+                    info = resolve_user(fetcher, user, "用户名")
+                    uid = str(info.get("uid") or "")
+                if not uid:
+                    self._post(("bawu_error", "没有找到这个用户，请改用用户 ID。"))
+                    return
+                result = fetch_recovers(fetcher, forum, uid, int(self.bawu_page_var.get() or 1))
+                self._post(("bawu_rows", result))
+            except Exception as error:  # noqa: BLE001
+                self._post(("bawu_error", str(error)))
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _query_bawu_detail(self) -> None:
+        selection = self.bawu_tree.selection()
+        if not selection:
+            return
+        try:
+            row = self._bawu_rows[int(selection[0])]
+        except (IndexError, ValueError):
+            return
+        if not row.get("tid"):
+            return
+        forum = self.bawu_forum_var.get().strip()
+        stoken = self._current_stoken()
+
+        def worker() -> None:
+            cookies = parse_cookie_input(self.cookie_var.get())
+            cookies["STOKEN"] = stoken
+            fetcher = Fetcher(cookie=cookies, delay=0.4, verbose=False)
+            try:
+                info = fetch_recover_info(fetcher, forum, row["tid"], row.get("pid") or "")
+                self._post(("bawu_detail", info))
+            except Exception as error:  # noqa: BLE001
+                self._post(("bawu_error", str(error)))
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _build_bawu_tab(self) -> None:
+        box = tk.Frame(self.tab_bawu, bg="#eef1f5", padx=16, pady=12)
+        box.pack(fill="both", expand=True)
+        tk.Label(
+            box,
+            text="只读：查询吧务后台保留期内、可恢复的删除内容；不提供恢复/删除。",
+            bg="#eef1f5",
+            fg="#b45309",
+            font=("Microsoft YaHei UI", 9),
+        ).pack(anchor="w", pady=(0, 8))
+        form = tk.Frame(box, bg="#eef1f5")
+        form.pack(fill="x")
+        tk.Label(form, text="吧名", bg="#eef1f5").pack(side="left")
+        self.bawu_forum_var = tk.StringVar()
+        ttk.Entry(form, textvariable=self.bawu_forum_var, width=16).pack(side="left", padx=(4, 10))
+        tk.Label(form, text="用户", bg="#eef1f5").pack(side="left")
+        self.bawu_user_var = tk.StringVar()
+        ttk.Entry(form, textvariable=self.bawu_user_var, width=16).pack(side="left", padx=(4, 10))
+        tk.Label(form, text="页码", bg="#eef1f5").pack(side="left")
+        self.bawu_page_var = tk.StringVar(value="1")
+        ttk.Spinbox(form, from_=1, to=999, textvariable=self.bawu_page_var, width=4).pack(
+            side="left", padx=(4, 10)
+        )
+        self.bawu_stoken_label = tk.Label(form, text="", bg="#eef1f5", fg="#475569")
+        self.bawu_stoken_label.pack(side="left", padx=(6, 0))
+        ttk.Button(form, text="填写 STOKEN", command=self._ask_stoken, width=12).pack(
+            side="left", padx=(6, 0)
+        )
+        ttk.Button(form, text="查询", command=self._query_bawu, width=8).pack(side="left", padx=(10, 0))
+
+        self.bawu_tree = ttk.Treeview(
+            box,
+            columns=("kind", "title", "content", "author", "time", "op", "hide"),
+            show="headings",
+            height=12,
+        )
+        for column, title, width in (
+            ("kind", "类型", 50),
+            ("title", "标题", 150),
+            ("content", "内容", 260),
+            ("author", "作者", 100),
+            ("time", "操作时间", 130),
+            ("op", "操作人", 90),
+            ("hide", "状态", 60),
+        ):
+            self.bawu_tree.heading(column, text=title)
+            self.bawu_tree.column(column, width=width, anchor="w")
+        self.bawu_tree.pack(fill="both", expand=True, pady=(8, 6))
+        self.bawu_tree.bind("<<TreeviewSelect>>", lambda _event: self._query_bawu_detail())
+        tk.Label(box, text="详情", bg="#eef1f5", fg="#475569").pack(anchor="w")
+        self.bawu_detail = tk.Text(box, height=8, wrap="word", font=("Microsoft YaHei UI", 9))
+        self.bawu_detail.pack(fill="both", expand=False, pady=(2, 0))
+        self.bawu_detail.configure(state="disabled")
+        self._bawu_rows: list = []
+        self._update_stoken_label()
+
     def _build_settings_tab(self) -> None:
         inner = ttk.Notebook(self.tab_settings)
         inner.pack(fill="both", expand=True, padx=6, pady=6)
@@ -1619,7 +1876,7 @@ class App:
             frame.pack(fill="both", expand=True, pady=4)
             editor = tk.Text(frame, height=6, wrap="word", font=("Microsoft YaHei UI", 9))
             editor.pack(fill="both", expand=True, padx=6, pady=6)
-            editor.insert("1.0", "\n".join(self.blacklist.get(key, [])))
+            editor.insert("1.0", chr(10).join(self.blacklist.get(key, [])))
             self.blacklist_editors[key] = editor
         bar = tk.Frame(box, bg="#eef1f5")
         bar.pack(fill="x", pady=(8, 0))
@@ -1659,6 +1916,20 @@ class App:
             font=("Microsoft YaHei UI", 8),
         ).pack(anchor="w", padx=20, pady=(2, 0))
 
+        backup_box = ttk.LabelFrame(box, text=" 配置备份 / 恢复 ")
+        backup_box.pack(fill="x", pady=(0, 10))
+        ttk.Button(backup_box, text="备份配置", command=self._backup_config, width=12).pack(
+            side="left", padx=(0, 8)
+        )
+        ttk.Button(backup_box, text="恢复配置", command=self._restore_config, width=12).pack(side="left")
+        tk.Label(
+            backup_box,
+            text="只含设置和本地标记，不含 Cookie",
+            bg="#eef1f5",
+            fg="#8a94a6",
+            font=("Microsoft YaHei UI", 8),
+        ).pack(side="left", padx=(10, 0))
+
         self.setting_vars = {}
         for key, text in (
             ("color_people", "在参与者列表里标色"),
@@ -1696,6 +1967,78 @@ class App:
         if getattr(self, "_last_lookup_profile", None):
             self._render_lookup(self._last_lookup_profile)
         self.general_hint.configure(text="已保存")
+
+    def _backup_config(self) -> None:
+        path = filedialog.asksaveasfilename(
+            title="备份配置",
+            defaultextension=".json",
+            filetypes=[("JSON 配置", "*.json"), ("ZIP 压缩包", "*.zip")],
+            initialfile="贴吧统计配置.json",
+            parent=self.root,
+        )
+        if not path:
+            return
+        try:
+            saved = write_backup(path, self.settings, self.blacklist)
+        except Exception as error:  # noqa: BLE001
+            messagebox.showerror("备份失败", str(error), parent=self.root)
+            return
+        self._append_log(f"配置已备份：{saved}", "ok")
+        messagebox.showinfo(
+            "备份完成",
+            "已保存到：" + chr(10) + saved,
+            parent=self.root,
+        )
+
+    def _restore_config(self) -> None:
+        path = filedialog.askopenfilename(
+            title="恢复配置",
+            filetypes=[("配置备份", "*.json *.zip"), ("所有文件", "*.*")],
+            parent=self.root,
+        )
+        if not path:
+            return
+        try:
+            data = read_backup(path)
+        except ValueError as error:
+            messagebox.showerror("无法恢复", str(error), parent=self.root)
+            return
+        if not messagebox.askyesno(
+            "恢复配置",
+            backup_preview(data) + chr(10) + chr(10) + "会覆盖当前设置和本地标记，继续吗？",
+            parent=self.root,
+        ):
+            return
+        try:
+            import tempfile
+
+            write_backup(
+                os.path.join(tempfile.gettempdir(), "tieba-config-before-restore.json"),
+                self.settings,
+                self.blacklist,
+            )
+        except Exception:  # noqa: BLE001
+            pass
+        self.settings.update(data["settings"])
+        save_settings(self.settings)
+        self.blacklist = data["blacklist"]
+        save_blacklist(self.blacklist)
+        mode = self.settings.get("mode")
+        if mode in ("guest", "login"):
+            self.mode_var.set(mode)
+        self.risk_var.set(bool(self.settings.get("risk_enabled", False)))
+        for key, var in getattr(self, "setting_vars", {}).items():
+            var.set(bool(self.settings.get(key, True)))
+        for key, editor in getattr(self, "blacklist_editors", {}).items():
+            editor.delete("1.0", "end")
+            editor.insert("1.0", chr(10).join(self.blacklist.get(key, [])))
+        self._apply_mode_ui()
+        self._apply_risk_ui()
+        self._refresh_people()
+        if getattr(self, "_last_lookup_profile", None):
+            self._render_lookup(self._last_lookup_profile)
+        self._append_log("配置已恢复，重启后完全生效。", "ok")
+        messagebox.showinfo("恢复完成", "配置已恢复。建议重启软件。", parent=self.root)
 
     def _build_help_tab(self) -> None:
         frame = tk.Frame(self.tab_help, bg="#eef1f5", padx=10, pady=10)
@@ -1922,6 +2265,91 @@ class App:
             ],
         )
         self.grid_hint.configure(text=f"帖子：{thread.meta.title or thread.meta.tid}")
+        self._add_compare_tab()
+
+    def _add_compare_tab(self) -> None:
+        frame = tk.Frame(self.grid_nb)
+        self.grid_nb.add(frame, text="  参与者对比  ")
+        top = tk.Frame(frame, bg="#ffffff", padx=8, pady=6)
+        top.pack(fill="x")
+        tk.Label(top, text="勾选帖子：", bg="#ffffff", fg="#475569", font=("Microsoft YaHei UI", 9)).pack(
+            side="left"
+        )
+        self.compare_vars = []
+        for index, thread in enumerate(self.last_threads):
+            var = tk.BooleanVar(value=index < 2)
+            label = (thread.meta.title or thread.meta.tid)[:16]
+            tk.Checkbutton(
+                top, text=label, variable=var, bg="#ffffff", anchor="w", font=("Microsoft YaHei UI", 8)
+            ).pack(side="left", padx=(2, 0))
+            self.compare_vars.append(var)
+        self.compare_mode_var = tk.StringVar(value="交集")
+        ttk.Combobox(top, values=MODES, textvariable=self.compare_mode_var, width=8, state="readonly").pack(
+            side="left", padx=(8, 0)
+        )
+        ttk.Button(top, text="生成对比", command=self._generate_compare, width=10).pack(
+            side="left", padx=(6, 0)
+        )
+        ttk.Button(top, text="导出结果", command=self._export_compare, width=10).pack(
+            side="left", padx=(4, 0)
+        )
+        self.compare_tree = ttk.Treeview(frame, columns=(), show="headings")
+        self.compare_tree.pack(fill="both", expand=True, padx=8, pady=(0, 8))
+        self.compare_result: Optional[tuple] = None
+
+    def _generate_compare(self) -> None:
+        selected = [index for index, var in enumerate(self.compare_vars) if var.get()]
+        if len(selected) < 2:
+            messagebox.showinfo("至少选 2 个帖子", "请勾选至少 2 个帖子。", parent=self.root)
+            return
+        try:
+            result = compare_threads(self.last_threads, selected, self.compare_mode_var.get())
+        except ValueError as error:
+            messagebox.showinfo("无法对比", str(error), parent=self.root)
+            return
+        headers = ["昵称", "用户名", "用户ID"] + result["threads"] + ["合计", "类型"]
+        columns = [str(index) for index in range(len(headers))]
+        self.compare_tree.configure(columns=columns)
+        for index, header in enumerate(headers):
+            self.compare_tree.heading(columns[index], text=header)
+            self.compare_tree.column(
+                columns[index],
+                width=110 if header in ("昵称", "用户名") else 70,
+                anchor="w" if header in ("昵称", "用户名") else "center",
+            )
+        for item in self.compare_tree.get_children():
+            self.compare_tree.delete(item)
+        rows = []
+        for row in result["rows"]:
+            values = [row["name"], row["username"], row["uid"]] + row["counts"] + [row["total"], row["type"]]
+            rows.append([str(value) for value in values])
+            self.compare_tree.insert("", "end", values=values)
+        self.compare_result = (headers, rows)
+
+    def _export_compare(self) -> None:
+        if not self.compare_result:
+            messagebox.showinfo("还没有结果", "先点「生成对比」。", parent=self.root)
+            return
+        from openpyxl import Workbook
+
+        path = filedialog.asksaveasfilename(
+            title="导出对比结果",
+            defaultextension=".xlsx",
+            filetypes=[("Excel 工作簿", "*.xlsx")],
+            initialfile="参与者对比.xlsx",
+            parent=self.root,
+        )
+        if not path:
+            return
+        headers, rows = self.compare_result
+        book = Workbook()
+        sheet = book.active
+        sheet.title = "参与者对比"
+        sheet.append(headers)
+        for row in rows:
+            sheet.append(row)
+        book.save(path)
+        self._append_log(f"对比结果已导出：{path}", "ok")
 
     def _add_grid_tab(
         self, notebook, title: str, headers: List[str], rows: List[list], urls: Optional[List[str]] = None
@@ -2054,6 +2482,50 @@ class App:
 
         ttk.Button(win, text="保存", command=save).pack(pady=10)
 
+    def _people_filter_active(self) -> bool:
+        if self.people_keyword_var.get().strip():
+            return True
+        if self.people_level_var.get() != "全部":
+            return True
+        if self._risk_enabled() and self.people_mark_var.get() != "全部":
+            return True
+        return False
+
+    def _filtered_threads(self) -> list:
+        from dataclasses import replace
+
+        selected = set()
+        filtered = filter_users(
+            self.people_users,
+            keyword=self.people_keyword_var.get(),
+            level=self.people_level_var.get(),
+            mark=self.people_mark_var.get() if self._risk_enabled() else "全部",
+            min_level=_optional_int(self.people_min_var.get()),
+            max_level=_optional_int(self.people_max_var.get()),
+        )
+        for user in filtered:
+            for value in (user.get("uid"), user.get("username"), user.get("name")):
+                if value:
+                    selected.add(str(value))
+        result = []
+        for thread in self.last_threads:
+            floors = [
+                floor
+                for floor in thread.floors
+                if str(floor.author_id) in selected
+                or str(floor.author_name) in selected
+                or str(floor.author) in selected
+            ]
+            comments = [
+                comment
+                for comment in thread.comments
+                if str(comment.author_id) in selected
+                or str(comment.author_name) in selected
+                or str(comment.author) in selected
+            ]
+            result.append(replace(thread, floors=floors, comments=comments))
+        return result
+
     def _export_now(self) -> None:
         if not self.last_threads:
             messagebox.showinfo("还没有数据", "先点「开始统计」抓一个帖子。", parent=self.root)
@@ -2069,15 +2541,37 @@ class App:
         )
         if not path:
             return
+        threads = self.last_threads
+        if self._people_filter_active():
+            scope = messagebox.askyesnocancel(
+                "导出范围",
+                """当前有参与者筛选条件。
+
+是：导出全部用户
+否：只导出当前筛选结果
+取消：不导出""",
+                parent=self.root,
+            )
+            if scope is None:
+                return
+            if scope is False:
+                threads = self._filtered_threads()
+                if not any(thread.floors or thread.comments for thread in threads):
+                    messagebox.showinfo("没有结果", "当前筛选没有可导出的用户。", parent=self.root)
+                    return
         try:
-            export_workbook(path, self.last_threads, include_op=getattr(self, "last_include_op", True))
+            export_workbook(path, threads, include_op=getattr(self, "last_include_op", True))
         except Exception as error:  # noqa: BLE001
             messagebox.showerror("导出失败", str(error), parent=self.root)
             return
         self.last_output = path
         self.open_btn.configure(state="normal")
         self._append_log(f"已导出 Excel：{path}", "ok")
-        messagebox.showinfo("导出完成", f"已保存到：\n{path}\n\n现在打开吗？", parent=self.root)
+        messagebox.showinfo(
+            "导出完成",
+            "已保存到：" + chr(10) + path + chr(10) + chr(10) + "现在打开吗？",
+            parent=self.root,
+        )
         self._open_result()
 
     def _enrich_levels_now(self) -> None:
@@ -2402,6 +2896,63 @@ class App:
             return "对方设置了隐私，关注列表不可见（风险提示：关注列表隐藏，未命中禁止时标黄）"
         return "没有查到关注列表"
 
+    def _export_profile_report(self) -> None:
+        user = getattr(self, "_profile_user", None)
+        profile = getattr(self, "_profile_data", None)
+        if not user or not profile:
+            messagebox.showinfo("还没有资料", "先点开一个参与者。", parent=self.root)
+            return
+        mark = None
+        if self._risk_enabled():
+            level, bar = self._profile_hit(profile, [self._user_bar(user)])
+            if level:
+                mark = {"level": {"ban": "红", "warn": "黄", "safe": "绿"}.get(level, level), "bar": bar}
+        self._choose_report_path(user, profile, mark)
+
+    def _export_lookup_report(self) -> None:
+        profile = getattr(self, "_last_lookup_profile", None)
+        if not profile:
+            messagebox.showinfo("还没有资料", "先查询一个用户。", parent=self.root)
+            return
+        user = {
+            "name": profile.get("nickname") or "",
+            "username": profile.get("username") or "",
+            "uid": profile.get("user_id") or "",
+            "level": "",
+        }
+        self._choose_report_path(user, profile, None)
+
+    def _choose_report_path(self, user, profile, mark) -> None:
+        initial = report_base(user, profile) + ".xlsx"
+        path = filedialog.asksaveasfilename(
+            title="导出用户报告",
+            defaultextension=".xlsx",
+            filetypes=[("Excel 工作簿", "*.xlsx")],
+            initialfile=initial,
+            parent=self.root,
+        )
+        if not path:
+            return
+        base = os.path.splitext(path)[0]
+        try:
+            xlsx, md = export_user_report(
+                base,
+                user,
+                profile,
+                self.last_threads,
+                mode="登录" if self.mode_var.get() == "login" else "免登录",
+                mark=mark,
+            )
+        except Exception as error:  # noqa: BLE001
+            messagebox.showerror("导出失败", str(error), parent=self.root)
+            return
+        self._append_log(f"用户报告已导出：{xlsx}；{md}", "ok")
+        messagebox.showinfo(
+            "导出完成",
+            "已生成：" + chr(10) + xlsx + chr(10) + md,
+            parent=self.root,
+        )
+
     def _render_profile(self, user, profile) -> None:
         forum_tree = self.profile_forum_tree
         post_tree = self.profile_post_tree
@@ -2442,6 +2993,7 @@ class App:
         self._profile_data = profile
         posts = profile.get("recent_posts") or []
         combined = self._merge_forum_lists(profile, self._user_bar(user), level or "")
+        self.profile_report_btn.pack(anchor="w", pady=(4, 0))
         if self._hidden_follows(profile):
             self.profile_probe_btn.pack(anchor="w", pady=(4, 0))
             self.profile_probe_btn.configure(state="normal", text="探测候选关注")
@@ -2547,6 +3099,16 @@ class App:
             status += " · ⚠ 关注列表隐藏，未命中禁止时标黄"
         self.profile_status.configure(text=status)
 
+    def _comment_depth_value(self) -> int:
+        text = self.comment_depth_var.get()
+        if "10" in text:
+            return 10
+        if "50" in text:
+            return 50
+        if "100" in text:
+            return 100
+        return 0
+
     def _on_start(self) -> None:
         if self.running:
             return
@@ -2620,6 +3182,8 @@ class App:
         options = CollectOptions(
             mode=mode,
             include_comments=self.comments_var.get(),
+            comment_depth=self._comment_depth_value(),
+            comment_concurrency=max(1, min(3, int(self.comment_concurrency_var.get() or 1))),
             enrich_levels=True,
             pb_levels=True,
             verbose=True,
@@ -2732,6 +3296,7 @@ class App:
             self._set_running(False)
             self.status_var.set("完成")
             try:
+                self._reset_people_filters()
                 self._refresh_people()
                 self._refresh_grid()
             except Exception:  # noqa: BLE001
@@ -2768,6 +3333,55 @@ class App:
             else:
                 self.open_btn.configure(state="disabled")
                 self._append_log(f"\n已停止，完成了 {count} 个帖子的抓取（未导出 Excel）。", "err")
+        elif kind == "bawu_rows":
+            _, result = message
+            self._bawu_rows = result["rows"]
+            for item in self.bawu_tree.get_children():
+                self.bawu_tree.delete(item)
+            for index, row in enumerate(self._bawu_rows):
+                self.bawu_tree.insert(
+                    "",
+                    "end",
+                    iid=str(index),
+                    values=(
+                        row["kind"],
+                        row["title"],
+                        row["content"][:80],
+                        row["author"],
+                        row["op_time"],
+                        row["op_name"],
+                        "屏蔽" if row["is_hide"] else "",
+                    ),
+                )
+            self._append_log(f"吧务查询完成：{len(self._bawu_rows)} 条", "ok")
+        elif kind == "bawu_detail":
+            _, info = message
+            text = (
+                "标题："
+                + info["title"]
+                + chr(10)
+                + "作者："
+                + info["author"]
+                + "（"
+                + info["username"]
+                + "）"
+                + chr(10)
+                + "tid："
+                + info["tid"]
+                + "  pid："
+                + info["pid"]
+                + chr(10)
+                + chr(10)
+                + info["content"]
+            )
+            self.bawu_detail.configure(state="normal")
+            self.bawu_detail.delete("1.0", "end")
+            self.bawu_detail.insert("1.0", text)
+            self.bawu_detail.configure(state="disabled")
+        elif kind == "bawu_error":
+            _, text = message
+            self._append_log(f"吧务查询失败：{text}", "muted")
+            messagebox.showerror("吧务查询失败", text, parent=self.root)
         elif kind == "probe_done":
             _, profile, results, button = message
             self._probe_running = False

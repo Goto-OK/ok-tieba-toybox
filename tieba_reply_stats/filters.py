@@ -1,0 +1,84 @@
+"""参与者筛选（FR-009）：纯函数，便于离线测试。"""
+
+from __future__ import annotations
+
+import re
+from typing import Dict, List, Optional
+
+EMOJI_CODE_RE = re.compile(r"\[U\+([0-9A-Fa-f]{4,6})\]")
+LEVEL_OPTIONS = ("全部", "Lv.1-3", "Lv.4-6", "Lv.7-9", "Lv.10+", "无等级", "自定义")
+MARK_OPTIONS = ("全部", "红", "黄", "绿", "白")
+
+
+def decode_display(text: str) -> str:
+    def repl(match: re.Match) -> str:
+        try:
+            return chr(int(match.group(1), 16))
+        except ValueError:
+            return match.group(0)
+
+    return EMOJI_CODE_RE.sub(repl, text or "")
+
+
+def _level_value(user: Dict) -> int:
+    try:
+        return int(str(user.get("level") or "").strip())
+    except ValueError:
+        return 0
+
+
+def _level_match(user: Dict, level: str, min_level: Optional[int], max_level: Optional[int]) -> bool:
+    value = _level_value(user)
+    if level == "全部":
+        return True
+    if level == "无等级":
+        return value <= 0
+    if level == "自定义":
+        low = 1 if min_level is None else min_level
+        high = 999 if max_level is None else max_level
+        if low > high:
+            low, high = high, low
+        return low <= value <= high
+    if level == "Lv.1-3":
+        return 1 <= value <= 3
+    if level == "Lv.4-6":
+        return 4 <= value <= 6
+    if level == "Lv.7-9":
+        return 7 <= value <= 9
+    if level == "Lv.10+":
+        return value >= 10
+    return True
+
+
+def _mark_match(user: Dict, mark: str) -> bool:
+    if mark == "全部":
+        return True
+    hit = str(user.get("hit") or "")
+    mapping = {"红": "ban", "黄": "warn", "绿": "safe", "白": ""}
+    return hit == mapping.get(mark, "")
+
+
+def filter_users(
+    users: List[Dict],
+    keyword: str = "",
+    level: str = "全部",
+    mark: str = "全部",
+    min_level: Optional[int] = None,
+    max_level: Optional[int] = None,
+) -> List[Dict]:
+    text = decode_display((keyword or "").strip()).casefold()
+    result = []
+    for user in users:
+        name = str(user.get("name") or "")
+        username = str(user.get("username") or "")
+        uid = str(user.get("uid") or "")
+        if text:
+            haystack = " ".join((name, username, uid, decode_display(name))).casefold()
+            if text not in haystack:
+                continue
+        if not _level_match(user, level, min_level, max_level):
+            continue
+        if not _mark_match(user, mark):
+            continue
+        result.append(user)
+    return result

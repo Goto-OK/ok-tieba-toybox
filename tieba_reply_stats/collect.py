@@ -29,6 +29,8 @@ class CollectOptions:
     mode: str = "guest"  # guest / login，必须显式指定
     max_pages: int = 0  # 0 表示抓完全部
     include_comments: bool = True
+    comment_depth: int = 0  # 0=全部；10/50/100=每层上限
+    comment_concurrency: int = 1  # 1~3
     max_comment_pages: int = 30  # 单层楼中楼最多翻多少页（防止异常死循环）
     enrich_levels: bool = False  # 为只回楼中楼、没发过楼层的用户补全等级（较慢）
     pb_levels: bool = True  # 用新版网页接口补全楼层/楼中楼等级（较快，默认开）

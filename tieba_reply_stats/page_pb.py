@@ -430,11 +430,139 @@ def collect_thread_anon(url: str, fetcher, options) -> ThreadData:
             break
 
     floors.sort(key=lambda item: item.post_no)
+    thread_data = ThreadData(meta=meta, floors=floors, comments=comments)
+    fill_comments_anon(thread_data, fetcher, options)
+    comments = thread_data.comments
     comments.sort(key=lambda item: (item.floor_no, item.pid))
     for floor in floors:
         for comment in comments:
             if comment.floor_no == floor.post_no and not comment.floor_author:
                 comment.floor_author = floor.author
     if options.log:
-        options.log(f"  完成：{len(floors)} 楼 / {len(comments)} 条楼中楼（游客模式，每层最多 10 条）")
-    return ThreadData(meta=meta, floors=floors, comments=comments)
+        options.log(f"  完成：{len(floors)} 楼 / {len(comments)} 条楼中楼（免登录）")
+    return thread_data
+
+
+FLOOR_URL = "https://tiebac.baidu.com/c/f/pb/floor?cmd=302002"
+
+
+def build_floor_request(tid: str, pid: str, pn: int = 1, bduss: str = "") -> bytes:
+    common = b"".join([_fv(1, 2), _fb(2, CLIENT_VERSION)])
+    if bduss:
+        common += _fb(10, bduss.encode())
+    data = b"".join(
+        [
+            _fb(9, common),
+            _fv(1, int(tid)),
+            _fv(2, int(pid)),
+            _fv(4, pn),
+            _fv(19, 0),
+        ]
+    )
+    return _fb(1, data)
+
+
+def _floor_request(fetcher, tid: str, pid: str, pn: int, bduss: str = "") -> bytes:
+    payload = build_floor_request(tid, pid, pn, bduss)
+    boundary = "-*_r1999"
+    body = (
+        (f'--{boundary}\r\nContent-Disposition: form-data; name="data"; filename="file"\r\n\r\n').encode()
+        + payload
+        + f"\r\n--{boundary}--\r\n".encode()
+    )
+    request = urllib.request.Request(
+        FLOOR_URL,
+        data=body,
+        headers={
+            "User-Agent": USER_AGENT,
+            "Content-Type": f"multipart/form-data; boundary={boundary}",
+            "x_bd_data_type": "protobuf",
+        },
+    )
+    with urllib.request.urlopen(request, timeout=40) as response:
+        return response.read()
+
+
+def parse_floor_response(raw: bytes) -> Dict:
+    error = _msg(raw, 1) or b""
+    code = _num(error, 1)
+    if code:
+        raise RuntimeError(f"贴吧接口错误 {code}: {_text(error, 2)}")
+    data = _msg(raw, 2) or b""
+    page = _parse_page(_msg(data, 1) or b"")
+    post = _msg(data, 3) or b""
+    floor_no = _num(post, 3)
+    comments: List[Dict] = []
+    for sub in _msgs(data, 4):
+        fake_post = _fb(15, _fb(2, sub))
+        comments.extend(_parse_comments(fake_post, {"post_no": floor_no}, {}, {}))
+    has_more = bool(page.get("has_more")) or int(page.get("total") or 0) > int(page.get("current") or 0)
+    return {"comments": comments, "page": page, "has_more": has_more}
+
+
+def fetch_floor_page(fetcher, tid: str, pid: str, pn: int = 1, bduss: str = "") -> Dict:
+    raw = _floor_request(fetcher, tid, pid, pn, bduss)
+    return parse_floor_response(raw)
+
+
+def fill_comments_anon(thread: ThreadData, fetcher, options) -> None:
+    """用 floor 接口把免登录楼中楼补全（最大保护 + 可配置并发）。"""
+    from concurrent.futures import ThreadPoolExecutor
+
+    depth = int(getattr(options, "comment_depth", 0) or 0)
+    concurrency = max(1, min(3, int(getattr(options, "comment_concurrency", 1) or 1)))
+    existing: Dict[int, set] = {}
+    for comment in thread.comments:
+        existing.setdefault(comment.floor_no, set()).add(comment.pid)
+    floors = [floor for floor in thread.floors if floor.reply_num > len(existing.get(floor.post_no, ()))]
+    if not floors:
+        return
+    if options.log:
+        options.log(f"  楼中楼补全：{len(floors)} 层（并发 {concurrency}）")
+
+    def work(floor):
+        result = []
+        target = int(floor.reply_num)
+        if depth:
+            target = min(target, depth)
+        pn = 1
+        while pn <= 50:
+            if options.should_stop and options.should_stop():
+                break
+            try:
+                page = fetch_floor_page(fetcher, thread.meta.tid, floor.pid, pn, bduss="")
+            except Exception as error:  # noqa: BLE001
+                thread.warnings.append(f"第 {floor.post_no} 层楼中楼失败：{error}")
+                break
+            for row in page["comments"]:
+                if row["pid"] and row["pid"] not in existing.get(floor.post_no, ()):
+                    row["floor_no"] = floor.post_no
+                    row["floor_author"] = floor.author
+                    result.append(row)
+            if not page["has_more"] or len(result) >= target:
+                break
+            pn += 1
+        return result
+
+    rows = []
+    with ThreadPoolExecutor(max_workers=concurrency) as pool:
+        for part in pool.map(work, floors):
+            rows.extend(part)
+    for row in rows:
+        thread.comments.append(
+            Comment(
+                floor_no=row["floor_no"],
+                floor_author=row.get("floor_author") or "",
+                pid=row["pid"],
+                author=row["author"],
+                author_name=row["author_name"],
+                author_id=row["author_id"],
+                portrait=row["portrait"],
+                posted_at=_to_datetime(row["time"]),
+                content=row["content"],
+                reply_to=row["reply_to"],
+                is_op=row["is_op"],
+                level=str(row["level"]) if row["level"] else "",
+            )
+        )
+    thread.comments.sort(key=lambda item: (item.floor_no, item.pid))
