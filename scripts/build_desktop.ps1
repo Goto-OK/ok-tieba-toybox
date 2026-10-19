@@ -61,6 +61,7 @@ if ($LASTEXITCODE -ne 0) { throw "生成 version_info 失败" }
 Write-Host "[2/5] 构建 exe（版本 $Version）"
 & $VenvPython -m PyInstaller --noconfirm --clean --onedir --windowed `
     --name "贴吧回复统计" `
+    --add-data "$Assets;assets" `
     --icon (Join-Path $Assets "app.ico") `
     --version-file (Join-Path $Assets "version_info.txt") `
     --paths $Root `

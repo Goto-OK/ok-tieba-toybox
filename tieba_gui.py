@@ -74,6 +74,11 @@ from tieba_reply_stats.version import __version__ as VERSION
 
 APP_TITLE = "贴吧楼层回复统计"
 
+
+def _asset_path(*parts: str) -> str:
+    base = getattr(sys, "_MEIPASS", os.path.dirname(os.path.abspath(__file__)))
+    return os.path.join(base, *parts)
+
 _EMOJI_CODE_RE = re.compile(r"\[U\+([0-9A-Fa-f]{4,6})\]")
 
 
@@ -169,9 +174,12 @@ class App:
         self._auto_filled = False
         self.blacklist = load_blacklist()
         self.settings = load_settings()
+        if self.settings.get("skin") == "bluefish":
+            self.settings["theme_mode"] = "dark"
         self.palette = resolve_palette(
             str(self.settings.get("theme_mode", "light")),
             str(self.settings.get("accent", "blue")),
+            str(self.settings.get("skin", "default")),
         )
         self.mode_var = tk.StringVar(value="guest")
 
@@ -2063,13 +2071,14 @@ class App:
                 self.settings.get("theme_mode", "light"), "浅色"
             )
         )
-        ttk.Combobox(
+        self.theme_combo = ttk.Combobox(
             row,
             values=("浅色", "深色", "跟随系统"),
             textvariable=self.theme_mode_var,
             width=10,
             state="readonly",
-        ).pack(side="left")
+        )
+        self.theme_combo.pack(side="left")
         self.theme_mode_var.trace_add("write", lambda *_: self._on_theme_changed())
         row2 = tk.Frame(theme_box, bg="#eef1f5")
         row2.pack(anchor="w", fill="x", padx=8, pady=(2, 4))
@@ -2079,14 +2088,29 @@ class App:
                 self.settings.get("accent", "blue"), "蓝"
             )
         )
-        ttk.Combobox(
+        self.accent_combo = ttk.Combobox(
             row2,
             values=("蓝", "绿", "紫"),
             textvariable=self.accent_var,
             width=10,
             state="readonly",
-        ).pack(side="left")
+        )
+        self.accent_combo.pack(side="left")
         self.accent_var.trace_add("write", lambda *_: self._on_accent_changed())
+        row3 = tk.Frame(theme_box, bg="#eef1f5")
+        row3.pack(anchor="w", fill="x", padx=8, pady=(2, 4))
+        tk.Label(row3, text="皮肤：", width=14, anchor="w", bg="#eef1f5", fg="#475569").pack(side="left")
+        self.skin_var = tk.StringVar(
+            value="蓝鱼（内置）" if self.settings.get("skin") == "bluefish" else "默认"
+        )
+        ttk.Combobox(
+            row3,
+            values=("默认", "蓝鱼（内置）"),
+            textvariable=self.skin_var,
+            width=12,
+            state="readonly",
+        ).pack(side="left")
+        self.skin_var.trace_add("write", lambda *_: self._on_skin_changed())
 
         note = ttk.LabelFrame(box, text=" 说明 ")
         note.pack(fill="x")
@@ -2099,6 +2123,38 @@ class App:
             wraplength=740,
             justify="left",
         ).pack(anchor="w", padx=8, pady=6)
+
+    def _on_skin_changed(self) -> None:
+        skin = "bluefish" if self.skin_var.get().startswith("蓝鱼") else "default"
+        self.settings["skin"] = skin
+        if skin == "bluefish":
+            self.settings["theme_mode"] = "dark"
+            self.theme_mode_var.set("深色")
+        save_settings(self.settings)
+        self._apply_theme()
+
+    def _apply_skin_banner(self) -> None:
+        banner = getattr(self, "skin_banner", None)
+        if banner is not None:
+            try:
+                banner.destroy()
+            except tk.TclError:
+                pass
+            self.skin_banner = None
+        if self.settings.get("skin") != "bluefish":
+            return
+        path = _asset_path("assets", "skins", "bluefish", "header.png")
+        if not os.path.isfile(path):
+            return
+        try:
+            image = tk.PhotoImage(file=path)
+        except tk.TclError:
+            return
+        self.skin_image = image
+        frame = tk.Frame(self.root, bg=self.palette["window_bg"], height=84)
+        frame.pack(fill="x", before=self.notebook)
+        tk.Label(frame, image=image, bg=self.palette["window_bg"], bd=0).pack()
+        self.skin_banner = frame
 
     def _on_theme_changed(self) -> None:
         mode = {"浅色": "light", "深色": "dark", "跟随系统": "system"}.get(
@@ -2164,11 +2220,12 @@ class App:
         palette = resolve_palette(
             str(self.settings.get("theme_mode", "light")),
             str(self.settings.get("accent", "blue")),
+            str(self.settings.get("skin", "default")),
         )
         self.palette = palette
         self.root.configure(bg=palette["window_bg"])
         style = ttk.Style(self.root)
-        dark = palette["window_bg"] == "#15171c"
+        dark = palette["window_bg"] != "#eef1f5"
         try:
             style.theme_use("clam" if dark else "vista")
         except tk.TclError:
@@ -2410,6 +2467,16 @@ class App:
             entry = getattr(self, "lookup_traffic_labels", {}).get(key)
             if entry:
                 entry[0].configure(fg=palette[value])
+        skin = self.settings.get("skin", "default")
+        state = "disabled" if skin == "bluefish" else "readonly"
+        for name in ("theme_combo", "accent_combo"):
+            combo = getattr(self, name, None)
+            if combo is not None:
+                try:
+                    combo.configure(state=state)
+                except tk.TclError:
+                    pass
+        self._apply_skin_banner()
 
     def _build_storage_tab(self) -> None:
         box = tk.Frame(self.tab_storage, bg="#eef1f5", padx=14, pady=10)

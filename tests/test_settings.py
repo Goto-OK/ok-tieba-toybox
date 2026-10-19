@@ -19,6 +19,7 @@ def test_defaults(monkeypatch, tmp_path):
     assert loaded["page_size"] == 1000
     assert loaded["theme_mode"] == "light"
     assert loaded["accent"] == "blue"
+    assert loaded["skin"] == "default"
 
 
 def test_roundtrip(monkeypatch, tmp_path):
@@ -33,6 +34,7 @@ def test_roundtrip(monkeypatch, tmp_path):
             "proxy_url": "http://127.0.0.1:8080",
             "theme_mode": "dark",
             "accent": "green",
+            "skin": "bluefish",
         }
     )
     loaded = settings_module.load_settings()
@@ -43,6 +45,7 @@ def test_roundtrip(monkeypatch, tmp_path):
     assert loaded["proxy_mode"] == "custom"
     assert loaded["theme_mode"] == "dark"
     assert loaded["accent"] == "green"
+    assert loaded["skin"] == "bluefish"
     assert json.loads((tmp_path / "settings.json").read_text(encoding="utf-8"))["proxy_url"] == "http://127.0.0.1:8080"
 
 

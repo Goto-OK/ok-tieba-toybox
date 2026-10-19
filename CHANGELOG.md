@@ -37,7 +37,7 @@
 
 ### 验证
 
-- pytest 61 个通过；
+- pytest 65 个通过；
 - ruff、mypy、selftest 通过；
 - 未重新打包 exe / APK。
 
