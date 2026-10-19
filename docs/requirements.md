@@ -549,6 +549,14 @@
 
 - 存储位置：`%APPDATA%\TiebaReplyStats\last_result.db`；
 - 存储格式：SQLite，带 `schema_version`、`app_version`、`saved_at`；
+- 表结构：
+  - `meta(key, value)`：`schema_version`、`app_version`、`saved_at`；
+  - `threads(tid, title, forum, source_url, fetched_at, payload_version, payload_json)`；
+  - `tid` 为主键，一个帖子只保留一行；
+  - 刷新成功时替换该 tid 的整行；
+  - `payload_json` 存该帖的楼层、楼中楼、警告等完整数据；
+  - 不建 floors/comments 独立表；
+  - 不保存历史快照；
 - 保存时机：
   - 每完成一个帖子后保存一次；
   - 用户停止时保存已完成部分；
