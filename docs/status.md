@@ -1,6 +1,6 @@
 # 实现状态
 
-最后更新：2026-10-19  
+最后更新：2026-10-20  
 说明：区分“规范定稿”“源码实现”“测试”“成品打包”。
 
 ## 0. 规范冻结
@@ -20,8 +20,8 @@
 
 | 编号 | 功能 | 规范 | 源码 | 测试 | 成品 |
 |---|---|---|---|---|---|
-| FR-008 | 匿名抓取 + 关注增强 | ✅ | 🟡 仍是旧登录模式 | ✅ 50 个 pytest | ✅ v1.3.1（旧逻辑） |
-| FR-008 | 红绿灯默认开启、仅发言 | ✅ | 🟡 默认仍关闭 | 🟡 GUI 冒烟 | ✅ v1.3.1（旧逻辑） |
+| FR-008 | 匿名抓取 + 关注增强 | ✅ | 🟡 默认匿名/增强入口已接；Cookie 校验/并发未全 | ✅ 56 个 pytest | ✅ v1.3.1（旧逻辑） |
+| FR-008 | 红绿灯默认开启、仅发言 | ✅ | 🟡 默认开/筛选/包含关注；并发/继续未做 | 🟡 GUI 冒烟 | ✅ v1.3.1（旧逻辑） |
 | FR-008 | 查用户 / 本地标记文案 | ✅ | ✅ 桌面 | 🟡 GUI 冒烟 | ✅ v1.3.1 |
 | FR-009 | 参与者筛选 | ✅ | ✅ 桌面 | ✅ 5 个专项 | ✅ v1.3.1 |
 | FR-010 | 多帖参与者对比 | ✅ | ✅ 桌面 | ✅ 4 个专项 | ✅ v1.3.1 |
@@ -30,8 +30,8 @@
 | FR-013 | 吧务删除内容 | ⛔ 已砍掉 | ✅ 已移除 | ✅ 无 | ❌ v1.3.1 仍含 |
 | FR-014 | 全量楼中楼 | ✅ | ✅ 默认匿名 floor；关注增强回退未做 | ✅ 匿名实测 | ✅ v1.3.1（旧逻辑） |
 | FR-015 | 隐藏关注候选探测 | ✅ | ✅ 桌面 | ✅ 4 个专项 | ✅ v1.3.1 |
-| UI-013 | 多帖切换 | ✅ | ❌ 只显示第一帖 | ❌ | ❌ |
-| UI-014 | Emoji 昵称查询 | ✅ | ❌ 未支持代码输入 | ❌ | ❌ |
+| UI-013 | 多帖切换/分帖/分页 | ✅ | ✅ 桌面 | 🟡 GUI 冒烟 | ❌ |
+| UI-014 | Emoji 昵称查询 | ✅ | 🟡 表格/输入已改；资料页未全 | 🟡 GUI 冒烟 | ❌ |
 
 补充：
 
@@ -96,7 +96,8 @@
 | FR-008 | 默认匿名批量用 `_user_bar` 单吧 | 跟随范围+筛选；快照；导出标注刷新中 |
 | FR-008 | 单用户资料页无条件请求关注 | 与红绿灯解耦，批量期间不触发 |
 
-这些差距只记录，不代表已修复；修复需明确“按规范改代码”。
+2026-10-20 已实现：去吧务、免登录 Cookie 隔离、楼中楼深度、批量筛选/含关注、多帖/分帖/分页、Emoji 表格、SQLite 结果、设置/关于页、导出说明、单实例。
+仍未完成：设置左侧分类、参与者分页、批量并发/继续、Excel 拆分、完整错误目录、代理生效、高 DPI/键盘、报告/对比全部元数据。
 
 ## 3. 工程状态
 
@@ -120,9 +121,11 @@
 ## 4. 源码提交
 
 ```text
-1cb818b feat: implement filters, comparison, reports, backup, bawu and full comments
-92b0c29 feat: use floor-first comments in login mode
-4852233 feat: add hidden-follow candidate probing
+8c80e14 feat: merge local marks and single-instance guard
+50b7e42 feat: export/report metadata and window geometry
+bd25eeb feat: paginate grids, export metadata and identity fallback
+c404014 feat: anonymous follow options, multi-thread views and result persistence
+34274d7 feat: remove bawu and STOKEN feature
 ```
 
 ## 5. 成品说明
@@ -139,6 +142,8 @@
 - 配置备份/恢复；
 - 全量楼中楼；
 - 隐藏关注探测。
+
+注意：成品仍是 v1.3.1，未包含 2026-10-20 的新源码功能。
 
 验证：构建脚本内置 `--selftest` 通过；exe 文件版本/产品版本均为 1.3.1。
 APK 未重建，仍是旧版。

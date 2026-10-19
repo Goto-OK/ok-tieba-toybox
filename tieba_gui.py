@@ -1574,8 +1574,10 @@ class App:
         mode_note = ""
         if self._risk_enabled():
             mode_note = " · 红绿灯：仅发言" if self.mode_var.get() == "guest" else " · 红绿灯：发言+关注"
+        warning_count = sum(len(thread.warnings) for thread in self.last_threads)
+        warning_note = f" · ⚠ {warning_count} 条数据警告" if warning_count else ""
         self.people_hint.configure(
-            text=f"v{VERSION} · 当前 {len(filtered)} / 共 {len(users)} 人 · 有等级 {with_level}{mode_note}"
+            text=f"v{VERSION} · 当前 {len(filtered)} / 共 {len(users)} 人 · 有等级 {with_level}{mode_note}{warning_note}"
         )
         self.profile_status.configure(text="选择左边一个人查看详情")
         for tree in (self.profile_forum_tree, self.profile_post_tree):
@@ -2698,6 +2700,11 @@ class App:
         ]
         self._add_grid_tab(self.grid_nb, "楼层明细", floor_headers, floor_rows, urls=floor_urls)
         self._add_grid_tab(self.grid_nb, "楼中楼明细", comment_headers, comment_rows, urls=comment_urls)
+        warn_count = sum(len(thread.warnings) for thread in threads)
+        if warn_count:
+            self.grid_hint.configure(text=f"⚠ 数据可能不完整：{warn_count} 条警告；导出说明里也会记录")
+        else:
+            self.grid_hint.configure(text="界面用 [U+XXXX] 显示 emoji，导出 Excel 保留原样")
         self._add_compare_tab()
 
     def _add_compare_tab(self) -> None:
