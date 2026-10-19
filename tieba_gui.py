@@ -581,11 +581,16 @@ class App:
                         "floor": 0,
                         "comment": 0,
                         "total": 0,
+                        "aliases": set(),
                     },
                 )
                 bucket["floor"] += item["floor_count"]
                 bucket["comment"] += item["comment_count"]
                 bucket["total"] += item["total"]
+                if item.get("name") and item["name"] != bucket["name"]:
+                    bucket["aliases"].add(bucket["name"])
+                    bucket["name"] = item["name"]
+                bucket["aliases"].update(item.get("aliases") or [])
                 if not bucket["username"] and item["username"]:
                     bucket["username"] = item["username"]
                 if not bucket["portrait"] and item["portrait"]:
@@ -595,6 +600,8 @@ class App:
                 if not bucket["badge"] and item["badge"]:
                     bucket["badge"] = item["badge"]
         users = list(buckets.values())
+        for user in users:
+            user["aliases"] = sorted(a for a in user.get("aliases", ()) if a and a != user["name"])
         users.sort(key=lambda item: (-item["total"], -item["floor"], item["name"]))
         return users
 
@@ -1571,6 +1578,16 @@ class App:
             self._filter_resetting = False
         self._refresh_people()
 
+    def _display_name(self, item) -> str:
+        name = encode_display(item.get("name") or "")
+        aliases = [encode_display(value) for value in item.get("aliases") or []]
+        if not aliases:
+            return name
+        shown = "、".join(aliases[:2])
+        if len(aliases) > 2:
+            shown += f" 等{len(aliases)}个"
+        return f"{name}（曾用：{shown}）"
+
     def _people_threads(self):
         value = self.people_range_var.get()
         if value.startswith("全部"):
@@ -1616,7 +1633,7 @@ class App:
                 iid=str(index),
                 values=(
                     "⚪" if self._risk_enabled() else "",
-                    encode_display(user["name"]),
+                    self._display_name(user),
                     user["username"] or "-",
                     user["uid"] or "-",
                     f"Lv.{user['level']}" if user["level"] else "-",
@@ -2740,12 +2757,17 @@ class App:
                         "comment": 0,
                         "total": 0,
                         "threads": 0,
+                        "aliases": set(),
                     },
                 )
                 bucket["floor"] += item["floor_count"]
                 bucket["comment"] += item["comment_count"]
                 bucket["total"] += item["total"]
                 bucket["threads"] += 1
+                if item.get("name") and item["name"] != bucket["name"]:
+                    bucket["aliases"].add(bucket["name"])
+                    bucket["name"] = item["name"]
+                bucket["aliases"].update(item.get("aliases") or [])
                 if not bucket["username"] and item["username"]:
                     bucket["username"] = item["username"]
                 if not bucket["portrait"] and item["portrait"]:
@@ -2755,6 +2777,8 @@ class App:
                 if not bucket["badge"] and item["badge"]:
                     bucket["badge"] = item["badge"]
         users = list(buckets.values())
+        for user in users:
+            user["aliases"] = sorted(a for a in user.get("aliases", ()) if a and a != user["name"])
         users.sort(key=lambda item: (-item["total"], -item["floor"], item["name"]))
         return users
 
@@ -2783,7 +2807,7 @@ class App:
             user_rows = [
                 [
                     index,
-                    encode_display(item["name"]),
+                    self._display_name(item),
                     encode_display(item["username"]),
                     item["uid"],
                     item["level"],
@@ -2800,7 +2824,7 @@ class App:
             user_rows = [
                 [
                     index,
-                    encode_display(item["name"]),
+                    self._display_name(item),
                     encode_display(item["username"]),
                     item["uid"],
                     item["level"],
@@ -2828,7 +2852,7 @@ class App:
                     per_rows.append(
                         [
                             f"{thread_index}. {title}",
-                            encode_display(item["name"]),
+                            self._display_name(item),
                             encode_display(item["username"]),
                             item["uid"],
                             item["level"],
@@ -3007,6 +3031,8 @@ class App:
         notes.append(["A", self._compare_label(0)])
         notes.append(["B", self._compare_label(1)])
         notes.append(["软件版本", VERSION])
+        warnings = sum(len(thread.warnings) for thread in self.last_threads)
+        notes.append(["数据警告", str(warnings) if warnings else "无"])
         book.save(path)
         self._append_log(f"对比结果已导出：{path}", "ok")
 

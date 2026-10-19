@@ -206,6 +206,7 @@ def _user_rows(thread: ThreadData, include_op: bool = True) -> List[list]:
                 item["total"],
                 item["total"] / total,
                 f"{item['first_floor']}楼" if item["first_floor"] else "-",
+                "；".join(item.get("aliases") or []),
             ]
         )
     return rows
@@ -223,6 +224,7 @@ USER_COLS = [
     Col("回复合计", 13, "center", fmt="0"),
     Col("占比", 11, "center", fmt="0.0%"),
     Col("首次出现", 13, "center"),
+    Col("曾用昵称", 28),
 ]
 
 FLOOR_COLS = [
@@ -328,6 +330,7 @@ def _write_thread(
         len(thread.comments),
         total_count,
         1 if total_count else 0,
+        "",
         "",
     ]
     write_table(sheet, USER_COLS, stats, total_row=total_row, links=user_links)

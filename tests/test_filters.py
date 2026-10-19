@@ -52,3 +52,15 @@ def test_merge_blacklists_priority():
     assert "北京" in merged["warn"]
     assert "上海" in merged["ban"]
     assert "北京" not in merged["safe"]
+
+
+def test_user_stats_latest_nickname_and_aliases():
+    from tieba_reply_stats.models import Floor, ThreadData, ThreadMeta
+
+    thread = ThreadData(meta=ThreadMeta(tid="1"))
+    thread.floors.append(Floor(1, "p1", "旧昵称", author_name="u", author_id="42"))
+    thread.floors.append(Floor(2, "p2", "新昵称", author_name="u", author_id="42"))
+    stats = thread.user_stats()
+    assert len(stats) == 1
+    assert stats[0]["name"] == "新昵称"
+    assert "旧昵称" in stats[0]["aliases"]
