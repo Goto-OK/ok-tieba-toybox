@@ -29,12 +29,12 @@
 - 红绿灯按“发言 + 关注”判定；
 - 隐藏关注仍然读不全。
 
-### 命令行
+### 命令行（基础）
 
 ```bash
 python tieba_stats.py https://tieba.baidu.com/p/1234567890 -o 统计.xlsx
 python tieba_stats.py <url1> <url2> --no-comments
-python tieba_stats.py <url> --cookie "BDUSS=xxx"  # 仅关注增强需要
+python tieba_stats.py <url> --cookie "BDUSS=xxx"  # 仅基础抓取
 ```
 
 ### Android（暂停）
@@ -62,7 +62,8 @@ Android 旧 APK 保留，但已暂停更新，不再承诺与桌面版功能同�
 - **导出 Excel**：多 sheet、超链接、冻结、筛选、合计行；
 - **多帖切换**：表格/参与者可切换单帖或全部帖子；再次抓取只补新帖；
 - **Emoji 昵称**：支持 `[U+XXXX]` 代码查询；
-- **Android（暂停）**：旧 APK 保留，不再跟进新功能。
+- **Android（暂停）**：旧 APK 保留，不再跟进新功能；
+- **命令行（基础）**：只做抓取/导出，不跟 GUI 新功能。
 
 ---
 
