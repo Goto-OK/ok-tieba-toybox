@@ -23,6 +23,14 @@ Cookie: BAIDUID=...; BDUSS=...; STOKEN=...; PSTM=...
 
 软件接受整段 Cookie，也接受只写 `BDUSS=...`。
 
+关注增强的输入方式：
+
+- **仅 BDUSS**（默认，推荐）；
+- **整段 Cookie**（兼容浏览器复制）。
+
+两种方式能力相同；整段 Cookie 不增加功能。  
+整段 Cookie 里即使有 STOKEN，也不读取、不使用、不落盘；只持久化 BDUSS。
+
 ## 3. 默认匿名
 
 - 不读取、不发送 Cookie；
