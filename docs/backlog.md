@@ -143,7 +143,9 @@
 ### 吧务删除内容（FR-013，只读）
 
 - [ ] 独立「吧务」标签
-- [ ] STOKEN 单独输入与 DPAPI 保存
+- [ ] 整段 Cookie 自动解析 STOKEN
+- [ ] 未检测到时手动补充 STOKEN（DPAPI）
+- [ ] 界面只显示“已检测到/未检测到”
 - [ ] 吧务权限探测
 - [ ] 按用户查 `get_recovers`
 - [ ] 详情 `get_recover_info`
