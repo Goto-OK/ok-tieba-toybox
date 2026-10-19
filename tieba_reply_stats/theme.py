@@ -73,7 +73,7 @@ DARK: Dict[str, str] = {
     "banner_text": "#fbbf24",
 }
 
-BLUEFISH: Dict[str, str] = {
+WHALEMAID: Dict[str, str] = {
     "window_bg": "#071426",
     "surface": "#0b1f38",
     "surface_alt": "#0e2947",
@@ -107,7 +107,8 @@ BLUEFISH: Dict[str, str] = {
     "banner_text": "#a5f3fc",
 }
 
-SKINS = ("default", "bluefish", "custom")
+BLUEFISH = WHALEMAID
+SKINS = ("default", "whalemaid", "bluefish", "custom")
 
 ACCENTS = {
     "blue": {"accent": "#1F4E79", "accent_hover": "#163b5c", "selection_bg": "#dbeafe", "selection_text": "#1F4E79"},
@@ -150,8 +151,8 @@ def resolve_palette(
     skin: str = "default",
     custom: Optional[Dict] = None,
 ) -> Dict[str, str]:
-    if skin == "bluefish":
-        return dict(BLUEFISH)
+    if skin in ("whalemaid", "bluefish"):
+        return dict(WHALEMAID)
     if skin == "custom" and custom:
         mode = str(custom.get("mode") or "light")
         palette = dict(DARK if mode == "dark" else LIGHT)
@@ -222,7 +223,7 @@ _FG_OPTIONS = {"fg", "foreground", "activeforeground", "selectforeground", "inse
 
 
 _TOKEN_VALUES: Dict[str, str] = {}
-for _palette in (LIGHT, DARK, BLUEFISH):
+for _palette in (LIGHT, DARK, WHALEMAID):
     for _name, _value in _palette.items():
         if _value.lower() in ("#ffffff", "#f7f9fc"):
             continue

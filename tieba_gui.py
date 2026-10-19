@@ -177,6 +177,8 @@ class App:
         self.settings = load_settings()
         self.custom_skin: Optional[Dict] = read_custom()
         if self.settings.get("skin") == "bluefish":
+            self.settings["skin"] = "whalemaid"
+        if self.settings.get("skin") == "whalemaid":
             self.settings["theme_mode"] = "dark"
         if self.settings.get("skin") == "custom" and not self.custom_skin:
             self.settings["skin"] = "default"
@@ -301,8 +303,11 @@ class App:
         ).pack(side="left")
         self.progress = ttk.Progressbar(status, mode="indeterminate", length=180)
 
-        self.notebook = ttk.Notebook(self.root, style="Main.TNotebook")
-        self.notebook.pack(fill="both", expand=True)
+        self.body = tk.Frame(self.root, bg="#eef1f5")
+        self.body.pack(fill="both", expand=True)
+        self.side_panel = tk.Frame(self.body, width=238, bg="#eef1f5")
+        self.notebook = ttk.Notebook(self.body, style="Main.TNotebook")
+        self.notebook.pack(side="left", fill="both", expand=True)
 
         self.tab_posts = tk.Frame(self.notebook, bg="#eef1f5")
         self.tab_lookup = tk.Frame(self.notebook, bg="#eef1f5")
@@ -2107,11 +2112,12 @@ class App:
         tk.Label(row3, text="皮肤：", width=14, anchor="w", bg="#eef1f5", fg="#475569").pack(side="left")
         skin_value = {
             "default": "默认",
-            "bluefish": "蓝鱼（内置）",
+            "whalemaid": "鲸鱼女仆（内置）",
+            "bluefish": "鲸鱼女仆（内置）",
             "custom": self.custom_skin.get("name", "自定义") if self.custom_skin else "默认",
         }.get(str(self.settings.get("skin", "default")), "默认")
         self.skin_var = tk.StringVar(value=skin_value)
-        self.skin_values = ["默认", "蓝鱼（内置）"]
+        self.skin_values = ["默认", "鲸鱼女仆（内置）"]
         if self.custom_skin:
             self.skin_values.append(self.custom_skin.get("name", "自定义"))
         self.skin_combo = ttk.Combobox(
@@ -2144,14 +2150,14 @@ class App:
 
     def _on_skin_changed(self) -> None:
         value = self.skin_var.get()
-        if value.startswith("蓝鱼"):
-            skin = "bluefish"
+        if value.startswith("鲸鱼") or value.startswith("蓝鱼"):
+            skin = "whalemaid"
         elif self.custom_skin and value == self.custom_skin.get("name", "自定义"):
             skin = "custom"
         else:
             skin = "default"
         self.settings["skin"] = skin
-        if skin == "bluefish":
+        if skin == "whalemaid":
             self.settings["theme_mode"] = "dark"
             self.theme_mode_var.set("深色")
         save_settings(self.settings)
@@ -2172,7 +2178,7 @@ class App:
             return
         self.custom_skin = custom
         name = custom.get("name", "自定义")
-        self.skin_values = ["默认", "蓝鱼（内置）", name]
+        self.skin_values = ["默认", "鲸鱼女仆（内置）", name]
         self.skin_combo.configure(values=self.skin_values)
         self.settings["skin"] = "custom"
         self.skin_var.set(name)
@@ -2190,7 +2196,7 @@ class App:
             return
         clear_custom()
         self.custom_skin = None
-        self.skin_values = ["默认", "蓝鱼（内置）"]
+        self.skin_values = ["默认", "鲸鱼女仆（内置）"]
         self.skin_combo.configure(values=self.skin_values)
         if self.settings.get("skin") == "custom":
             self.settings["skin"] = "default"
@@ -2208,8 +2214,8 @@ class App:
                 pass
             self.skin_banner = None
         skin = self.settings.get("skin", "default")
-        if skin == "bluefish":
-            path = _asset_path("assets", "skins", "bluefish", "header.png")
+        if skin in ("whalemaid", "bluefish"):
+            path = _asset_path("assets", "skins", "whalemaid", "header.png")
         elif skin == "custom" and self.custom_skin:
             path = self.custom_skin.get("assets", {}).get("header", "")
         else:
@@ -2221,8 +2227,8 @@ class App:
         except tk.TclError:
             return
         self.skin_image = image
-        frame = tk.Frame(self.root, bg=self.palette["window_bg"], height=84)
-        frame.pack(fill="x", before=self.notebook)
+        frame = tk.Frame(self.root, bg=self.palette["window_bg"], height=96)
+        frame.pack(fill="x", before=self.body)
         tk.Label(frame, image=image, bg=self.palette["window_bg"], bd=0).pack()
         self.skin_banner = frame
 
@@ -2539,7 +2545,7 @@ class App:
             if entry:
                 entry[0].configure(fg=palette[value])
         skin = self.settings.get("skin", "default")
-        state = "disabled" if skin in ("bluefish", "custom") else "readonly"
+        state = "disabled" if skin in ("whalemaid", "bluefish", "custom") else "readonly"
         for name in ("theme_combo", "accent_combo"):
             combo = getattr(self, name, None)
             if combo is not None:
@@ -2548,6 +2554,7 @@ class App:
                 except tk.TclError:
                     pass
         self._apply_skin_banner()
+        self._update_side_skin()
         self._update_empty_skin()
 
     def _build_storage_tab(self) -> None:
@@ -2693,7 +2700,7 @@ class App:
         )
         tk.Label(
             help_box,
-            text="第三方组件：Python / PyInstaller / lxml / openpyxl / Tcl-Tk，各自按其许可证分发。",
+            text="第三方组件：Python / PyInstaller / lxml / openpyxl / Tcl-Tk；内置 Whale Maid 素材（MIT），详见 THIRD_PARTY_NOTICES.md。",
             bg="#eef1f5",
             fg="#8a94a6",
             font=("Microsoft YaHei UI", 8),
@@ -3545,6 +3552,37 @@ class App:
         self.settings["table_density"] = "compact" if self.table_density_var.get() == "紧凑" else "comfortable"
         save_settings(self.settings)
         self._apply_table_density()
+
+    def _update_side_skin(self) -> None:
+        panel = getattr(self, "side_panel", None)
+        if panel is None:
+            return
+        for child in panel.winfo_children():
+            child.destroy()
+        skin = self.settings.get("skin", "default")
+        if skin in ("whalemaid", "bluefish"):
+            path = _asset_path("assets", "skins", "whalemaid", "side.png")
+        elif skin == "custom" and self.custom_skin:
+            path = self.custom_skin.get("assets", {}).get("side", "")
+        else:
+            path = ""
+        if not path or not os.path.isfile(path):
+            panel.pack_forget()
+            return
+        try:
+            image = tk.PhotoImage(file=path)
+        except tk.TclError:
+            panel.pack_forget()
+            return
+        if image.width() > 230:
+            factor = (image.width() + 229) // 230
+            image = image.subsample(factor, factor)
+        panel.configure(bg=self.palette["window_bg"])
+        label = tk.Label(panel, image=image, bg=self.palette["window_bg"], bd=0)
+        self.side_image = image
+        label.pack(side="bottom", padx=6, pady=8)
+        if not panel.winfo_manager():
+            panel.pack(side="right", fill="y", before=self.notebook)
 
     def _update_empty_skin(self) -> None:
         label = getattr(self, "empty_skin_label", None)

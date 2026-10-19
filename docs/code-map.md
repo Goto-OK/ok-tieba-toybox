@@ -32,7 +32,7 @@
 | `config_backup.py` | 配置备份/恢复 |
 | `blacklist.py` | 本地标记、优先级、导入导出、合并 |
 | `settings.py` | 设置默认值、类型校验、持久化 |
-| `theme.py` | 浅色/深色/系统、强调色、内置蓝鱼、颜色映射 |
+| `theme.py` | 浅色/深色/系统、强调色、内置鲸鱼女仆、颜色映射 |
 | `skin_store.py` | 自定义皮肤 ZIP 导入、校验、读取 |
 | `cookie_store.py` | Windows DPAPI Cookie |
 | `storage.py` | 最近结果 SQLite / DPAPI / 恢复 |

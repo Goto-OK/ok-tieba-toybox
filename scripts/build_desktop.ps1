@@ -75,7 +75,7 @@ Write-Host "[3/5] 复制发布目录：$Output"
 if (Test-Path -LiteralPath $Output) { Remove-Item -LiteralPath $Output -Recurse -Force }
 New-Item -ItemType Directory -Path $Output | Out-Null
 Copy-Item -Path (Join-Path $Dist "贴吧回复统计\*") -Destination $Output -Recurse -Force
-foreach ($name in @("使用说明.txt", "启动.bat", "以管理员身份运行.bat")) {
+foreach ($name in @("使用说明.txt", "THIRD_PARTY_NOTICES.md", "启动.bat", "以管理员身份运行.bat")) {
     $file = Join-Path $Root $name
     if (Test-Path -LiteralPath $file) { Copy-Item -LiteralPath $file -Destination $Output -Force }
 }

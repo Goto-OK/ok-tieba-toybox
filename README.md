@@ -5,7 +5,7 @@
 
 > 当前版本：**1.4.0**
 
-支持浅色 / 深色 / 跟随系统、蓝/绿/紫强调色，以及内置「蓝鱼」轻皮肤；可在「外观」导入本地皮肤 ZIP。　详细改动见 [CHANGELOG.md](CHANGELOG.md)
+支持浅色 / 深色 / 跟随系统、蓝/绿/紫强调色，以及内置「鲸鱼女仆」轻皮肤；可在「外观」导入本地皮肤 ZIP。内置角色素材为 MIT 许可的 Whale Maid，详见 THIRD_PARTY_NOTICES.md。　详细改动见 [CHANGELOG.md](CHANGELOG.md)
 
 ---
 
