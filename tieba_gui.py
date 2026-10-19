@@ -2321,13 +2321,16 @@ class App:
             result["value"] = value
             win.destroy()
 
+        def command(value):
+            return lambda: finish(value)
+
         for index in range(len(choices) - 1, -1, -1):
             label, value = choices[index]
             if index == default:
                 tk.Button(
                     buttons,
                     text=label,
-                    command=lambda v=value: finish(v),
+                    command=command(value),
                     bg="#1F4E79",
                     fg="#ffffff",
                     activebackground="#163b5c",
@@ -2339,7 +2342,7 @@ class App:
                     font=("Microsoft YaHei UI", 9, "bold"),
                 ).pack(side="right", padx=(8, 0))
             else:
-                ttk.Button(buttons, text=label, command=lambda v=value: finish(v), width=12).pack(
+                ttk.Button(buttons, text=label, command=command(value), width=12).pack(
                     side="right", padx=(8, 0)
                 )
         win.bind("<Return>", lambda _event: finish(choices[default][1]))
