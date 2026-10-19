@@ -2837,51 +2837,22 @@ class App:
             messagebox.showerror("导入失败", "保存失败，请检查配置目录权限。", parent=self.root)
 
     def _build_grid_tab(self) -> None:
-        bar = tk.Frame(self.tab_grid, bg="#ffffff", padx=12, pady=8)
+        bar = tk.Frame(self.tab_grid, bg="#ffffff", padx=12, pady=7)
         bar.pack(fill="x")
-        tk.Label(
-            bar,
-            text="表格可排序、双击打开链接、Ctrl+C 复制",
-            bg="#ffffff",
-            fg="#6b7280",
-            font=("Microsoft YaHei UI", 9),
-        ).pack(side="left")
+        tk.Label(bar, text="帖子：", bg="#ffffff", fg="#475569", font=("Microsoft YaHei UI", 9)).pack(
+            side="left"
+        )
         self.grid_thread_var = tk.StringVar()
         self.grid_thread_box = ttk.Combobox(
-            bar, textvariable=self.grid_thread_var, width=34, state="readonly"
+            bar, textvariable=self.grid_thread_var, width=38, state="readonly"
         )
-        self.grid_thread_box.pack(side="left", padx=(8, 0))
+        self.grid_thread_box.pack(side="left")
         self.grid_thread_box.bind("<<ComboboxSelected>>", lambda _event: self._refresh_grid())
-        tk.Label(bar, text="密度：", bg="#ffffff", fg="#475569", font=("Microsoft YaHei UI", 8)).pack(
-            side="left", padx=(8, 0)
-        )
-        self.table_density_var = tk.StringVar(
-            value="紧凑" if self.settings.get("table_density") == "compact" else "舒适"
-        )
-        ttk.Combobox(
-            bar,
-            values=("舒适", "紧凑"),
-            textvariable=self.table_density_var,
-            width=5,
-            state="readonly",
-        ).pack(side="left")
-        self.table_density_var.trace_add("write", lambda *_: self._on_table_density_changed())
-        self.export_btn = tk.Button(
-            bar,
-            text="导出 Excel",
-            command=self._export_now,
-            bg="#e5e9f0",
-            fg="#334155",
-            activebackground="#d5dbe5",
-            relief="flat",
-            padx=14,
-            pady=6,
-            cursor="hand2",
-            font=("Microsoft YaHei UI", 10),
-        )
-        self.export_btn.pack(side="left", padx=(10, 0))
+
+        right = tk.Frame(bar, bg="#ffffff")
+        right.pack(side="right")
         self.open_btn = tk.Button(
-            bar,
+            right,
             text="打开 Excel",
             command=self._open_result,
             bg="#e5e9f0",
@@ -2891,18 +2862,48 @@ class App:
             padx=14,
             pady=6,
             cursor="hand2",
-            font=("Microsoft YaHei UI", 10),
+            font=("Microsoft YaHei UI", 9),
             state="disabled",
         )
-        self.open_btn.pack(side="left", padx=(8, 0))
+        self.open_btn.pack(side="right")
+        self.export_btn = tk.Button(
+            right,
+            text="导出 Excel",
+            command=self._export_now,
+            bg="#1F4E79",
+            fg="#ffffff",
+            activebackground="#163b5c",
+            activeforeground="#ffffff",
+            relief="flat",
+            padx=16,
+            pady=6,
+            cursor="hand2",
+            font=("Microsoft YaHei UI", 9, "bold"),
+        )
+        self.export_btn.pack(side="right", padx=(0, 8))
+        self.table_density_var = tk.StringVar(
+            value="紧凑" if self.settings.get("table_density") == "compact" else "舒适"
+        )
+        ttk.Combobox(
+            right,
+            values=("舒适", "紧凑"),
+            textvariable=self.table_density_var,
+            width=5,
+            state="readonly",
+        ).pack(side="right", padx=(0, 10))
+        tk.Label(right, text="密度", bg="#ffffff", fg="#475569", font=("Microsoft YaHei UI", 8)).pack(
+            side="right"
+        )
+        self.table_density_var.trace_add("write", lambda *_: self._on_table_density_changed())
+
         hint_bar = tk.Frame(self.tab_grid, bg="#ffffff", padx=12, pady=2)
         hint_bar.pack(fill="x")
         self.grid_hint = tk.Label(
             hint_bar,
-            text="界面用 [U+XXXX] 显示 emoji，导出 Excel 保留原样",
+            text="表格可排序、双击打开链接、Ctrl+C 复制 · 界面用 [U+XXXX] 显示 emoji，导出保留原样",
             bg="#ffffff",
             fg="#8a94a6",
-            font=("Microsoft YaHei UI", 9),
+            font=("Microsoft YaHei UI", 8),
         )
         self.grid_hint.pack(side="left")
 
@@ -3158,7 +3159,9 @@ class App:
         if warn_count:
             self.grid_hint.configure(text=f"⚠ 数据可能不完整：{warn_count} 条警告；导出说明里也会记录")
         else:
-            self.grid_hint.configure(text="界面用 [U+XXXX] 显示 emoji，导出 Excel 保留原样")
+            self.grid_hint.configure(
+                text="表格可排序、双击打开链接、Ctrl+C 复制 · 界面用 [U+XXXX] 显示 emoji，导出保留原样"
+            )
         self._add_compare_tab()
 
     def _add_compare_tab(self) -> None:
