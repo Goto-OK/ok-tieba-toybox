@@ -23,9 +23,9 @@ python tests/selftest.py
 ## 3. 桌面版
 
 ```powershell
-./scripts/build_desktop.ps1 -Version 1.2.0
+./scripts/build_desktop.ps1 -Version 1.3.0
 # 若提示“禁止运行脚本”：
-powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build_desktop.ps1 -Version 1.2.0
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build_desktop.ps1 -Version 1.3.0
 ```
 
 脚本会：

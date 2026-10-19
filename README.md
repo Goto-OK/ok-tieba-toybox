@@ -3,7 +3,7 @@
 输入贴吧帖子链接，抓取**主题楼层 + 楼中楼**，按用户汇总，导出 Excel；
 并提供参与者资料、查用户、本地标记、游客模式（无 Cookie）和 Android 版。
 
-> 当前版本：**1.2.0**　详细改动见 [CHANGELOG.md](CHANGELOG.md)
+> 当前版本：**1.3.0**　详细改动见 [CHANGELOG.md](CHANGELOG.md)
 
 ---
 
