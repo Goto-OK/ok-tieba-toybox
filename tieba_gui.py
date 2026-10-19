@@ -2002,34 +2002,28 @@ class App:
             self._show_settings_page(selection[0])
 
     def _build_storage_tab(self) -> None:
-        box = tk.Frame(self.tab_storage, bg="#eef1f5", padx=16, pady=12)
+        box = tk.Frame(self.tab_storage, bg="#eef1f5", padx=14, pady=10)
         box.pack(fill="both", expand=True)
 
+        save_box = ttk.LabelFrame(box, text=" 保存与恢复 ")
+        save_box.pack(fill="x", pady=(0, 6))
         self.save_result_var = tk.BooleanVar(value=bool(self.settings.get("save_result", True)))
         ttk.Checkbutton(
-            box,
-            text="保存最近结果（默认开启）",
+            save_box,
+            text="保存最近结果",
             variable=self.save_result_var,
             command=self._on_save_result_toggle,
-        ).pack(anchor="w", pady=3)
+        ).pack(anchor="w", padx=8, pady=(4, 0))
         self.encrypt_var = tk.BooleanVar(value=bool(self.settings.get("encrypt_result", False)))
         ttk.Checkbutton(
-            box,
+            save_box,
             text="加密保存结果（DPAPI，仅当前 Windows 用户可读）",
             variable=self.encrypt_var,
             command=self._on_encrypt_toggle,
-        ).pack(anchor="w", pady=3)
-        self.log_enabled_var = tk.BooleanVar(value=bool(self.settings.get("log_enabled", False)))
-        ttk.Checkbutton(
-            box,
-            text="保存运行日志（默认关闭，不含 Cookie/正文）",
-            variable=self.log_enabled_var,
-            command=self._on_log_toggle,
-        ).pack(anchor="w", pady=3)
-
-        row = tk.Frame(box, bg="#eef1f5")
-        row.pack(anchor="w", pady=(8, 0))
-        tk.Label(row, text="启动时恢复：", bg="#eef1f5", fg="#475569").pack(side="left")
+        ).pack(anchor="w", padx=8, pady=(2, 0))
+        row = tk.Frame(save_box, bg="#eef1f5")
+        row.pack(anchor="w", fill="x", padx=8, pady=(4, 2))
+        tk.Label(row, text="启动时恢复：", width=14, anchor="w", bg="#eef1f5", fg="#475569").pack(side="left")
         self.restore_mode_var = tk.StringVar(
             value="询问" if self.settings.get("restore_mode") == "ask" else "自动"
         )
@@ -2041,21 +2035,49 @@ class App:
             state="readonly",
         ).pack(side="left")
         self.restore_mode_var.trace_add("write", lambda *_: self._on_restore_mode_changed())
-
-        ttk.Button(box, text="清空最近结果", command=self._clear_result).pack(anchor="w", pady=(12, 0))
-        ttk.Button(box, text="打开数据目录", command=lambda: self._open_folder(APP_DIR)).pack(
-            anchor="w", pady=(6, 0)
-        )
         tk.Label(
-            box,
-            text="结果只保存最近一次；不保存 Cookie 和本地标记。",
+            save_box,
+            text="结果只保存最近一次，不保存 Cookie 和本地标记。",
             bg="#eef1f5",
             fg="#8a94a6",
             font=("Microsoft YaHei UI", 8),
-        ).pack(anchor="w", pady=(8, 0))
+        ).pack(anchor="w", padx=8, pady=(2, 4))
+
+        log_box = ttk.LabelFrame(box, text=" 运行日志 ")
+        log_box.pack(fill="x", pady=(0, 6))
+        self.log_enabled_var = tk.BooleanVar(value=bool(self.settings.get("log_enabled", False)))
+        ttk.Checkbutton(
+            log_box,
+            text="保存运行日志（默认关闭，不含 Cookie/正文）",
+            variable=self.log_enabled_var,
+            command=self._on_log_toggle,
+        ).pack(anchor="w", padx=8, pady=(4, 0))
+        tk.Label(
+            log_box,
+            text="日志目录：%APPDATA%\\TiebaReplyStats\\logs",
+            bg="#eef1f5",
+            fg="#8a94a6",
+            font=("Microsoft YaHei UI", 8),
+        ).pack(anchor="w", padx=8, pady=(2, 4))
+
+        maint_box = ttk.LabelFrame(box, text=" 数据维护 ")
+        maint_box.pack(fill="x")
+        buttons = tk.Frame(maint_box, bg="#eef1f5")
+        buttons.pack(anchor="w", padx=8, pady=(6, 4))
+        ttk.Button(buttons, text="清空最近结果", command=self._clear_result, width=14).pack(side="left")
+        ttk.Button(
+            buttons, text="打开数据目录", command=lambda: self._open_folder(APP_DIR), width=14
+        ).pack(side="left", padx=(8, 0))
+        tk.Label(
+            maint_box,
+            text="数据目录：%APPDATA%\\TiebaReplyStats",
+            bg="#eef1f5",
+            fg="#8a94a6",
+            font=("Microsoft YaHei UI", 8),
+        ).pack(anchor="w", padx=8, pady=(0, 4))
 
     def _build_about_tab(self) -> None:
-        box = tk.Frame(self.tab_about, bg="#eef1f5", padx=16, pady=12)
+        box = tk.Frame(self.tab_about, bg="#eef1f5", padx=14, pady=10)
         box.pack(fill="both", expand=True)
         tk.Label(
             box,
@@ -2066,45 +2088,98 @@ class App:
         ).pack(anchor="w")
         tk.Label(
             box,
-            text=f"数据目录：{APP_DIR}",
+            text="默认匿名 · 结果只存本机 · 不保存 STOKEN",
             bg="#eef1f5",
-            fg="#475569",
+            fg="#8a94a6",
             font=("Microsoft YaHei UI", 8),
-            wraplength=760,
-            justify="left",
-        ).pack(anchor="w", pady=(6, 0))
+        ).pack(anchor="w", pady=(2, 8))
+
+        path_box = ttk.LabelFrame(box, text=" 数据位置 ")
+        path_box.pack(fill="x", pady=(0, 6))
+        path_row = tk.Frame(path_box, bg="#eef1f5")
+        path_row.pack(fill="x", padx=8, pady=(6, 2))
         tk.Label(
-            box,
-            text="临时目录：%TEMP%\\TiebaReplyStats",
+            path_row,
+            text=f"数据：{APP_DIR}",
             bg="#eef1f5",
             fg="#475569",
             font=("Microsoft YaHei UI", 8),
-        ).pack(anchor="w")
+            anchor="w",
+        ).pack(side="left", fill="x", expand=True)
+        ttk.Button(
+            path_row, text="打开", command=lambda: self._open_folder(APP_DIR), width=8
+        ).pack(side="right")
+        temp_row = tk.Frame(path_box, bg="#eef1f5")
+        temp_row.pack(fill="x", padx=8, pady=(2, 2))
+        tk.Label(
+            temp_row,
+            text="临时：%TEMP%\\TiebaReplyStats",
+            bg="#eef1f5",
+            fg="#475569",
+            font=("Microsoft YaHei UI", 8),
+            anchor="w",
+        ).pack(side="left", fill="x", expand=True)
+        ttk.Button(
+            temp_row,
+            text="打开",
+            command=lambda: self._open_folder(os.path.join(os.environ.get("TEMP", ""), "TiebaReplyStats")),
+            width=8,
+        ).pack(side="right")
+        old_row = tk.Frame(path_box, bg="#eef1f5")
+        old_row.pack(fill="x", padx=8, pady=(2, 6))
         self.old_files_label = tk.Label(
-            box, text="", bg="#eef1f5", fg="#8a94a6", font=("Microsoft YaHei UI", 8)
+            old_row, text="", bg="#eef1f5", fg="#8a94a6", font=("Microsoft YaHei UI", 8)
         )
-        self.old_files_label.pack(anchor="w", pady=(4, 0))
+        self.old_files_label.pack(side="left")
+        ttk.Button(old_row, text="清理旧结果", command=self._cleanup_old_results, width=10).pack(side="right")
         self._refresh_old_files_label()
 
-        row = tk.Frame(box, bg="#eef1f5")
-        row.pack(anchor="w", pady=(10, 0))
-        ttk.Button(row, text="打开数据目录", command=lambda: self._open_folder(APP_DIR)).pack(side="left")
-        ttk.Button(row, text="查看快速说明", command=self._show_quick_guide).pack(side="left", padx=(6, 0))
-        ttk.Button(row, text="复制诊断信息", command=self._copy_diagnostics).pack(side="left", padx=(6, 0))
-
-        ttk.Button(box, text="清理旧结果文件", command=self._cleanup_old_results).pack(anchor="w", pady=(10, 0))
-        ttk.Button(box, text="恢复默认设置", command=self._restore_defaults).pack(anchor="w", pady=(6, 0))
-        ttk.Button(box, text="清空所有本地数据", command=self._clear_all_data).pack(anchor="w", pady=(6, 0))
-
+        help_box = ttk.LabelFrame(box, text=" 帮助与诊断 ")
+        help_box.pack(fill="x", pady=(0, 6))
+        help_row = tk.Frame(help_box, bg="#eef1f5")
+        help_row.pack(anchor="w", padx=8, pady=(6, 2))
+        ttk.Button(help_row, text="查看快速说明", command=self._show_quick_guide, width=14).pack(side="left")
+        ttk.Button(help_row, text="复制诊断信息", command=self._copy_diagnostics, width=14).pack(
+            side="left", padx=(8, 0)
+        )
         tk.Label(
-            box,
+            help_box,
             text="第三方组件：Python / PyInstaller / lxml / openpyxl / Tcl-Tk，各自按其许可证分发。",
             bg="#eef1f5",
             fg="#8a94a6",
             font=("Microsoft YaHei UI", 8),
             wraplength=760,
             justify="left",
-        ).pack(anchor="w", pady=(12, 0))
+        ).pack(anchor="w", padx=8, pady=(2, 4))
+
+        maint_box = ttk.LabelFrame(box, text=" 维护 ")
+        maint_box.pack(fill="x")
+        maint_row = tk.Frame(maint_box, bg="#eef1f5")
+        maint_row.pack(anchor="w", padx=8, pady=(6, 4))
+        ttk.Button(
+            maint_row, text="恢复默认设置", command=self._restore_defaults, width=14
+        ).pack(side="left")
+        tk.Button(
+            maint_row,
+            text="清空所有本地数据",
+            command=self._clear_all_data,
+            bg="#fee2e2",
+            fg="#b91c1c",
+            activebackground="#fecaca",
+            activeforeground="#991b1b",
+            relief="flat",
+            padx=10,
+            pady=4,
+            cursor="hand2",
+            font=("Microsoft YaHei UI", 9),
+        ).pack(side="left", padx=(8, 0))
+        tk.Label(
+            maint_box,
+            text="清空所有本地数据不会删除你导出的 Excel 或 Markdown。",
+            bg="#eef1f5",
+            fg="#8a94a6",
+            font=("Microsoft YaHei UI", 8),
+        ).pack(anchor="w", padx=8, pady=(0, 4))
 
     def _on_save_result_toggle(self) -> None:
         self.settings["save_result"] = bool(self.save_result_var.get())
