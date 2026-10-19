@@ -66,8 +66,8 @@ URL → extract_tid
   → GET /p/{tid}?pn=1
   → parse_thread_page → ThreadMeta + floors
   → 后续页 /p/{tid}?pn=N
-  → totalComment（每层前 10 条）
-  → /p/comment 补足（翻页）
+  → 每层先走 floor 翻页（302002）
+  → 失败再回退 totalComment + /p/comment
   → page_pc / nestedFloor 补等级、作者 ID
   → ThreadData
 ```
@@ -217,7 +217,7 @@ profile（查用户或参与者缓存）
 ### 3.11 全量楼中楼
 
 ```text
-page（楼层 + 前10预览）
+page（楼层 + 楼中楼预览）
   → 每层判断 reply_num / 深度上限
   → floor 接口 pn=1..N（可配置并发 1~3）
   → 按 pid 去重

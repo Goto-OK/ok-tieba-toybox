@@ -7,11 +7,12 @@
 | [protocol.md](protocol.md) | 贴吧接口、protobuf、本地 HTTP API |
 | [release.md](release.md) | 版本、构建、发布检查清单 |
 | [standards.md](standards.md) | 代码风格、测试、Git、完成定义 |
-| [spec-summary.md](spec-summary.md) | 规范总览（新会话先读） |
+| [spec-index.md](spec-index.md) | 规范入口（新会话先读） |
+| [ui-spec.md](ui-spec.md) | 界面规范 |
 | [code-map.md](code-map.md) | 代码地图与整理记录 |
 | [status.md](status.md) | 规范 / 源码 / 测试 / 成品状态 |
 | [backlog.md](backlog.md) | 待办、缺口、优先级 |
-| [proposals.md](proposals.md) | 待确认的功能规范草案 |
+| [proposals.md](proposals.md) | 历史设计过程（不作规范） |
 | [aiotieba-capabilities.md](aiotieba-capabilities.md) | aiotieba 删除内容能力研究 |
 | [credentials.md](credentials.md) | Cookie / BDUSS / STOKEN 说明 |
 

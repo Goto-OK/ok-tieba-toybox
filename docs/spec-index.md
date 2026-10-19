@@ -1,0 +1,93 @@
+# 规范索引
+
+用途：新会话/新任务先读这一份，再按需打开对应分类文档。  
+原则：**索引不复制正文，正文只有一个来源。**
+
+## 1. 启动顺序
+
+```text
+spec-index.md
+→ status.md（判断做没做）
+→ 目标功能对应文档（只读相关章节）
+```
+
+不要默认通读 `docs/` 全部文件。
+
+## 2. 硬规则
+
+- 默认只改规范，不改代码；
+- 只有明确说“开始实现 / 改代码 / 动手”才改 `.py`；
+- 只改需求指定的代码片段，不擅自重构无关模块；
+- 需求模糊时先提问，禁止脑补；
+- 接口能力/上限/字段/认证必须有证据，未验证标“待验证”；
+- 每轮更新 `status.md`；
+- 只有明确说“出 exe / 出 APK”才构建。
+
+## 3. 文档地图
+
+| 主题 | 唯一正文 | 什么时候读 |
+|---|---|---|
+| 功能需求 | [requirements.md](requirements.md) | 改功能、加功能、验收 |
+| 界面规范 | [ui-spec.md](ui-spec.md) | 改按钮、布局、日志、表格、对话框 |
+| 凭据与能力边界 | [credentials.md](credentials.md) | Cookie / BDUSS / STOKEN / 权限 |
+| 接口协议 | [protocol.md](protocol.md) | 抓包、字段、签名、接口证据 |
+| 工程规范 | [standards.md](standards.md) | 代码风格、测试、提交 |
+| 实现状态 | [status.md](status.md) | 判断规范/源码/测试/成品 |
+| 发布流程 | [release.md](release.md) | 出 exe / APK |
+| 待办/缺口 | [backlog.md](backlog.md) | 下一步做什么 |
+| 研究资料 | [aiotieba-capabilities.md](aiotieba-capabilities.md) | 接口能力调研 |
+| 功能草案 | [proposals.md](proposals.md) | 历史设计过程，不作规范 |
+| 代码地图 | [code-map.md](code-map.md) | 找模块、看代码边界 |
+
+## 4. 功能地图
+
+| ID | 功能 | 正文 |
+|---|---|---|
+| BASE | 抓取、统计、导出、参与者、查用户 | requirements 3.1–3.4 |
+| FR-008 | 免登录 / 登录模式、红绿灯 | requirements 3.6 |
+| FR-009 | 参与者筛选 | requirements 3.3 参与者（FR-009） |
+| FR-010 | 多帖对比 | requirements 3.8 |
+| FR-011 | 单用户报告 | requirements 3.9 |
+| FR-012 | 配置备份 / 恢复 | requirements 3.10 |
+| FR-013 | 吧务删除内容（只读） | requirements 3.11 |
+| FR-014 | 全量楼中楼 | requirements 3.12 |
+| FR-015 | 隐藏关注候选探测 | requirements 3.13 |
+| CRED | 凭据分级与能力边界 | credentials + requirements 3.14 |
+| UI-001~012 | 按钮、日志、布局、表格、对话框 | ui-spec |
+| PROTO | 接口协议与证据 | protocol |
+| ENG | 工程规范 | standards |
+
+
+
+## 5. 界面规范索引
+
+| ID | 内容 |
+|---|---|
+| UI-001 | 一键红绿灯按钮文案、宽度、状态 |
+| UI-002 | 运行日志位置、最小高度、折叠 |
+| UI-003 | 默认窗口、最小窗口、布局 |
+| UI-004 | 主导航与子标签 |
+| UI-005 | 统一文案 |
+| UI-006 | 参与者筛选 |
+| UI-007 | 表格与来源列 |
+| UI-008 | 查用户 |
+| UI-009 | 配置备份 |
+| UI-010 | 吧务页 |
+| UI-011 | 反馈与状态 |
+| UI-012 | 界面验收 |
+
+## 6. 使用方式
+
+- 只改功能：读 `requirements` 对应 FR + `status`；
+- 只改界面：读 `ui-spec` 对应 UI + `status`；
+- 只改凭据：读 `credentials` + `requirements` 3.14；
+- 只改接口：读 `protocol` 对应接口 + `status`；
+- 只做发布：读 `release` + `status`。
+
+## 7. 维护规则
+
+- 新增规范先判断主题，写入唯一正文；
+- 索引只加一行链接，不复制正文；
+- 同一规则不能在两个文档各写一份；
+- 发现重复，先合并到唯一正文，再把另一处改成链接；
+- `spec-summary.md` 已废弃，仅保留跳转。
