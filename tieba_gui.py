@@ -167,6 +167,12 @@ class App:
         self.mode_var = tk.StringVar(value=str(self.settings.get("mode", "guest")))
 
         self._build_ui()
+        saved_geometry = str(self.settings.get("window_geometry") or "")
+        if saved_geometry:
+            try:
+                self.root.geometry(saved_geometry)
+            except tk.TclError:
+                pass
         self._set_output(default_output_path())
         self.root.after(120, self._poll_queue)
         self.root.protocol("WM_DELETE_WINDOW", self._on_close)
@@ -2751,6 +2757,13 @@ class App:
             self.compare_tree.insert("", "end", values=values)
         self.compare_result = (headers, rows)
 
+    def _compare_label(self, index: int) -> str:
+        selected = [i for i, var in enumerate(getattr(self, "compare_vars", [])) if var.get()]
+        if index < len(selected):
+            thread = self.last_threads[selected[index]]
+            return encode_display(thread.meta.title or thread.meta.tid)
+        return ""
+
     def _export_compare(self) -> None:
         if not self.compare_result:
             messagebox.showinfo("还没有结果", "先点「生成对比」。", parent=self.root)
@@ -2773,6 +2786,13 @@ class App:
         sheet.append(headers)
         for row in rows:
             sheet.append(row)
+        notes = book.create_sheet("导出说明")
+        notes.append(["项目", "内容"])
+        notes.append(["对比模式", self.compare_mode_var.get()])
+        notes.append(["勾选帖子数", str(len(rows))])
+        notes.append(["A", self._compare_label(0)])
+        notes.append(["B", self._compare_label(1)])
+        notes.append(["软件版本", VERSION])
         book.save(path)
         self._append_log(f"对比结果已导出：{path}", "ok")
 
@@ -3825,6 +3845,11 @@ class App:
         self.status_var.set("正在停止…")
 
     def _on_close(self) -> None:
+        try:
+            self.settings["window_geometry"] = self.root.geometry()
+            save_settings(self.settings)
+        except tk.TclError:
+            pass
         active = self.running or getattr(self, "_batch_running", False)
         if not active:
             self.root.destroy()
