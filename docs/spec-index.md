@@ -53,7 +53,7 @@ spec-index.md
 | FR-014 | 全量楼中楼 | requirements 3.12 |
 | FR-015 | 隐藏关注候选探测 | requirements 3.13 |
 | CRED | 凭据分级与能力边界 | credentials + requirements 3.14 |
-| UI-001~012 | 按钮、日志、布局、表格、对话框 | ui-spec |
+| UI-001~013 | 按钮、日志、布局、表格、开关 | ui-spec |
 | PROTO | 接口协议与证据 | protocol |
 | ENG | 工程规范 | standards |
 
@@ -74,7 +74,8 @@ spec-index.md
 | UI-009 | 配置备份 |
 | UI-010 | 吧务页 |
 | UI-011 | 反馈与状态 |
-| UI-012 | 界面验收 |
+| UI-012 | 本地标记开关 |
+| UI-013 | 界面验收 |
 
 ## 6. 使用方式
 
