@@ -16,11 +16,10 @@ import tkinter as tk
 import traceback
 import webbrowser
 from datetime import datetime
-from tkinter import filedialog, messagebox, simpledialog, ttk
+from tkinter import filedialog, messagebox, ttk
 from typing import Any, Callable, Dict, List, Optional
 from urllib.parse import quote
 
-from tieba_reply_stats.bawu_deleted import fetch_recover_info, fetch_recovers
 from tieba_reply_stats.blacklist import (
     classify,
     load_blacklist,
@@ -53,7 +52,6 @@ from tieba_reply_stats.pbapi import fill_thread_levels
 from tieba_reply_stats.profile import fetch_user_profile, resolve_user
 from tieba_reply_stats.report import export_user_report, report_base
 from tieba_reply_stats.settings import load_settings, save_settings
-from tieba_reply_stats.stoken_store import load_stoken, save_stoken
 from tieba_reply_stats.version import __version__ as VERSION
 
 APP_TITLE = "贴吧楼层回复统计"
@@ -220,10 +218,8 @@ class App:
         self.tab_posts = tk.Frame(self.notebook, bg="#eef1f5")
         self.tab_lookup = tk.Frame(self.notebook, bg="#eef1f5")
         self.tab_settings = tk.Frame(self.notebook, bg="#eef1f5")
-        self.tab_bawu = tk.Frame(self.notebook, bg="#eef1f5")
         self.notebook.add(self.tab_posts, text="  帖子统计  ")
         self.notebook.add(self.tab_lookup, text="  查用户  ")
-        self.notebook.add(self.tab_bawu, text="  吧务  ")
         self.notebook.add(self.tab_settings, text="  设置  ")
 
         self.post_nb = ttk.Notebook(self.tab_posts)
@@ -445,7 +441,6 @@ class App:
         self._build_people_tab()
         self._build_lookup_tab()
         self._build_settings_tab()
-        self._build_bawu_tab()
 
         self.url_text.focus_set()
         self.root.update_idletasks()
@@ -1714,143 +1709,6 @@ class App:
         x = self.root.winfo_rootx() + max(0, (self.root.winfo_width() - width) // 2)
         y = self.root.winfo_rooty() + max(0, (self.root.winfo_height() - height) // 3)
         win.geometry(f"+{x}+{y}")
-
-    def _ask_stoken(self) -> None:
-        value = simpledialog.askstring("STOKEN", "粘贴 STOKEN（只保存在本机）", show="*", parent=self.root)
-        if not value:
-            return
-        if save_stoken(value.strip()):
-            self._append_log("STOKEN 已保存（本机加密）。", "ok")
-        else:
-            self._append_log("STOKEN 保存失败。", "muted")
-        self._update_stoken_label()
-
-    def _current_stoken(self) -> str:
-        return parse_cookie_input(self.cookie_var.get()).get("STOKEN", "") or (load_stoken() or "")
-
-    def _update_stoken_label(self) -> None:
-        if hasattr(self, "bawu_stoken_label"):
-            self.bawu_stoken_label.configure(
-                text="STOKEN：已检测到" if self._current_stoken() else "STOKEN：未检测到"
-            )
-
-    def _query_bawu(self) -> None:
-        forum = self.bawu_forum_var.get().strip()
-        user = self.bawu_user_var.get().strip()
-        if not forum or not user:
-            messagebox.showinfo("缺少参数", "请填写吧名和用户。", parent=self.root)
-            return
-        stoken = self._current_stoken()
-        if not stoken:
-            self._ask_stoken()
-            stoken = self._current_stoken()
-        if not stoken:
-            messagebox.showinfo("缺少 STOKEN", "吧务查询需要 STOKEN。", parent=self.root)
-            return
-        self._update_stoken_label()
-        self.bawu_detail.configure(state="normal")
-        self.bawu_detail.delete("1.0", "end")
-        self.bawu_detail.configure(state="disabled")
-
-        def worker() -> None:
-            cookies = parse_cookie_input(self.cookie_var.get())
-            cookies["STOKEN"] = stoken
-            fetcher = Fetcher(cookie=cookies, delay=0.4, verbose=False)
-            try:
-                uid = user if user.isdigit() else ""
-                if not uid:
-                    info = resolve_user(fetcher, user, "用户名")
-                    uid = str(info.get("uid") or "")
-                if not uid:
-                    self._post(("bawu_error", "没有找到这个用户，请改用用户 ID。"))
-                    return
-                result = fetch_recovers(fetcher, forum, uid, int(self.bawu_page_var.get() or 1))
-                self._post(("bawu_rows", result))
-            except Exception as error:  # noqa: BLE001
-                self._post(("bawu_error", str(error)))
-
-        threading.Thread(target=worker, daemon=True).start()
-
-    def _query_bawu_detail(self) -> None:
-        selection = self.bawu_tree.selection()
-        if not selection:
-            return
-        try:
-            row = self._bawu_rows[int(selection[0])]
-        except (IndexError, ValueError):
-            return
-        if not row.get("tid"):
-            return
-        forum = self.bawu_forum_var.get().strip()
-        stoken = self._current_stoken()
-
-        def worker() -> None:
-            cookies = parse_cookie_input(self.cookie_var.get())
-            cookies["STOKEN"] = stoken
-            fetcher = Fetcher(cookie=cookies, delay=0.4, verbose=False)
-            try:
-                info = fetch_recover_info(fetcher, forum, row["tid"], row.get("pid") or "")
-                self._post(("bawu_detail", info))
-            except Exception as error:  # noqa: BLE001
-                self._post(("bawu_error", str(error)))
-
-        threading.Thread(target=worker, daemon=True).start()
-
-    def _build_bawu_tab(self) -> None:
-        box = tk.Frame(self.tab_bawu, bg="#eef1f5", padx=16, pady=12)
-        box.pack(fill="both", expand=True)
-        tk.Label(
-            box,
-            text="只读：查询吧务后台保留期内、可恢复的删除内容；不提供恢复/删除。",
-            bg="#eef1f5",
-            fg="#b45309",
-            font=("Microsoft YaHei UI", 9),
-        ).pack(anchor="w", pady=(0, 8))
-        form = tk.Frame(box, bg="#eef1f5")
-        form.pack(fill="x")
-        tk.Label(form, text="吧名", bg="#eef1f5").pack(side="left")
-        self.bawu_forum_var = tk.StringVar()
-        ttk.Entry(form, textvariable=self.bawu_forum_var, width=16).pack(side="left", padx=(4, 10))
-        tk.Label(form, text="用户", bg="#eef1f5").pack(side="left")
-        self.bawu_user_var = tk.StringVar()
-        ttk.Entry(form, textvariable=self.bawu_user_var, width=16).pack(side="left", padx=(4, 10))
-        tk.Label(form, text="页码", bg="#eef1f5").pack(side="left")
-        self.bawu_page_var = tk.StringVar(value="1")
-        ttk.Spinbox(form, from_=1, to=999, textvariable=self.bawu_page_var, width=4).pack(
-            side="left", padx=(4, 10)
-        )
-        self.bawu_stoken_label = tk.Label(form, text="", bg="#eef1f5", fg="#475569")
-        self.bawu_stoken_label.pack(side="left", padx=(6, 0))
-        ttk.Button(form, text="填写 STOKEN", command=self._ask_stoken, width=12).pack(
-            side="left", padx=(6, 0)
-        )
-        ttk.Button(form, text="查询", command=self._query_bawu, width=8).pack(side="left", padx=(10, 0))
-
-        self.bawu_tree = ttk.Treeview(
-            box,
-            columns=("kind", "title", "content", "author", "time", "op", "hide"),
-            show="headings",
-            height=12,
-        )
-        for column, title, width in (
-            ("kind", "类型", 50),
-            ("title", "标题", 150),
-            ("content", "内容", 260),
-            ("author", "作者", 100),
-            ("time", "操作时间", 130),
-            ("op", "操作人", 90),
-            ("hide", "状态", 60),
-        ):
-            self.bawu_tree.heading(column, text=title)
-            self.bawu_tree.column(column, width=width, anchor="w")
-        self.bawu_tree.pack(fill="both", expand=True, pady=(8, 6))
-        self.bawu_tree.bind("<<TreeviewSelect>>", lambda _event: self._query_bawu_detail())
-        tk.Label(box, text="详情", bg="#eef1f5", fg="#475569").pack(anchor="w")
-        self.bawu_detail = tk.Text(box, height=8, wrap="word", font=("Microsoft YaHei UI", 9))
-        self.bawu_detail.pack(fill="both", expand=False, pady=(2, 0))
-        self.bawu_detail.configure(state="disabled")
-        self._bawu_rows: list = []
-        self._update_stoken_label()
 
     def _build_settings_tab(self) -> None:
         inner = ttk.Notebook(self.tab_settings)
@@ -3375,55 +3233,6 @@ class App:
             else:
                 self.open_btn.configure(state="disabled")
                 self._append_log(f"\n已停止，完成了 {count} 个帖子的抓取（未导出 Excel）。", "err")
-        elif kind == "bawu_rows":
-            _, result = message
-            self._bawu_rows = result["rows"]
-            for item in self.bawu_tree.get_children():
-                self.bawu_tree.delete(item)
-            for index, row in enumerate(self._bawu_rows):
-                self.bawu_tree.insert(
-                    "",
-                    "end",
-                    iid=str(index),
-                    values=(
-                        row["kind"],
-                        row["title"],
-                        row["content"][:80],
-                        row["author"],
-                        row["op_time"],
-                        row["op_name"],
-                        "屏蔽" if row["is_hide"] else "",
-                    ),
-                )
-            self._append_log(f"吧务查询完成：{len(self._bawu_rows)} 条", "ok")
-        elif kind == "bawu_detail":
-            _, info = message
-            text = (
-                "标题："
-                + info["title"]
-                + chr(10)
-                + "作者："
-                + info["author"]
-                + "（"
-                + info["username"]
-                + "）"
-                + chr(10)
-                + "tid："
-                + info["tid"]
-                + "  pid："
-                + info["pid"]
-                + chr(10)
-                + chr(10)
-                + info["content"]
-            )
-            self.bawu_detail.configure(state="normal")
-            self.bawu_detail.delete("1.0", "end")
-            self.bawu_detail.insert("1.0", text)
-            self.bawu_detail.configure(state="disabled")
-        elif kind == "bawu_error":
-            _, text = message
-            self._append_log(f"吧务查询失败：{text}", "muted")
-            messagebox.showerror("吧务查询失败", text, parent=self.root)
         elif kind == "probe_done":
             _, profile, results, button = message
             self._probe_running = False

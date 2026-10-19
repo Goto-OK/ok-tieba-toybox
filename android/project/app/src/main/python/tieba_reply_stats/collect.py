@@ -104,7 +104,7 @@ def collect_thread(url: str, fetcher: Fetcher, options: CollectOptions) -> Threa
     if mode == "guest":
         from .page_pb import collect_thread_anon
 
-        log("  模式：免登录（公开帖子 / 每层前 10 条楼中楼）")
+        log("  模式：免登录（公开帖子 / 楼中楼按设置补全）")
         data = collect_thread_anon(source_url, fetcher, options)
         data.meta.mode = "guest"
         return data
