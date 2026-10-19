@@ -1879,8 +1879,29 @@ class App:
         win.geometry(f"+{x}+{y}")
 
     def _build_settings_tab(self) -> None:
-        inner = ttk.Notebook(self.tab_settings)
-        inner.pack(fill="both", expand=True, padx=6, pady=6)
+        style = ttk.Style(self.root)
+        style.layout("Side.TNotebook", [("Side.TNotebook.client", {"sticky": "nswe"})])
+        wrap = tk.Frame(self.tab_settings, bg="#eef1f5")
+        wrap.pack(fill="both", expand=True, padx=6, pady=6)
+        sidebar = tk.Frame(wrap, bg="#ffffff", width=118)
+        sidebar.pack(side="left", fill="y", padx=(0, 6))
+        sidebar.pack_propagate(False)
+        self.settings_nav = tk.Listbox(
+            sidebar,
+            activestyle="none",
+            exportselection=False,
+            font=("Microsoft YaHei UI", 9),
+            bg="#ffffff",
+            fg="#334155",
+            selectbackground="#dbeafe",
+            selectforeground="#1F4E79",
+            relief="flat",
+            highlightthickness=0,
+        )
+        self.settings_nav.pack(fill="both", expand=True)
+        inner = ttk.Notebook(wrap, style="Side.TNotebook")
+        inner.pack(side="left", fill="both", expand=True)
+        self.settings_inner = inner
         self.tab_general = tk.Frame(inner, bg="#eef1f5")
         self.tab_blacklist = tk.Frame(inner, bg="#eef1f5")
         self.tab_help = tk.Frame(inner, bg="#eef1f5")
@@ -1894,6 +1915,11 @@ class App:
         self._build_general_tab()
         self._build_storage_tab()
         self._build_about_tab()
+        for label in ("常规", "本地标记", "结果与存储", "使用说明", "关于 / 帮助"):
+            self.settings_nav.insert("end", f"  {label}")
+        self.settings_nav.bind("<<ListboxSelect>>", self._on_settings_nav)
+        self.settings_nav.selection_set(0)
+        self.settings_inner.select(0)
 
         box = tk.Frame(self.tab_blacklist, bg="#eef1f5", padx=16, pady=12)
         box.pack(fill="both", expand=True)
@@ -1922,6 +1948,11 @@ class App:
         )
         self.settings_hint.pack(side="left", padx=(10, 0))
         self._build_help_tab()
+
+    def _on_settings_nav(self, _event=None) -> None:
+        selection = self.settings_nav.curselection()
+        if selection:
+            self.settings_inner.select(selection[0])
 
     def _build_storage_tab(self) -> None:
         box = tk.Frame(self.tab_storage, bg="#eef1f5", padx=16, pady=12)
