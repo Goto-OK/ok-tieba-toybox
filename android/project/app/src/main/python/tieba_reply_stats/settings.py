@@ -28,6 +28,8 @@ DEFAULTS: Dict[str, Any] = {
     "log_enabled": False,
     "page_size": 1000,
     "table_density": "comfortable",  # comfortable / compact
+    "theme_mode": "light",  # light / dark / system
+    "accent": "blue",  # blue / green / purple
     "settings_start": "general",  # general / last
     "onboarding_seen": False,
     "window_geometry": "",
@@ -40,6 +42,8 @@ _CHOICES = {
     "proxy_mode": ("system", "none", "custom"),
     "settings_start": ("general", "last"),
     "table_density": ("comfortable", "compact"),
+    "theme_mode": ("light", "dark", "system"),
+    "accent": ("blue", "green", "purple"),
 }
 
 
