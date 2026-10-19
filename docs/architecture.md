@@ -214,6 +214,22 @@ profile（查用户或参与者缓存）
 - 手动 STOKEN 单独 DPAPI 保存，不进入日志/导出/配置备份；
 - 无权限、缺 STOKEN、过期分别提示。
 
+### 3.11 全量楼中楼
+
+```text
+page（楼层 + 前10预览）
+  → 每层判断 reply_num / 深度上限
+  → floor 接口 pn=1..N（可配置并发 1~3）
+  → 按 pid 去重
+  → 登录模式 floor 失败 → totalComment + /p/comment 回退
+  → ThreadData.comments
+```
+
+- 匿名只走 floor；失败保留预览 + 警告；
+- 登录 floor 优先，失败回退网页；
+- 单层失败不影响其他层；
+- 每层 50 页、单帖 2000 请求上限。
+
 ## 4. 平台差异
 
 | 能力 | Windows | Android |
