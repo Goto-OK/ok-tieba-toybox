@@ -905,7 +905,7 @@ class App:
 
         tk.Label(
             forum_frame,
-            text="关注的贴吧（双击打开）",
+            text="关注贴吧",
             bg="#fbfcfe",
             fg="#475569",
             font=("Microsoft YaHei UI", 9, "bold"),
@@ -946,7 +946,7 @@ class App:
 
         tk.Label(
             post_frame,
-            text="最近发言（双击打开帖子）",
+            text="最近发言",
             bg="#fbfcfe",
             fg="#475569",
             font=("Microsoft YaHei UI", 9, "bold"),
@@ -1331,7 +1331,7 @@ class App:
         paned.add(right, weight=2)
         tk.Label(
             left,
-            text="关注的贴吧（双击打开贴吧）",
+            text="关注贴吧（双击）",
             bg="#eef1f5",
             fg="#475569",
             font=("Microsoft YaHei UI", 9, "bold"),
@@ -1369,7 +1369,7 @@ class App:
 
         tk.Label(
             right,
-            text="最近发言（双击打开帖子）",
+            text="最近发言",
             bg="#eef1f5",
             fg="#475569",
             font=("Microsoft YaHei UI", 9, "bold"),
