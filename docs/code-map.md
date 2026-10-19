@@ -7,7 +7,7 @@
 
 | 文件 | 作用 |
 |---|---|
-| `tieba_gui.py` | Windows tkinter GUI，约 2970 行 |
+| `tieba_gui.py` | Windows tkinter GUI，3584 行 |
 | `tieba_stats.py` | CLI 包装，18 行 |
 | `android/project/.../android_server.py` | Android 本地 HTTP 服务 |
 | `scripts/build_desktop.ps1` | 桌面构建 |
@@ -19,18 +19,24 @@
 |---|---:|---|
 | `fetch.py` | 406 | HTTP、Cookie、重试、缓存 |
 | `parse.py` | 590 | 网页楼层/楼中楼解析（lxml） |
-| `page_pb.py` | 440 | 匿名 `page` protobuf |
+| `page_pb.py` | 568 | 匿名 `page` / `floor` protobuf |
 | `pbapi.py` | 226 | `page_pc` / `nestedFloor` 补等级 |
 | `profile.py` | 497 | 资料、关注、最近发言 |
 | `profile_pb.py` | 192 | 客户端 profile protobuf |
 | `userpost_pb.py` | 224 | 客户端 userpost protobuf |
-| `collect.py` | 432 | 抓取编排、模式分流 |
+| `collect.py` | 434 | 抓取编排、模式分流 |
 | `models.py` | 157 | Floor / Comment / ThreadData |
 | `export.py` | 489 | Excel 导出 |
 | `blacklist.py` | 161 | 本地标记、Excel 导入导出 |
 | `settings.py` | 55 | 通用设置 |
 | `cookie_store.py` | 133 | Windows DPAPI Cookie |
 | `follow_probe.py` | 144 | 隐藏关注候选探测（FR-015） |
+| `filters.py` | 84 | 参与者筛选（FR-009） |
+| `compare.py` | 63 | 多帖对比（FR-010） |
+| `report.py` | 181 | 单用户报告（FR-011） |
+| `config_backup.py` | 84 | 配置备份（FR-012） |
+| `bawu_deleted.py` | 117 | 吧务删除内容只读（FR-013） |
+| `stoken_store.py` | 41 | 手动 STOKEN DPAPI |
 | `version.py` | 3 | 版本唯一来源 |
 | `cli.py` | 209 | 命令行 |
 
@@ -47,8 +53,13 @@
 | `tests/test_blacklist.py` | 标记优先级 |
 | `tests/test_follow_probe.py` | 候选探测 |
 | `tests/test_version.py` | 版本一致性 |
+| `tests/test_filters.py` | 筛选（FR-009） |
+| `tests/test_compare.py` | 对比（FR-010） |
+| `tests/test_report.py` | 用户报告（FR-011） |
+| `tests/test_config_backup.py` | 配置备份（FR-012） |
+| `tests/test_bawu_deleted.py` | 吧务解析（FR-013） |
 
-当前：32 个 pytest 通过，selftest 通过。
+当前：49 个 pytest 通过，selftest 通过。
 
 ## 4. 脚本
 
