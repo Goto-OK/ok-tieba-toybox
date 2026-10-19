@@ -97,7 +97,15 @@ class ThreadData:
             level = str(level or "").strip()
             if level in ("0", "None"):
                 level = ""
-            key = uid if uid and uid != "0" else f"name:{name}"
+            clean_portrait = str(portrait or "").split("?")[0]
+            if uid and uid != "0":
+                key = f"uid:{uid}"
+            elif clean_portrait:
+                key = f"portrait:{clean_portrait}"
+            elif username:
+                key = f"name:{username}"
+            else:
+                key = f"anon:{name}"
             bucket = buckets.get(key)
             if bucket is None:
                 bucket = {

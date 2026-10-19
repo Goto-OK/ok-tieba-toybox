@@ -11,10 +11,13 @@ def _key(item: Dict) -> str:
     uid = str(item.get("uid") or "").strip()
     if uid and uid != "0":
         return f"uid:{uid}"
+    portrait = str(item.get("portrait") or "").split("?")[0]
+    if portrait:
+        return f"portrait:{portrait}"
     username = str(item.get("username") or "").strip()
     if username:
         return f"name:{username}"
-    return f"nick:{item.get('name') or ''}"
+    return f"anon:{item.get('name') or ''}"
 
 
 def _label(thread) -> str:
