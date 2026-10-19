@@ -77,20 +77,23 @@ x_bd_data_type: protobuf
 
 | 字段 | 编号 | 说明 |
 |---|---|---|
-| `common` | 1 | `_client_type=2`、`_client_version` |
-| `kz` | 2 | 帖子 tid |
-| `pid` | 3 | 楼层 pid（`is_comment=false`） |
-| `spid` | 4 | 楼中楼 pid（`is_comment=true`） |
-| `pn` | 5 | 页码 |
-| `sort` | 6 | 排序 |
+| `common` | 9 | `_client_type=2`、`_client_version`；登录时带 BDUSS |
+| `kz` | 1 | 帖子 tid |
+| `pid` | 2 | 楼层 pid（`is_comment=false`） |
+| `spid` | 3 | 楼中楼 pid（`is_comment=true`） |
+| `pn` | 4 | 页码 |
+| `sort` | 19 | 排序 |
 
-响应 `PbFloorResIdl.data`：`comment_list`（评论列表）、`page`。
+响应 `PbFloorResIdl.data`：`page=1`、`post=3`、`subpost_list=4`（评论列表）。
 
 实测：无 BDUSS 也能翻页；某层 32 条回复时，`pn=1` 返回 29 条、`pn=2` 返回 2 条，`has_more=false`。
 因此免登录可以抓完整楼中楼，不必受 `page` 接口每层 10 条预览的限制。
 
 证据：`aiotieba 4.8.1` 的 `get_comments` 源码 + 2026-10-19 匿名实测
 （tid=1234567890，floor 13，reply_num=32，pn=1 返回 29，pn=2 返回 2）。
+
+登录态补充实测（2026-10-19）：同一楼层带 BDUSS 返回 29 + 2 条，与匿名一致；
+`_collect_comments` 登录路径走 floor 后总计 116 条、floor 13 为 31 条，未触发网页回退。
 
 ## 3. 用户资料 protobuf
 
@@ -172,7 +175,7 @@ pn=26, common=27`。
 
 ## 6. 限制
 
-- 游客模式每层最多 10 条楼中楼，这是 `floor_rn` 上限；
+- `page` 预览每层最多 10 条，这是 `floor_rn` 上限；`floor` 接口可翻页抓全；
 - 隐藏关注列表无法完整获取；
 - 高频请求会触发百度安全验证；默认间隔 ≥0.3 秒；
 - 接口无文档、可能变更，升级前先跑 `tests/selftest.py` 和真实帖子冒烟。

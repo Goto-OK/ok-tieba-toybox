@@ -207,7 +207,7 @@ python scripts/sync_android.py --check
 ## 15. 当前状态
 
 - 源码已实现：FR-008 桌面、FR-009、FR-010、FR-011、FR-012、FR-015 桌面；
-- 部分实现：FR-013 桌面（缺真实吧务权限联调）、FR-014 免登录+登录 floor 优先（登录未实测）；
+- 部分实现：FR-013 桌面（缺真实吧务权限联调）；FR-014 已登录实测；
 - 成品仍是 v1.2.0，未包含源码新功能；
 - 测试：49 个 pytest + selftest；
 - 详细状态：[status.md](status.md)。
