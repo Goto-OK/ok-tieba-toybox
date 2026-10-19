@@ -1005,6 +1005,8 @@ class App:
 
     def _auto_fill_levels(self) -> None:
         """切到参与者时，如果还有缺等级的，自动在后台补一次（不用手动点）。"""
+        if self.mode_var.get() == "guest":
+            return
         if not parse_cookie_input(self.cookie_var.get()).get("BDUSS"):
             return
         if getattr(self, "_auto_filling", False) or getattr(self, "_auto_filled", False):
@@ -1241,7 +1243,7 @@ class App:
 
         def worker():
             try:
-                fetcher = Fetcher(cookie=parse_cookie_input(self.cookie_var.get()), delay=0.3, verbose=False)
+                fetcher = Fetcher(cookie=self._request_cookie(), delay=0.3, verbose=False)
                 info = {}
                 if mode == "昵称":
                     # 先在当前抓到的参与者里找（最可靠，避免昵称搜索接口搜不到）
@@ -1331,7 +1333,7 @@ class App:
         self._append_log(f"开始探测 {len(candidates)} 个候选吧（最多 30 个）…", "muted")
 
         def worker() -> None:
-            fetcher = Fetcher(cookie=parse_cookie_input(self.cookie_var.get()), delay=0.3, verbose=False)
+            fetcher = Fetcher(cookie={}, delay=0.3, verbose=False)
             results = probe_forums(
                 fetcher,
                 uid,
@@ -2491,6 +2493,16 @@ class App:
             return True
         return False
 
+    def _visible_people(self) -> list:
+        return filter_users(
+            self.people_users,
+            keyword=self.people_keyword_var.get(),
+            level=self.people_level_var.get(),
+            mark=self.people_mark_var.get() if self._risk_enabled() else "全部",
+            min_level=_optional_int(self.people_min_var.get()),
+            max_level=_optional_int(self.people_max_var.get()),
+        )
+
     def _filtered_threads(self) -> list:
         from dataclasses import replace
 
@@ -2585,7 +2597,7 @@ class App:
 
         def worker():
             try:
-                fetcher = Fetcher(cookie=parse_cookie_input(self.cookie_var.get()), delay=0.3, verbose=False)
+                fetcher = Fetcher(cookie=self._request_cookie(), delay=0.3, verbose=False)
                 options = CollectOptions(verbose=True, log=self._log_from_thread)
                 for thread in self.last_threads:
                     filled = fill_thread_levels(thread, fetcher, self._log_from_thread)
@@ -2603,6 +2615,11 @@ class App:
                 self._post(("enrich_error", str(error)))
 
         threading.Thread(target=worker, daemon=True).start()
+
+    def _request_cookie(self) -> dict:
+        if self.mode_var.get() == "guest":
+            return {}
+        return parse_cookie_input(self.cookie_var.get())
 
     def _user_bar(self, user) -> str:
         """这个用户参与的是哪个吧（多帖子时取他出现过的第一个帖子的吧）。"""
@@ -2644,20 +2661,25 @@ class App:
         if not getattr(self, "people_users", None):
             messagebox.showinfo("还没有数据", "先点「开始统计」抓一个帖子。", parent=self.root)
             return
+        users = self._visible_people()
+        if not users:
+            messagebox.showinfo("没有可刷新的用户", "当前筛选没有用户。", parent=self.root)
+            return
         self._batch_running = True
         self._batch_cancel = False
         self._batch_done = 0
-        self._batch_total = len(self.people_users)
+        self._batch_total = len(users)
         self.batch_btn.configure(text="停止查询")
         self.people_hint.configure(text=f"批量查询 0/{self._batch_total}…")
-        users = list(self.people_users)
         count = self._post_count()
         start_date, end_date = self._date_params()
         prefer = "start" if "开始" in self.post_prefer_var.get() else "end"
 
         def worker():
-            fetcher = Fetcher(cookie=parse_cookie_input(self.cookie_var.get()), delay=0.3, verbose=False)
             guest = self.mode_var.get() == "guest"
+            fetcher = Fetcher(
+                cookie={} if guest else parse_cookie_input(self.cookie_var.get()), delay=0.3, verbose=False
+            )
             for index, user in enumerate(users):
                 if self._batch_cancel:
                     break
@@ -2722,7 +2744,7 @@ class App:
             user["level"] = level
         hit_level = ""
         if profile.get("ok"):
-            hit_level, _ = self._profile_hit(profile, [self._user_bar(user)])
+            hit_level, _ = self._profile_hit(profile, user.get("bars") or [self._user_bar(user)])
         label = {"ban": "禁止", "warn": "警告", "safe": "安全"}.get(hit_level, "")
         hidden = self._hidden_follows(profile) if profile.get("ok") else False
         try:
@@ -2757,7 +2779,7 @@ class App:
 
         def worker():
             try:
-                fetcher = Fetcher(cookie=parse_cookie_input(self.cookie_var.get()), delay=0.3, verbose=False)
+                fetcher = Fetcher(cookie=self._request_cookie(), delay=0.3, verbose=False)
                 profile = fetch_user_profile(
                     fetcher,
                     user["uid"],
@@ -3154,8 +3176,8 @@ class App:
             delay = 0.8
         delay = min(5.0, max(0.3, delay))
 
-        cookie = parse_cookie_input(self.cookie_var.get())
         mode = self.mode_var.get()
+        cookie = {} if mode == "guest" else parse_cookie_input(self.cookie_var.get())
         if mode == "login" and not cookie.get("BDUSS"):
             answer = messagebox.askyesnocancel(
                 "登录模式需要 Cookie",
@@ -3173,7 +3195,7 @@ class App:
             return
         if mode == "guest":
             self._append_log("本次使用免登录模式：公开帖子，楼中楼按设置补全", "muted")
-        if cookie and self.remember_var.get():
+        if mode != "guest" and cookie and self.remember_var.get():
             if save_cookie(self.cookie_var.get().strip()):
                 self._append_log("已记住 Cookie（本机加密保存），下次会自动填入。", "muted")
             else:
@@ -3211,9 +3233,29 @@ class App:
         self.status_var.set("正在停止…")
 
     def _on_close(self) -> None:
-        if self.running and not messagebox.askyesno("仍在抓取", "还没抓完，确定要退出吗？", parent=self.root):
+        active = self.running or getattr(self, "_batch_running", False)
+        if not active:
+            self.root.destroy()
             return
+        if not messagebox.askyesno(
+            "任务仍在进行",
+            "停止任务并退出？" + chr(10) + "已完成的部分会保留。",
+            parent=self.root,
+        ):
+            return
+        self._closing = True
         self.stop_event.set()
+        self._batch_cancel = True
+        self.status_var.set("正在停止…")
+        self._append_log("正在停止任务并保存已完成部分…", "muted")
+        self.root.after(100, self._wait_close)
+
+    def _wait_close(self) -> None:
+        worker_alive = bool(self.worker and self.worker.is_alive())
+        batch_alive = bool(getattr(self, "_batch_running", False))
+        if worker_alive or batch_alive:
+            self.root.after(100, self._wait_close)
+            return
         self.root.destroy()
 
     # ------------------------------------------------------------- worker

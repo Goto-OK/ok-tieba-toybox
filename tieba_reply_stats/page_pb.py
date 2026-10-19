@@ -506,7 +506,7 @@ def fetch_floor_page(fetcher, tid: str, pid: str, pn: int = 1, bduss: str = "") 
 
 
 def fill_comments_anon(thread: ThreadData, fetcher, options) -> None:
-    """用 floor 接口把免登录楼中楼补全（最大保护 + 可配置并发）。"""
+    """用 floor 接口把免登录楼中楼补全（按总条数上限 + 并发）。"""
     from concurrent.futures import ThreadPoolExecutor
 
     if not getattr(options, "include_comments", True):
@@ -515,21 +515,30 @@ def fill_comments_anon(thread: ThreadData, fetcher, options) -> None:
     concurrency = max(1, min(3, int(getattr(options, "comment_concurrency", 1) or 1)))
     existing: Dict[int, set] = {}
     for comment in thread.comments:
-        existing.setdefault(comment.floor_no, set()).add(comment.pid)
-    floors = [floor for floor in thread.floors if floor.reply_num > len(existing.get(floor.post_no, ()))]
+        if comment.pid:
+            existing.setdefault(comment.floor_no, set()).add(comment.pid)
+
+    def desired_total(floor: Floor) -> int:
+        total = int(floor.reply_num or 0)
+        if depth:
+            total = min(total, depth)
+        return total
+
+    floors = [floor for floor in thread.floors if len(existing.get(floor.post_no, ())) < desired_total(floor)]
     if not floors:
         return
     if options.log:
         options.log(f"  楼中楼补全：{len(floors)} 层（并发 {concurrency}）")
 
-    def work(floor):
-        result = []
-        target = int(floor.reply_num)
-        if depth:
-            target = min(target, depth)
+    def work(floor: Floor):
+        need = desired_total(floor) - len(existing.get(floor.post_no, ()))
+        if need <= 0:
+            return []
+        result: List[Dict] = []
+        seen = set(existing.get(floor.post_no, ()))
         pn = 1
-        while pn <= 50:
-            if options.should_stop and options.should_stop():
+        while pn <= 50 and len(result) < need:
+            if getattr(options, "should_stop", None) and options.should_stop():
                 break
             try:
                 page = fetch_floor_page(fetcher, thread.meta.tid, floor.pid, pn, bduss="")
@@ -537,11 +546,16 @@ def fill_comments_anon(thread: ThreadData, fetcher, options) -> None:
                 thread.warnings.append(f"第 {floor.post_no} 层楼中楼失败：{error}")
                 break
             for row in page["comments"]:
-                if row["pid"] and row["pid"] not in existing.get(floor.post_no, ()):
-                    row["floor_no"] = floor.post_no
-                    row["floor_author"] = floor.author
-                    result.append(row)
-            if not page["has_more"] or len(result) >= target:
+                if len(result) >= need:
+                    break
+                pid = row["pid"]
+                if not pid or pid in seen:
+                    continue
+                seen.add(pid)
+                row["floor_no"] = floor.post_no
+                row["floor_author"] = floor.author
+                result.append(row)
+            if not page["has_more"]:
                 break
             pn += 1
         return result
