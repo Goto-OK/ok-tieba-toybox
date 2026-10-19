@@ -1616,7 +1616,7 @@ class App:
             self.mode_hint.configure(
                 text="完整楼中楼 · 关注列表 · 完整资料"
                 if login
-                else "公开帖子 · 每层前 10 条楼中楼 · 红绿灯只看发言"
+                else "公开帖子 · 楼中楼按设置补全 · 红绿灯只看发言"
             )
         self._apply_risk_ui()
 
@@ -1666,7 +1666,7 @@ class App:
         cards = tk.Frame(frame, bg="#ffffff")
         cards.pack(fill="x")
         for value, title, desc in (
-            ("guest", "免登录（推荐）", "公开帖子；楼中楼每层前 10 条；红绿灯只看发言"),
+            ("guest", "免登录（推荐）", "公开帖子；楼中楼按设置补全；红绿灯只看发言"),
             ("login", "登录（Cookie）", "完整楼中楼、关注列表、完整资料；需要 BDUSS"),
         ):
             row = tk.Frame(
@@ -3172,7 +3172,7 @@ class App:
                 self._set_mode("guest")
             return
         if mode == "guest":
-            self._append_log("本次使用免登录模式：公开帖子，楼中楼每层前 10 条", "muted")
+            self._append_log("本次使用免登录模式：公开帖子，楼中楼按设置补全", "muted")
         if cookie and self.remember_var.get():
             if save_cookie(self.cookie_var.get().strip()):
                 self._append_log("已记住 Cookie（本机加密保存），下次会自动填入。", "muted")
