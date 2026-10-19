@@ -1219,21 +1219,6 @@ class App:
         ttk.Button(bar, text="Emoji 代码", command=self._insert_emoji_code, width=10).pack(
             side="left", padx=(6, 0)
         )
-        tk.Label(bar, text="  条数：", bg="#ffffff", fg="#475569", font=("Microsoft YaHei UI", 9)).pack(
-            side="left"
-        )
-        self.lookup_count_var = tk.StringVar(value="50")
-        ttk.Spinbox(bar, from_=5, to=1000, increment=10, width=6, textvariable=self.lookup_count_var).pack(
-            side="left"
-        )
-        self.lookup_date_mode_var = tk.StringVar(value="近期")
-        ttk.Combobox(
-            bar,
-            values=("近期", "指定日期"),
-            textvariable=self.lookup_date_mode_var,
-            width=9,
-            state="readonly",
-        ).pack(side="left", padx=(6, 0))
         self.lookup_start_var = tk.StringVar()
         self.lookup_end_var = tk.StringVar()
         self.lookup_date_row = tk.Frame(self.tab_lookup, bg="#ffffff", padx=12, pady=4)
@@ -1254,26 +1239,67 @@ class App:
             _var.trace_add("write", lambda *_: self._on_lookup_parts_changed())
         self.lookup_start_var.set(self._group_date(self.lookup_start_parts))
         self.lookup_end_var.set(self._group_date(self.lookup_end_parts))
-        self.lookup_date_mode_var.trace_add("write", lambda *_: self._on_lookup_date_changed())
-        ttk.Button(bar, text="查询", command=self._on_lookup, width=8).pack(side="left", padx=(8, 0))
+        tk.Button(
+            bar,
+            text="查询",
+            command=self._on_lookup,
+            bg="#1F4E79",
+            fg="#ffffff",
+            activebackground="#163b5c",
+            activeforeground="#ffffff",
+            relief="flat",
+            padx=14,
+            pady=4,
+            cursor="hand2",
+            font=("Microsoft YaHei UI", 9, "bold"),
+        ).pack(side="left", padx=(8, 0))
         ttk.Button(bar, text="复制全部", command=self._copy_lookup, width=8).pack(side="left", padx=(6, 0))
+
+        bar2 = tk.Frame(self.tab_lookup, bg="#ffffff", padx=12, pady=3)
+        bar2.pack(fill="x")
+        tk.Label(bar2, text="最近发言抓取条数：", bg="#ffffff", fg="#475569", font=("Microsoft YaHei UI", 8)).pack(
+            side="left"
+        )
+        self.lookup_count_var = tk.StringVar(value="50")
+        ttk.Spinbox(bar2, from_=5, to=1000, increment=10, width=6, textvariable=self.lookup_count_var).pack(
+            side="left"
+        )
+        tk.Label(bar2, text="  日期：", bg="#ffffff", fg="#475569", font=("Microsoft YaHei UI", 8)).pack(
+            side="left"
+        )
+        self.lookup_date_mode_var = tk.StringVar(value="近期")
+        ttk.Combobox(
+            bar2,
+            values=("近期", "指定日期"),
+            textvariable=self.lookup_date_mode_var,
+            width=9,
+            state="readonly",
+        ).pack(side="left")
         self.lookup_status = tk.Label(
-            bar, text="", bg="#ffffff", fg="#8a94a6", font=("Microsoft YaHei UI", 9)
+            bar2, text="", bg="#ffffff", fg="#8a94a6", font=("Microsoft YaHei UI", 8)
         )
         self.lookup_status.pack(side="right")
-
         self.lookup_traffic_labels = {}
+        self.lookup_traffic_text = tk.Label(
+            bar2, text="", bg="#ffffff", fg="#6b7280", font=("Microsoft YaHei UI", 8)
+        )
+        self.lookup_traffic_text.pack(side="right", padx=(0, 6))
         for key, color in (("ban", "#dc2626"), ("warn", "#f59e0b"), ("safe", "#16a34a")):
-            label = tk.Label(bar, text="●", fg="#d1d5db", bg="#ffffff", font=("Microsoft YaHei UI", 14))
+            label = tk.Label(bar2, text="●", fg="#d1d5db", bg="#ffffff", font=("Microsoft YaHei UI", 12))
             label.pack(side="right", padx=(0, 2))
             self.lookup_traffic_labels[key] = (label, color)
-        self.lookup_traffic_text = tk.Label(
-            bar, text="", bg="#ffffff", fg="#6b7280", font=("Microsoft YaHei UI", 9)
+        tk.Label(bar2, text="标记：", bg="#ffffff", fg="#6b7280", font=("Microsoft YaHei UI", 8)).pack(
+            side="right"
         )
-        self.lookup_traffic_text.pack(side="right", padx=(0, 8))
 
+        self.lookup_date_mode_var.trace_add("write", lambda *_: self._on_lookup_date_changed())
         self.lookup_info = tk.Label(
-            self.tab_lookup, text="", anchor="w", bg="#eef1f5", fg="#334155", font=("Microsoft YaHei UI", 10)
+            self.tab_lookup,
+            text="输入用户名 / 用户ID / 昵称，点「查询」查看资料、关注和最近发言。",
+            anchor="w",
+            bg="#eef1f5",
+            fg="#64748b",
+            font=("Microsoft YaHei UI", 9),
         )
         self.lookup_info.pack(fill="x", padx=12, pady=(0, 4))
 
@@ -1329,20 +1355,27 @@ class App:
             fg="#475569",
             font=("Microsoft YaHei UI", 9, "bold"),
         ).pack(anchor="w")
+        post_wrap = tk.Frame(right, bg="#eef1f5")
+        post_wrap.pack(fill="both", expand=True)
         self.lookup_post_tree = ttk.Treeview(
-            right, columns=("time", "type", "bar", "title", "content"), show="headings", height=14
+            post_wrap, columns=("time", "type", "bar", "title", "content"), show="headings", height=14
         )
         self.lookup_post_tree.heading("time", text="日期")
         self.lookup_post_tree.heading("type", text="类型")
         self.lookup_post_tree.heading("bar", text="贴吧")
         self.lookup_post_tree.heading("title", text="标题")
         self.lookup_post_tree.heading("content", text="内容")
-        self.lookup_post_tree.column("time", width=80, anchor="center")
+        self.lookup_post_tree.column("time", width=90, anchor="center")
         self.lookup_post_tree.column("type", width=55, anchor="center")
-        self.lookup_post_tree.column("bar", width=110, anchor="w")
-        self.lookup_post_tree.column("title", width=220, anchor="w")
-        self.lookup_post_tree.column("content", width=260, anchor="w")
-        self.lookup_post_tree.pack(fill="both", expand=True)
+        self.lookup_post_tree.column("bar", width=100, anchor="w")
+        self.lookup_post_tree.column("title", width=230, anchor="w")
+        self.lookup_post_tree.column("content", width=300, anchor="w")
+        post_xscroll = ttk.Scrollbar(post_wrap, orient="horizontal", command=self.lookup_post_tree.xview)
+        self.lookup_post_tree.configure(xscrollcommand=post_xscroll.set)
+        self.lookup_post_tree.grid(row=0, column=0, sticky="nsew")
+        post_xscroll.grid(row=1, column=0, sticky="ew")
+        post_wrap.rowconfigure(0, weight=1)
+        post_wrap.columnconfigure(0, weight=1)
         self.lookup_post_tree.bind("<Double-1>", lambda _event: self._open_lookup_post())
         self._configure_colors(self.lookup_post_tree)
         self._make_sortable(
