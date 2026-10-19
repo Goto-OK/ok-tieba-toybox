@@ -43,6 +43,7 @@ from tieba_reply_stats.collect import (
 from tieba_reply_stats.cookie_store import clear_cookie, load_cookie, save_cookie
 from tieba_reply_stats.export import export_workbook
 from tieba_reply_stats.fetch import CaptchaError, Fetcher, FetchError, ThreadGoneError, parse_cookie_input
+from tieba_reply_stats.follow_probe import candidate_bars, probe_forums
 from tieba_reply_stats.pbapi import fill_thread_levels
 from tieba_reply_stats.profile import fetch_user_profile, resolve_user
 from tieba_reply_stats.settings import load_settings, save_settings
@@ -683,16 +684,18 @@ class App:
             font=("Microsoft YaHei UI", 9, "bold"),
         ).pack(anchor="w")
         self.profile_forum_tree = ttk.Treeview(
-            forum_frame, columns=("bar", "level"), show="headings", height=12
+            forum_frame, columns=("bar", "level", "source"), show="headings", height=12
         )
         self.profile_forum_tree.heading("bar", text="贴吧")
         self.profile_forum_tree.heading("level", text="等级")
-        self.profile_forum_tree.column("bar", width=130, anchor="w")
-        self.profile_forum_tree.column("level", width=50, anchor="center")
+        self.profile_forum_tree.heading("source", text="来源")
+        self.profile_forum_tree.column("bar", width=110, anchor="w")
+        self.profile_forum_tree.column("level", width=45, anchor="center")
+        self.profile_forum_tree.column("source", width=70, anchor="center")
         self.profile_forum_tree.pack(fill="both", expand=True)
         self.profile_forum_tree.bind("<Double-1>", lambda _event: self._open_profile_forum())
         self._configure_colors(self.profile_forum_tree)
-        self._make_sortable(self.profile_forum_tree, {"bar": "贴吧", "level": "等级"})
+        self._make_sortable(self.profile_forum_tree, {"bar": "贴吧", "level": "等级", "source": "来源"})
         self.profile_forum_note = tk.Label(
             forum_frame,
             text="",
@@ -703,6 +706,9 @@ class App:
             font=("Microsoft YaHei UI", 8),
         )
         self.profile_forum_note.pack(fill="x", pady=(2, 0))
+        self.profile_probe_btn = ttk.Button(
+            forum_frame, text="探测候选关注", command=self._probe_profile_forums, width=16
+        )
         self._profile_forum_names: Dict[str, str] = {}
 
         tk.Label(
@@ -1043,15 +1049,19 @@ class App:
             fg="#475569",
             font=("Microsoft YaHei UI", 9, "bold"),
         ).pack(anchor="w")
-        self.lookup_forum_tree = ttk.Treeview(left, columns=("bar", "level"), show="headings", height=14)
+        self.lookup_forum_tree = ttk.Treeview(
+            left, columns=("bar", "level", "source"), show="headings", height=14
+        )
         self.lookup_forum_tree.heading("bar", text="贴吧")
         self.lookup_forum_tree.heading("level", text="等级")
-        self.lookup_forum_tree.column("bar", width=150, anchor="w")
-        self.lookup_forum_tree.column("level", width=55, anchor="center")
+        self.lookup_forum_tree.heading("source", text="来源")
+        self.lookup_forum_tree.column("bar", width=130, anchor="w")
+        self.lookup_forum_tree.column("level", width=50, anchor="center")
+        self.lookup_forum_tree.column("source", width=70, anchor="center")
         self.lookup_forum_tree.pack(fill="both", expand=True)
         self.lookup_forum_tree.bind("<Double-1>", lambda _event: self._open_lookup_forum())
         self._configure_colors(self.lookup_forum_tree)
-        self._make_sortable(self.lookup_forum_tree, {"bar": "贴吧", "level": "等级"})
+        self._make_sortable(self.lookup_forum_tree, {"bar": "贴吧", "level": "等级", "source": "来源"})
         self.lookup_forum_note = tk.Label(
             left,
             text="",
@@ -1062,6 +1072,9 @@ class App:
             font=("Microsoft YaHei UI", 8),
         )
         self.lookup_forum_note.pack(fill="x", pady=(2, 0))
+        self.lookup_probe_btn = ttk.Button(
+            left, text="探测候选关注", command=self._probe_lookup_forums, width=16
+        )
         self._lookup_forum_names: Dict[str, str] = {}
 
         tk.Label(
@@ -1194,6 +1207,63 @@ class App:
 
         threading.Thread(target=worker, daemon=True).start()
 
+    def _probe_profile_forums(self) -> None:
+        if getattr(self, "_probe_running", False):
+            self._probe_stop.set()
+            return
+        user = getattr(self, "_profile_user", None)
+        profile = getattr(self, "_profile_data", None)
+        if not user or not profile:
+            return
+        self._start_probe(user, profile, self.profile_probe_btn)
+
+    def _probe_lookup_forums(self) -> None:
+        if getattr(self, "_probe_running", False):
+            self._probe_stop.set()
+            return
+        profile = getattr(self, "_last_lookup_profile", None)
+        if not profile:
+            return
+        user: Dict[str, Any] = {
+            "uid": profile.get("user_id") or "",
+            "portrait": profile.get("portrait") or "",
+            "bars": [],
+        }
+        self._start_probe(user, profile, self.lookup_probe_btn)
+
+    def _start_probe(self, user, profile, button) -> None:
+        uid = str(profile.get("user_id") or user.get("uid") or "")
+        portrait = str(profile.get("portrait") or user.get("portrait") or "")
+        if not uid or not portrait:
+            messagebox.showinfo("缺少资料", "没有用户 ID 或头像，无法探测。", parent=self.root)
+            return
+        candidates = candidate_bars(user, profile, self.blacklist)
+        if not candidates:
+            messagebox.showinfo(
+                "没有候选吧",
+                "本帖发言、最近发言、本地标记里没有可探测的吧。",
+                parent=self.root,
+            )
+            return
+        self._probe_running = True
+        self._probe_stop = threading.Event()
+        button.configure(state="normal", text="停止探测")
+        self._append_log(f"开始探测 {len(candidates)} 个候选吧（最多 30 个）…", "muted")
+
+        def worker() -> None:
+            fetcher = Fetcher(cookie=parse_cookie_input(self.cookie_var.get()), delay=0.3, verbose=False)
+            results = probe_forums(
+                fetcher,
+                uid,
+                portrait,
+                candidates,
+                log=self._log_from_thread,
+                should_stop=self._probe_stop.is_set,
+            )
+            self._post(("probe_done", profile, results, button))
+
+        threading.Thread(target=worker, daemon=True).start()
+
     def _render_lookup(self, profile) -> None:
         forum_tree = self.lookup_forum_tree
         post_tree = self.lookup_post_tree
@@ -1216,7 +1286,11 @@ class App:
                 "",
                 "end",
                 iid=iid,
-                values=(forum["name"], f"Lv.{forum['level']}" if forum.get("level") else "-"),
+                values=(
+                    forum["name"],
+                    f"Lv.{forum['level']}" if forum.get("level") else "-",
+                    forum.get("source") or "",
+                ),
                 tags=self._row_tags(forum["name"], "forum"),
             )
             self._lookup_forum_names[iid] = forum["name"]
@@ -1279,6 +1353,11 @@ class App:
             info += " | ⚠ 关注列表隐藏，未命中禁止时标黄"
         self.lookup_info.configure(text=info)
         self.lookup_status.configure(text=f"{profile.get('username') or ''} · {len(posts)} 条发言")
+        if self._hidden_follows(profile):
+            self.lookup_probe_btn.pack(anchor="w", pady=(4, 0))
+            self.lookup_probe_btn.configure(state="normal", text="探测候选关注")
+        else:
+            self.lookup_probe_btn.pack_forget()
 
     def _open_participants(self) -> None:
         if not self.last_threads:
@@ -2265,21 +2344,44 @@ class App:
         forums = profile.get("followed_forums") or []
         hidden = profile.get("hidden_forums") or []
         base = forums or hidden
-        merged = {forum["name"]: dict(forum) for forum in base if forum.get("name")}
+        merged = {}
+        for forum in base:
+            name = forum.get("name")
+            if not name:
+                continue
+            item = dict(forum)
+            item["source"] = "公开" if forums else "隐藏恢复"
+            merged[name] = item
         if not forums:
             for forum in profile.get("like_forum") or []:
                 name = forum.get("name")
                 if name and name not in merged:
-                    merged[name] = {"name": name, "level": 0, "level_name": ""}
+                    merged[name] = {"name": name, "level": 0, "level_name": "", "source": "精选"}
         if bar_name and bar_level:
             name = bar_name[:-1] if bar_name.endswith("吧") and len(bar_name) > 2 else bar_name
             level_int = int(bar_level or 0)
             if name and level_int > 0:
                 existing = merged.get(name)
                 if existing is None:
-                    merged[name] = {"name": name, "level": level_int, "level_name": ""}
+                    merged[name] = {"name": name, "level": level_int, "level_name": "", "source": "等级"}
                 elif not existing.get("level"):
                     existing["level"] = level_int
+        for forum in profile.get("probed_forums") or []:
+            name = forum.get("name")
+            if not name:
+                continue
+            existing = merged.get(name)
+            if existing is None:
+                merged[name] = {
+                    "name": name,
+                    "level": int(forum.get("level") or 0),
+                    "level_name": forum.get("level_name") or "",
+                    "source": "候选确认",
+                }
+            elif existing.get("source") != "公开":
+                if int(forum.get("level") or 0) > int(existing.get("level") or 0):
+                    existing["level"] = int(forum.get("level") or 0)
+                existing["source"] = "候选确认"
         return sorted(merged.values(), key=lambda item: int(item.get("level") or 0), reverse=True)
 
     def _forum_note(self, profile, bar_name: str = "", bar_level: str = "") -> str:
@@ -2290,6 +2392,9 @@ class App:
         if hidden or profile.get("like_forum"):
             count = len(self._merge_forum_lists(profile, bar_name, bar_level))
             note = f"对方隐藏了完整关注列表，已从等级头衔/精选恢复 {count} 个，可能不全"
+            probed = len(profile.get("probed_forums") or [])
+            if probed:
+                note += f"；候选确认 {probed} 个"
             if self._hidden_follows(profile):
                 note += "（风险提示：关注列表隐藏，未命中禁止时标黄）"
             return note
@@ -2333,8 +2438,15 @@ class App:
                 except tk.TclError:
                     pass
 
+        self._profile_user = user
+        self._profile_data = profile
         posts = profile.get("recent_posts") or []
         combined = self._merge_forum_lists(profile, self._user_bar(user), level or "")
+        if self._hidden_follows(profile):
+            self.profile_probe_btn.pack(anchor="w", pady=(4, 0))
+            self.profile_probe_btn.configure(state="normal", text="探测候选关注")
+        else:
+            self.profile_probe_btn.pack_forget()
 
         for index, forum in enumerate(combined):
             iid = str(index)
@@ -2342,7 +2454,11 @@ class App:
                 "",
                 "end",
                 iid=iid,
-                values=(forum["name"], f"Lv.{forum['level']}" if forum.get("level") else "-"),
+                values=(
+                    forum["name"],
+                    f"Lv.{forum['level']}" if forum.get("level") else "-",
+                    forum.get("source") or "",
+                ),
                 tags=self._row_tags(forum["name"], "forum"),
             )
             self._profile_forum_names[iid] = forum["name"]
@@ -2652,6 +2768,16 @@ class App:
             else:
                 self.open_btn.configure(state="disabled")
                 self._append_log(f"\n已停止，完成了 {count} 个帖子的抓取（未导出 Excel）。", "err")
+        elif kind == "probe_done":
+            _, profile, results, button = message
+            self._probe_running = False
+            button.configure(state="normal", text="探测候选关注")
+            profile["probed_forums"] = results
+            self._append_log(f"候选探测完成：确认 {len(results)} 个关注。", "ok")
+            if profile is getattr(self, "_last_lookup_profile", None):
+                self._render_lookup(profile)
+            elif profile is getattr(self, "_profile_data", None):
+                self._render_profile(self._profile_user, profile)
         elif kind == "batch_profile":
             _, index, user, profile = message
             self._batch_done = max(getattr(self, "_batch_done", 0), index + 1)
