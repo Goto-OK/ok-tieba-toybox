@@ -16,6 +16,7 @@ import threading
 import tkinter as tk
 import traceback
 import webbrowser
+from dataclasses import replace
 from datetime import datetime
 from tkinter import filedialog, messagebox, simpledialog, ttk
 from typing import Any, Callable, Dict, List, Optional
@@ -169,6 +170,7 @@ class App:
         self.mode_var = tk.StringVar(value=str(self.settings.get("mode", "guest")))
 
         self._build_ui()
+        self.notebook.bind("<<NotebookTabChanged>>", self._on_main_tab_changed)
         saved_geometry = str(self.settings.get("window_geometry") or "")
         if saved_geometry:
             try:
@@ -178,6 +180,7 @@ class App:
         self._set_output(default_output_path())
         self.root.after(120, self._poll_queue)
         self.root.protocol("WM_DELETE_WINDOW", self._on_close)
+        self.root.bind("<F1>", lambda _event: self._show_quick_guide())
 
         saved = load_cookie()
         if saved:
@@ -1950,9 +1953,25 @@ class App:
         self.settings_hint.pack(side="left", padx=(10, 0))
         self._build_help_tab()
 
+    def _on_settings_start_changed(self) -> None:
+        self.settings["settings_start"] = "last" if self.settings_start_var.get() == "上次分类" else "general"
+        save_settings(self.settings)
+
+    def _on_main_tab_changed(self, _event=None) -> None:
+        if self.notebook.select() != str(self.tab_settings):
+            return
+        index = 0
+        if self.settings.get("settings_start") == "last":
+            index = getattr(self, "_last_settings_index", 0)
+        if 0 <= index < self.settings_nav.size():
+            self.settings_nav.selection_clear(0, "end")
+            self.settings_nav.selection_set(index)
+            self.settings_inner.select(index)
+
     def _on_settings_nav(self, _event=None) -> None:
         selection = self.settings_nav.curselection()
         if selection:
+            self._last_settings_index = selection[0]
             self.settings_inner.select(selection[0])
 
     def _build_storage_tab(self) -> None:
@@ -2338,6 +2357,21 @@ class App:
         tk.Label(batch_row, text="（含关注时强制 1）", bg="#eef1f5", fg="#8a94a6", font=("Microsoft YaHei UI", 8)).pack(
             side="left", padx=(6, 0)
         )
+
+        start_row = tk.Frame(box, bg="#eef1f5")
+        start_row.pack(anchor="w", pady=(0, 8))
+        tk.Label(start_row, text="打开设置时停在：", bg="#eef1f5", fg="#475569").pack(side="left")
+        self.settings_start_var = tk.StringVar(
+            value="上次分类" if self.settings.get("settings_start") == "last" else "常规"
+        )
+        ttk.Combobox(
+            start_row,
+            values=("常规", "上次分类"),
+            textvariable=self.settings_start_var,
+            width=8,
+            state="readonly",
+        ).pack(side="left")
+        self.settings_start_var.trace_add("write", lambda *_: self._on_settings_start_changed())
 
         backup_box = ttk.LabelFrame(box, text=" 配置备份 / 恢复 ")
         backup_box.pack(fill="x", pady=(0, 10))
@@ -3233,6 +3267,49 @@ class App:
             parts.append(f"标记 {mark}")
         return "；".join(parts) or "无"
 
+    def _expand_large_threads(self, threads, limit: int = 500_000):
+        result: list = []
+        for thread in threads:
+            size = len(thread.floors) + len(thread.comments)
+            if size <= limit:
+                result.append(thread)
+                continue
+            by_floor: Dict[int, List] = {}
+            for comment in thread.comments:
+                by_floor.setdefault(comment.floor_no, []).append(comment)
+            groups: list = []
+            part_floors: list = []
+            part_comments: list = []
+            rows = 0
+            for floor in thread.floors:
+                comments = by_floor.pop(floor.post_no, [])
+                block = 1 + len(comments)
+                if part_floors and rows + block > limit:
+                    groups.append((part_floors, part_comments))
+                    part_floors, part_comments, rows = [], [], 0
+                part_floors.append(floor)
+                part_comments.extend(comments)
+                rows += block
+            for comments in by_floor.values():
+                part_comments.extend(comments)
+            if part_floors or part_comments:
+                groups.append((part_floors, part_comments))
+            total = len(groups)
+            for index, (floors, comments) in enumerate(groups, start=1):
+                meta = replace(
+                    thread.meta,
+                    title=f"{thread.meta.title or thread.meta.tid}（分片 {index}/{total}）",
+                )
+                result.append(
+                    replace(
+                        thread,
+                        meta=meta,
+                        floors=list(floors),
+                        comments=list(comments),
+                    )
+                )
+        return result
+
     def _split_export_threads(self, threads, limit: int = 500_000):
         parts = []
         current: list = []
@@ -3309,7 +3386,7 @@ class App:
             "数据警告": "；".join(warnings) if warnings else "无",
             "空帖子": "；".join(empty) if empty else "无",
         }
-        parts = self._split_export_threads(threads)
+        parts = self._split_export_threads(self._expand_large_threads(threads))
         paths = []
         try:
             for index, part in enumerate(parts, start=1):
