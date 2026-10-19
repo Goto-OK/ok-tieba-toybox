@@ -70,7 +70,7 @@ python tests/selftest.py
 python scripts/sync_android.py --check
 ```
 
-- 网络相关功能（游客模式、登录模式、查成分）至少手动冒烟一次；
+- 网络相关功能（默认匿名、关注增强、查用户）至少手动冒烟一次；
 - 修 bug 时优先补一个能复现的测试。
 
 ## 7. 目录与文件

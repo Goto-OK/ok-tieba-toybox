@@ -59,7 +59,7 @@
 
 ## 3. 数据流
 
-### 3.1 抓帖子（登录态）
+### 3.1 抓帖子（默认匿名）
 
 ```text
 URL → extract_tid
@@ -110,27 +110,26 @@ login:
   → 行标记 + 行底色
 ```
 
-`_profile_hit` / `_batch_refresh_marks` 都接收 `mode`：
-免登录分支不调用资料/关注接口，直接用帖子里的发言吧。
+`_profile_hit` / `_batch_refresh_marks` 都接收 `follow_enhance`：
+关闭时只使用帖子里的发言吧，不调用资料/关注接口。
 
-### 3.5 模式选择
+### 3.5 匿名与关注增强
 
 ```text
 启动
-  → 读取设置中的 mode（guest / login，默认 guest）
-  → 界面渲染模式选择与能力提示
-  → 开始抓取：
-       guest → 忽略 Cookie，走 page_pb（匿名）
-       login → 校验 BDUSS，走网页/登录 protobuf
-  → 状态栏 / 日志 / 导出标注本次模式
+  → 读取 follow_enhance（默认 false）
+  → 默认匿名抓取：忽略 Cookie，走 page_pb
+  → 关注增强开启：校验 BDUSS，读取公开关注
+  → 状态栏 / 日志标注“关注增强：开/关”
 ```
 
 约束：
 
-- 模式由用户显式选择，`collect_thread` 不再根据 `BDUSS` 是否存在隐式分流；
-- 免登录模式下不得读取或发送 Cookie；
-- 登录模式缺少 `BDUSS` 时直接报错，不降级；
-- 结果对象记录 `mode`，供导出和界面显示。
+- 不提供免登录/登录模式选择；
+- 不根据 Cookie 是否存在自动开启关注增强；
+- 匿名模式不得读取或发送 Cookie；
+- 关注增强缺少 BDUSS 时直接报错，不降级；
+- 关注增强只影响公开关注/查用户/红绿灯关注判定，不改变抓取和楼中楼。
 
 ### 3.6 参与者筛选
 
@@ -194,25 +193,14 @@ profile（查用户或参与者缓存）
 - 不支持 Cookie/快照/历史；
 - 校验失败不覆盖现有配置。
 
-### 3.10 吧务删除内容（只读）
+### 3.10 吧务删除内容（已砍掉）
 
 ```text
-吧名 + 用户（uid/username/nickname）
-  → 解析 uid
-  → get_recovers(forum, uid, pn)
-  → 列表（Recover：text/tid/pid/user/op_time/content_type/is_hide）
-  → 选中一条
-  → get_recover_info(forum, tid, pid)
-  → 标题 + 正文详情
+不提供吧务标签
+不保存 STOKEN
+不调用 get_recovers / get_recover_info
+不提供恢复/删除/屏蔽
 ```
-
-- 只用只读接口；
-- 不调用 `recover` / `del_post` / `del_thread`；
-- STOKEN 来源：
-  整段 Cookie → 自动解析；缺失 → 吧务页手动补；
-- STOKEN 只存在凭据层，界面只显示“已检测到/未检测到”，不显示明文；
-- 手动 STOKEN 单独 DPAPI 保存，不进入日志/导出/配置备份；
-- 无权限、缺 STOKEN、过期分别提示。
 
 ### 3.11 全量楼中楼
 
@@ -221,12 +209,12 @@ page（楼层 + 楼中楼预览）
   → 每层判断 reply_num / 深度上限
   → floor 接口 pn=1..N（可配置并发 1~3）
   → 按 pid 去重
-  → 登录模式 floor 失败 → totalComment + /p/comment 回退
+  → 关注增强态 floor 失败 → totalComment + /p/comment 回退
   → ThreadData.comments
 ```
 
 - 匿名只走 floor；失败保留预览 + 警告；
-- 登录 floor 优先，失败回退网页；
+- 默认匿名 floor 优先；关注增强态失败回退网页；
 - 单层失败不影响其他层；
 - 每层 50 页、单帖 2000 请求上限。
 

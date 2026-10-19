@@ -29,7 +29,7 @@ spec-index.md
 |---|---|---|
 | 功能需求 | [requirements.md](requirements.md) | 改功能、加功能、验收 |
 | 界面规范 | [ui-spec.md](ui-spec.md) | 改按钮、布局、日志、表格、对话框 |
-| 凭据与能力边界 | [credentials.md](credentials.md) | Cookie / BDUSS / STOKEN / 权限 |
+| 凭据与能力边界 | [credentials.md](credentials.md) | Cookie / BDUSS / 公开关注增强 |
 | 接口协议 | [protocol.md](protocol.md) | 抓包、字段、签名、接口证据 |
 | 工程规范 | [standards.md](standards.md) | 代码风格、测试、提交 |
 | 实现状态 | [status.md](status.md) | 判断规范/源码/测试/成品 |
@@ -44,16 +44,16 @@ spec-index.md
 | ID | 功能 | 正文 |
 |---|---|---|
 | BASE | 抓取、统计、导出、参与者、查用户 | requirements 3.1–3.4 |
-| FR-008 | 免登录 / 登录模式、红绿灯 | requirements 3.6 |
+| FR-008 | 匿名抓取、关注增强、红绿灯 | requirements 3.6 |
 | FR-009 | 参与者筛选 | requirements 3.3 参与者（FR-009） |
 | FR-010 | 多帖对比 | requirements 3.8 |
 | FR-011 | 单用户报告 | requirements 3.9 |
 | FR-012 | 配置备份 / 恢复 | requirements 3.10 |
-| FR-013 | 吧务删除内容（只读） | requirements 3.11 |
+| FR-013 | ~~吧务删除内容~~（已砍掉） | requirements 3.11 撤销说明 |
 | FR-014 | 全量楼中楼 | requirements 3.12 |
 | FR-015 | 隐藏关注候选探测 | requirements 3.13 |
 | CRED | 凭据分级与能力边界 | credentials + requirements 3.14 |
-| UI-001~013 | 按钮、日志、布局、表格、开关 | ui-spec |
+| UI-001~015 | 按钮、日志、布局、表格、开关、多帖、Emoji | ui-spec |
 | PROTO | 接口协议与证据 | protocol |
 | ENG | 工程规范 | standards |
 
@@ -72,10 +72,12 @@ spec-index.md
 | UI-007 | 表格与来源列 |
 | UI-008 | 查用户 |
 | UI-009 | 配置备份 |
-| UI-010 | 吧务页 |
+| UI-010 | 关注增强 |
 | UI-011 | 反馈与状态 |
 | UI-012 | 本地标记开关 |
-| UI-013 | 界面验收 |
+| UI-013 | 多帖切换 |
+| UI-014 | Emoji 查询 |
+| UI-015 | 界面验收 |
 
 ## 6. 使用方式
 
@@ -101,7 +103,7 @@ spec-index.md
 |---|---|---|
 | 功能行为 | 免登录是否查关注、批量用哪些吧、导出统计口径 | `requirements.md` 对应 FR |
 | 界面呈现 | 按钮文字/宽度/截断、日志被挡住、窗口大小、表格列 | `ui-spec.md` 对应 UI |
-| 凭据/权限 | Cookie、BDUSS、STOKEN、吧务权限、免登录边界 | `credentials.md` |
+| 凭据/权限 | Cookie、BDUSS、公开关注增强、隐藏关注边界 | `credentials.md` |
 | 接口协议 | 请求字段、签名、分页、返回结构、实测证据 | `protocol.md` |
 | 工程 | 测试、构建、版本、代码风格 | `standards.md` / `release.md` |
 | 状态 | 做没做、成品版本、已知差距 | `status.md` |

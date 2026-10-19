@@ -84,7 +84,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build_desktop.ps1 -V
 - [ ] CHANGELOG 已更新
 - [ ] selftest 通过
 - [ ] 游客模式冒烟通过
-- [ ] 登录模式冒烟通过
+- [ ] 匿名 + 关注增强冒烟通过
 - [ ] exe `--selftest` 返回 0
 - [ ] 快捷方式图标正常
 - [ ] zip 已重新生成
