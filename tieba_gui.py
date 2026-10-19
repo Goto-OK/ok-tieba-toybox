@@ -189,6 +189,7 @@ class App:
             self.mode_var.set("guest")
         self._apply_mode_ui()
         self._apply_risk_ui()
+        self._apply_proxy()
         self._restore_last_result()
         self.root.after(300, self._maybe_onboarding)
 
@@ -2239,6 +2240,25 @@ class App:
             state="readonly",
         ).pack(side="left")
         self.removed_action_var.trace_add("write", lambda *_: self._on_fetch_settings_changed())
+        proxy_row = tk.Frame(fetch_box, bg="#eef1f5")
+        proxy_row.pack(anchor="w", pady=(4, 0))
+        tk.Label(proxy_row, text="网络代理：", bg="#eef1f5", fg="#475569").pack(side="left")
+        self.proxy_mode_var = tk.StringVar(
+            value={"system": "跟随系统", "none": "不使用", "custom": "自定义"}.get(
+                self.settings.get("proxy_mode", "system"), "跟随系统"
+            )
+        )
+        ttk.Combobox(
+            proxy_row,
+            values=("跟随系统", "不使用", "自定义"),
+            textvariable=self.proxy_mode_var,
+            width=8,
+            state="readonly",
+        ).pack(side="left")
+        self.proxy_url_var = tk.StringVar(value=self.settings.get("proxy_url", ""))
+        ttk.Entry(proxy_row, textvariable=self.proxy_url_var, width=32).pack(side="left", padx=(6, 0))
+        self.proxy_mode_var.trace_add("write", lambda *_: self._on_proxy_changed())
+        self.proxy_url_var.trace_add("write", lambda *_: self._on_proxy_changed())
 
         backup_box = ttk.LabelFrame(box, text=" 配置备份 / 恢复 ")
         backup_box.pack(fill="x", pady=(0, 10))
@@ -2273,6 +2293,28 @@ class App:
             font=("Microsoft YaHei UI", 9),
         )
         self.general_hint.pack(anchor="w", pady=(10, 0))
+
+    def _apply_proxy(self) -> None:
+        var = getattr(self, "proxy_mode_var", None)
+        mode = {"跟随系统": "system", "不使用": "none", "自定义": "custom"}.get(
+            var.get() if var is not None else "跟随系统",
+            "system",
+        )
+        if mode == "custom":
+            Fetcher.DEFAULT_PROXY = self.proxy_url_var.get().strip() or None
+        elif mode == "none":
+            Fetcher.DEFAULT_PROXY = ""
+        else:
+            Fetcher.DEFAULT_PROXY = None
+
+    def _on_proxy_changed(self) -> None:
+        mode = {"跟随系统": "system", "不使用": "none", "自定义": "custom"}.get(
+            self.proxy_mode_var.get(), "system"
+        )
+        self.settings["proxy_mode"] = mode
+        self.settings["proxy_url"] = self.proxy_url_var.get().strip()
+        save_settings(self.settings)
+        self._apply_proxy()
 
     def _on_fetch_settings_changed(self) -> None:
         self.settings["auto_refresh_old"] = bool(self.auto_refresh_var.get())
