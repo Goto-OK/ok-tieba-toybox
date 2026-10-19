@@ -24,7 +24,7 @@
 | `profile.py` | 497 | 资料、关注、最近发言 |
 | `profile_pb.py` | 192 | 客户端 profile protobuf |
 | `userpost_pb.py` | 224 | 客户端 userpost protobuf |
-| `collect.py` | 434 | 抓取编排、模式分流 |
+| `collect.py` | 472 | 抓取编排、模式分流、floor 优先 |
 | `models.py` | 157 | Floor / Comment / ThreadData |
 | `export.py` | 489 | Excel 导出 |
 | `blacklist.py` | 161 | 本地标记、Excel 导入导出 |

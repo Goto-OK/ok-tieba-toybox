@@ -24,13 +24,13 @@
 | FR-011 | 单用户报告（Excel+MD） | ✅ | ✅ 桌面 | ✅ 2 个专项 | ❌ |
 | FR-012 | 配置备份/恢复（JSON+ZIP） | ✅ | ✅ 桌面 | ✅ 3 个专项 | ❌ |
 | FR-013 | 吧务删除内容（只读） | ✅ | 🟡 桌面代码 | ✅ 3 个专项 | ❌ |
-| FR-014 | 全量楼中楼 | ✅ | 🟡 免登录全量；登录仍走网页 | 🟡 匿名实测 | ❌ |
+| FR-014 | 全量楼中楼 | ✅ | 🟡 免登录+登录 floor 优先 | 🟡 匿名实测；登录未实测 | ❌ |
 | FR-015 | 隐藏关注候选探测 | ✅ | ✅ 桌面 | ✅ 4 个专项 | ❌ |
 
 补充：
 
 - FR-013 没有真实吧务权限/STOKEN，未做真实联调；
-- FR-014 登录模式仍用现有网页完整路径，未改成“floor 优先 + 回退”；
+- FR-014 登录模式已加 floor 优先 + 网页回退，但没有登录态实测；
 - 所有源码都未重新打包，成品仍是 v1.2.0。
 
 ## 3. 工程状态
@@ -55,6 +55,7 @@
 
 ```text
 1cb818b feat: implement filters, comparison, reports, backup, bawu and full comments
+92b0c29 feat: use floor-first comments in login mode
 4852233 feat: add hidden-follow candidate probing
 ```
 
