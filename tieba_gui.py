@@ -3012,6 +3012,8 @@ class App:
             headers,
             user_rows,
             urls=[user_url(item) for item in stats],
+            default_sort="合计",
+            default_reverse=True,
         )
 
         if all_mode:
@@ -3040,6 +3042,8 @@ class App:
                 ["帖子", "昵称", "用户名", "用户ID", "等级", "头衔", "楼层", "楼中楼", "合计"],
                 per_rows,
                 urls=per_urls,
+                default_sort="合计",
+                default_reverse=True,
             )
 
         floor_rows = []
@@ -3094,8 +3098,22 @@ class App:
             "等级",
             "内容",
         ]
-        self._add_grid_tab(self.grid_nb, "楼层明细", floor_headers, floor_rows, urls=floor_urls)
-        self._add_grid_tab(self.grid_nb, "楼中楼明细", comment_headers, comment_rows, urls=comment_urls)
+        self._add_grid_tab(
+            self.grid_nb,
+            "楼层明细",
+            floor_headers,
+            floor_rows,
+            urls=floor_urls,
+            default_sort="楼层",
+        )
+        self._add_grid_tab(
+            self.grid_nb,
+            "楼中楼明细",
+            comment_headers,
+            comment_rows,
+            urls=comment_urls,
+            default_sort="所在楼层",
+        )
         warn_count = sum(len(thread.warnings) for thread in threads)
         if warn_count:
             self.grid_hint.configure(text=f"⚠ 数据可能不完整：{warn_count} 条警告；导出说明里也会记录")
@@ -3211,7 +3229,14 @@ class App:
         self._append_log(f"对比结果已导出：{path}", "ok")
 
     def _add_grid_tab(
-        self, notebook, title: str, headers: List[str], rows: List[list], urls: Optional[List[str]] = None
+        self,
+        notebook,
+        title: str,
+        headers: List[str],
+        rows: List[list],
+        urls: Optional[List[str]] = None,
+        default_sort: Optional[str] = None,
+        default_reverse: bool = False,
     ) -> None:
         all_rows = [list(row) for row in rows]
         all_urls = list(urls or [])
@@ -3343,13 +3368,9 @@ class App:
 
         tree.bind("<Button-3>", show_menu)
 
-        def sort_by(column: str) -> None:
-            if state["column"] == column:
-                state["reverse"] = not state["reverse"]
-            else:
-                state["column"] = column
-                state["reverse"] = False
-            reverse = bool(state["reverse"])
+        def apply_sort(column: str, reverse: bool) -> None:
+            state["column"] = column
+            state["reverse"] = reverse
             index = int(column)
 
             def key(row):
@@ -3368,12 +3389,21 @@ class App:
                     arrow = " ▼" if reverse else " ▲"
                 tree.heading(columns[position], text=header + arrow)
 
+        def sort_by(column: str) -> None:
+            if state["column"] == column:
+                apply_sort(column, not bool(state["reverse"]))
+            else:
+                apply_sort(column, False)
+
         def make_command(column: str) -> Callable[[], None]:
             return lambda: sort_by(column)
 
         for index, header in enumerate(headers):
             tree.heading(columns[index], command=make_command(columns[index]))
-        render()
+        if default_sort in headers:
+            apply_sort(columns[headers.index(default_sort)], default_reverse)
+        else:
+            render()
 
     def _open_blacklist_dialog(self) -> None:
         win = tk.Toplevel(self.root)
