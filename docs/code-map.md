@@ -35,8 +35,6 @@
 | `compare.py` | 63 | 多帖对比（FR-010） |
 | `report.py` | 181 | 单用户报告（FR-011） |
 | `config_backup.py` | 84 | 配置备份（FR-012） |
-| `bawu_deleted.py` | 117 | 吧务删除内容只读（FR-013） |
-| `stoken_store.py` | 41 | 手动 STOKEN DPAPI |
 | `version.py` | 3 | 版本唯一来源 |
 | `cli.py` | 209 | 命令行 |
 
@@ -57,9 +55,8 @@
 | `tests/test_compare.py` | 对比（FR-010） |
 | `tests/test_report.py` | 用户报告（FR-011） |
 | `tests/test_config_backup.py` | 配置备份（FR-012） |
-| `tests/test_bawu_deleted.py` | 吧务解析（FR-013） |
 
-当前：49 个 pytest 通过，selftest 通过。
+当前：50 个 pytest 通过，selftest 通过。
 
 ## 4. 脚本
 
