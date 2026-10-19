@@ -654,7 +654,13 @@ class App:
             command=self._on_include_follows_changed,
         )
         self.include_follows_check.pack(side="left", padx=(6, 0))
+        self.resume_batch_btn = ttk.Button(
+            bar, text="继续未完成", command=self._resume_batch, width=12, state="disabled"
+        )
+        self.resume_batch_btn.pack(side="left", padx=(6, 0))
         self._batch_running = False
+        self._batch_plan: List[Dict[str, Any]] = []
+        self._batch_pending: List[Dict[str, Any]] = []
         self._batch_cancel = False
         ttk.Button(bar, text="刷新", command=self._refresh_people, width=6).pack(side="left", padx=(8, 0))
         ttk.Button(bar, text="在浏览器打开主页", command=self._open_current_profile, width=16).pack(
@@ -3307,7 +3313,7 @@ class App:
             return self._group_date(self.post_start_parts), self._group_date(self.post_end_parts)
         return "", ""
 
-    def _batch_refresh_marks(self) -> None:
+    def _batch_refresh_marks(self, resume_users=None) -> None:
         if getattr(self, "_batch_running", False):
             self._batch_cancel = True
             self.batch_btn.configure(text="正在停止…")
@@ -3322,7 +3328,7 @@ class App:
         if not getattr(self, "people_users", None):
             messagebox.showinfo("还没有数据", "先点「开始统计」抓一个帖子。", parent=self.root)
             return
-        users = self._visible_people()
+        users = list(resume_users) if resume_users is not None else self._visible_people()
         if not users:
             messagebox.showinfo("没有可刷新的用户", "当前筛选没有用户。", parent=self.root)
             return
@@ -3330,6 +3336,9 @@ class App:
         self._batch_cancel = False
         self._batch_done = 0
         self._batch_total = len(users)
+        self._batch_plan = list(users)
+        self._batch_pending = []
+        self.resume_batch_btn.configure(state="disabled", text="继续未完成")
         self.batch_btn.configure(text="停止查询")
         self.people_hint.configure(text=f"批量查询 0/{self._batch_total}…")
         count = self._post_count()
@@ -3369,6 +3378,12 @@ class App:
             self._post(("batch_done",))
 
         threading.Thread(target=worker, daemon=True).start()
+
+    def _resume_batch(self) -> None:
+        if self._batch_pending:
+            pending = list(self._batch_pending)
+            self._batch_pending = []
+            self._batch_refresh_marks(resume_users=pending)
 
     def _hidden_follows(self, profile) -> bool:
         return bool(profile.get("followed_private")) or profile.get("priv_like") == 3
@@ -4144,6 +4159,14 @@ class App:
             self.batch_btn.configure(text="一键红绿灯")
             done = getattr(self, "_batch_done", 0)
             total = getattr(self, "_batch_total", 0)
+            if cancelled and done < total:
+                self._batch_pending = list(self._batch_plan[done:])
+                self.resume_batch_btn.configure(
+                    state="normal", text=f"继续未完成（{done}/{total}）"
+                )
+            else:
+                self._batch_pending = []
+                self.resume_batch_btn.configure(state="disabled", text="继续未完成")
             self.people_hint.configure(text=f"已刷新 {done}/{total} 人的红绿灯")
             self._append_log(
                 ("已停止" if cancelled else "完成") + f"一键红绿灯：刷新 {done} 人。",
