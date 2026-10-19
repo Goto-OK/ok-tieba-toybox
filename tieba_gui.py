@@ -2855,10 +2855,16 @@ class App:
             state="disabled",
         )
         self.open_btn.pack(side="left", padx=(8, 0))
+        hint_bar = tk.Frame(self.tab_grid, bg="#ffffff", padx=12, pady=2)
+        hint_bar.pack(fill="x")
         self.grid_hint = tk.Label(
-            bar, text="界面用 [U+XXXX] 显示 emoji，导出 Excel 保留原样", bg="#ffffff", fg="#8a94a6", font=("Microsoft YaHei UI", 9)
+            hint_bar,
+            text="界面用 [U+XXXX] 显示 emoji，导出 Excel 保留原样",
+            bg="#ffffff",
+            fg="#8a94a6",
+            font=("Microsoft YaHei UI", 9),
         )
-        self.grid_hint.pack(side="right")
+        self.grid_hint.pack(side="left")
 
         self.grid_nb = ttk.Notebook(self.tab_grid)
         self.grid_nb.pack(fill="both", expand=True, padx=8, pady=8)
@@ -3213,17 +3219,32 @@ class App:
         notebook.add(frame, text=f"  {title}  ")
         columns = [str(index) for index in range(len(headers))]
         tree = ttk.Treeview(frame, columns=columns, show="headings")
+        widths = {
+            "#": 48,
+            "昵称": 170,
+            "用户名": 110,
+            "用户ID": 110,
+            "帖子": 190,
+            "等级": 60,
+            "头衔": 100,
+            "楼层": 60,
+            "楼中楼": 70,
+            "合计": 60,
+            "所在楼层": 78,
+            "回复者": 130,
+            "内容": 260,
+        }
         for index, header in enumerate(headers):
             tree.heading(columns[index], text=header)
-            if header == "内容":
-                width = 240
-            elif header in ("用户ID", "用户名"):
-                width = 110
-            elif header == "帖子":
-                width = 180
-            else:
-                width = 80
-            tree.column(columns[index], width=width, anchor="w" if header in ("内容", "昵称", "帖子") else "center")
+            width = widths.get(header, 90)
+            tree.column(
+                columns[index],
+                width=width,
+                minwidth=max(44, width // 2),
+                stretch=index == len(headers) - 1,
+                anchor="w" if header in ("内容", "昵称", "帖子", "回复者") else "center",
+            )
+        tree.tag_configure("odd", background="#f7f9fc")
         tree.links = {}  # type: ignore[attr-defined]
         yscroll = ttk.Scrollbar(frame, orient="vertical", command=tree.yview)
         xscroll = ttk.Scrollbar(frame, orient="horizontal", command=tree.xview)
@@ -3263,7 +3284,8 @@ class App:
             start_index = state["page"] * size
             for offset, row in enumerate(all_rows[start_index : start_index + size]):
                 values = ["" if value is None else value for value in row]
-                iid = tree.insert("", "end", values=values)
+                tags = ("odd",) if (start_index + offset) % 2 else ()
+                iid = tree.insert("", "end", values=values, tags=tags)
                 index = start_index + offset
                 tree.links[iid] = all_urls[index] if index < len(all_urls) else ""  # type: ignore[attr-defined]
             page_label.configure(text=f"第 {state['page'] + 1}/{pages} 页，共 {len(all_rows)} 行")
