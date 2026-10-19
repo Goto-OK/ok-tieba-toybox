@@ -10,6 +10,7 @@
 | [spec-index.md](spec-index.md) | 规范入口（新会话先读） |
 | [ui-spec.md](ui-spec.md) | 界面规范 |
 | [code-map.md](code-map.md) | 代码地图与整理记录 |
+| [market-comparison.md](market-comparison.md) | 市面项目横向对比 |
 | [status.md](status.md) | 规范 / 源码 / 测试 / 成品状态 |
 | [backlog.md](backlog.md) | 待办、缺口、优先级 |
 | [proposals.md](proposals.md) | 历史设计过程（不作规范） |

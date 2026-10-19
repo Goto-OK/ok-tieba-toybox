@@ -38,6 +38,7 @@ spec-index.md
 | 研究资料 | [aiotieba-capabilities.md](aiotieba-capabilities.md) | 接口能力调研 |
 | 功能草案 | [proposals.md](proposals.md) | 历史设计过程，不作规范 |
 | 代码地图 | [code-map.md](code-map.md) | 找模块、看代码边界 |
+| 竞品对比 | [market-comparison.md](market-comparison.md) | 横向对比、借鉴优先级 |
 
 ## 4. 功能地图
 
