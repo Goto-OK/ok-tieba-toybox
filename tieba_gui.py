@@ -729,6 +729,23 @@ class App:
             "comment": 58,
             "total": 48,
         }
+        self.people_pager = tk.Frame(left, bg="#ffffff")
+        self.people_pager.pack(side="bottom", fill="x", pady=(4, 0))
+        self._people_page = 0
+        self.people_page_label = tk.Label(
+            self.people_pager, text="", bg="#ffffff", fg="#475569", font=("Microsoft YaHei UI", 8)
+        )
+        self.people_page_label.pack(side="left")
+        def page_command(value):
+            return lambda: self._people_go(value)
+
+        for text, delta in (("首页", "first"), ("上一页", -1), ("下一页", 1), ("末页", "last")):
+            ttk.Button(
+                self.people_pager,
+                text=text,
+                width=5 if text in ("首页", "末页") else 6,
+                command=page_command(delta),
+            ).pack(side="left", padx=(4, 0))
         self.people_tree = ttk.Treeview(left, columns=columns, show="headings")
         for col in columns:
             self.people_tree.heading(col, text=headings[col])
@@ -1515,6 +1532,7 @@ class App:
         self.post_nb.select(self.tab_people)
 
     def _on_people_filter_changed(self) -> None:
+        self._people_page = 0
         if getattr(self, "_filter_resetting", False):
             return
         if self.people_level_var.get() == "自定义":
@@ -1551,9 +1569,13 @@ class App:
             max_level=_optional_int(self.people_max_var.get()),
         )
         self._profile_cache = {}
+        page_size = max(1, int(self.settings.get("page_size", 1000) or 1000))
+        pages = max(1, (len(filtered) + page_size - 1) // page_size)
+        self._people_page = min(max(0, getattr(self, "_people_page", 0)), pages - 1)
+        start = self._people_page * page_size
         for item in self.people_tree.get_children():
             self.people_tree.delete(item)
-        for user in filtered:
+        for user in filtered[start : start + page_size]:
             index = self._people_index[id(user)]
             self.people_tree.insert(
                 "",
@@ -1570,6 +1592,10 @@ class App:
                     user["total"],
                 ),
             )
+        if hasattr(self, "people_page_label"):
+            self.people_page_label.configure(
+                text=f"第 {self._people_page + 1}/{pages} 页 · 筛选后 {len(filtered)} / 共 {len(users)} 人"
+            )
         with_level = sum(1 for user in filtered if user.get("level"))
         mode_note = ""
         if self._risk_enabled():
@@ -1583,6 +1609,18 @@ class App:
         for tree in (self.profile_forum_tree, self.profile_post_tree):
             for item in tree.get_children():
                 tree.delete(item)
+
+    def _people_go(self, value) -> None:
+        users = getattr(self, "people_users", [])
+        page_size = max(1, int(self.settings.get("page_size", 1000) or 1000))
+        pages = max(1, (len(users) + page_size - 1) // page_size)
+        if value == "first":
+            self._people_page = 0
+        elif value == "last":
+            self._people_page = pages - 1
+        else:
+            self._people_page = min(max(0, self._people_page + int(value)), pages - 1)
+        self._refresh_people()
 
     def _on_person_select(self, _event=None) -> None:
         selection = self.people_tree.selection()
