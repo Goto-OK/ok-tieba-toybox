@@ -258,8 +258,7 @@ class App:
             font=("Microsoft YaHei UI", 9),
             anchor="w",
         ).pack(side="left")
-        self.progress = ttk.Progressbar(status, mode="indeterminate", length=200)
-        self.progress.pack(side="right")
+        self.progress = ttk.Progressbar(status, mode="indeterminate", length=180)
 
         self.notebook = ttk.Notebook(self.root)
         self.notebook.pack(fill="both", expand=True)
@@ -1420,7 +1419,7 @@ class App:
     def _on_lookup(self) -> None:
         query = self.lookup_query_var.get().strip()
         if not query:
-            messagebox.showinfo("请输入", "先输入要查询的内容。", parent=self.root)
+            self.lookup_status.configure(text="先输入要查询的内容")
             return
         raw_query = query
         query = decode_display(query).strip() or query
@@ -2143,7 +2142,7 @@ class App:
     def _cleanup_old_results(self) -> None:
         files = stored_old_files()
         if not files:
-            messagebox.showinfo("没有旧文件", "没有需要清理的旧结果文件。", parent=self.root)
+            self.status_var.set("没有需要清理的旧结果文件")
             return
         if not messagebox.askyesno(
             "清理旧结果", f"删除 {len(files)} 个旧结果文件？", parent=self.root, default=messagebox.NO
@@ -2190,7 +2189,7 @@ class App:
         ]
         self.root.clipboard_clear()
         self.root.clipboard_append(chr(10).join(lines))
-        messagebox.showinfo("已复制", "诊断信息已复制（不含 Cookie/昵称/正文）。", parent=self.root)
+        self.status_var.set("诊断信息已复制（不含 Cookie/昵称/正文）")
 
     def _show_quick_guide(self) -> None:
         existing = getattr(self, "_guide_window", None)
@@ -3120,7 +3119,7 @@ class App:
     def _generate_compare(self) -> None:
         selected = [index for index, var in enumerate(self.compare_vars) if var.get()]
         if len(selected) < 2:
-            messagebox.showinfo("至少选 2 个帖子", "请勾选至少 2 个帖子。", parent=self.root)
+            self.grid_hint.configure(text="至少勾选 2 个帖子才能对比")
             return
         try:
             result = compare_threads(self.last_threads, selected, self.compare_mode_var.get())
@@ -3159,7 +3158,7 @@ class App:
 
     def _export_compare(self) -> None:
         if not self.compare_result:
-            messagebox.showinfo("还没有结果", "先点「生成对比」。", parent=self.root)
+            self.grid_hint.configure(text="先生成对比结果")
             return
         from openpyxl import Workbook
 
@@ -3546,7 +3545,8 @@ class App:
 
     def _export_now(self) -> None:
         if not self.last_threads:
-            messagebox.showinfo("还没有数据", "先点「开始统计」抓一个帖子。", parent=self.root)
+            self.status_var.set("还没有可导出的数据")
+            self._append_log("导出前需要先抓取帖子。", "muted")
             return
         threads = self._selected_grid_threads()
         if len(self.last_threads) > 1 and not self.grid_thread_var.get().startswith("全部"):
@@ -3637,7 +3637,7 @@ class App:
 
     def _enrich_levels_now(self) -> None:
         if not self.last_threads:
-            messagebox.showinfo("还没有数据", "先点「开始统计」抓一个帖子。", parent=self.root)
+            self.status_var.set("还没有可补全等级的数据")
             return
         if getattr(self, "_enriching", False):
             return
@@ -4307,11 +4307,8 @@ class App:
             except ValueError:
                 bad.append(token)
         if not urls:
-            messagebox.showwarning(
-                "缺少链接",
-                "请先粘贴至少一个帖子链接，例如：\nhttps://tieba.baidu.com/p/1234567890",
-                parent=self.root,
-            )
+            self.status_var.set("先粘贴至少一个帖子链接")
+            self.url_text.focus_set()
             return
         if bad:
             messagebox.showwarning(
@@ -4543,7 +4540,7 @@ class App:
             self._persist_result(self.last_threads)
             self._auto_filled = False
             self._set_running(False)
-            self.status_var.set("完成")
+            self.status_var.set(f"完成 · {len(self.last_threads)} 个帖子 / {len(self._aggregate_users())} 位用户")
             try:
                 self._reset_people_filters()
                 self._refresh_people()
@@ -4605,6 +4602,7 @@ class App:
             cancelled = getattr(self, "_batch_cancel", False)
             self._batch_running = False
             self._batch_cancel = False
+            self.status_var.set("准备就绪")
             self.batch_btn.configure(text="一键红绿灯")
             done = getattr(self, "_batch_done", 0)
             total = getattr(self, "_batch_total", 0)
@@ -4694,6 +4692,7 @@ class App:
             self.stop_btn.configure(state="normal")
             self.open_btn.configure(state="disabled")
             self.status_var.set("正在抓取，请稍候…")
+            self.progress.pack(side="right")
             try:
                 self.progress.start(12)
             except tk.TclError:
@@ -4705,6 +4704,7 @@ class App:
                 self.progress.stop()
             except tk.TclError:
                 pass
+            self.progress.pack_forget()
 
     def _append_log(self, text: str, tag: str | None = None) -> None:
         self.log_text.configure(state="normal")
