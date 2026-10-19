@@ -12,7 +12,7 @@
 ## 研究
 
 - [~] 无吧务权限的“删除痕迹”研究：已完成首轮样本（1 帖）
-- [ ] HTML 占位验证（当前 IP 被安全验证拦截）
+- [x] HTML 占位验证：页面直接跳过 12 楼，无删除占位
 - [ ] 扩大样本、检查用户主页缺口
 
 详见 [aiotieba-capabilities.md](aiotieba-capabilities.md)。
