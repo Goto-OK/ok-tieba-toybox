@@ -57,7 +57,7 @@ spec-index.md
 | FR-014 | 全量楼中楼 | requirements 3.12 |
 | FR-015 | 隐藏关注候选探测 | requirements 3.13 |
 | CRED | 凭据分级与能力边界 | credentials + requirements 3.14 |
-| UI-001~016 | 按钮、日志、布局、表格、开关、多帖、Emoji、持久化 | ui-spec |
+| UI-001~018 | 按钮、日志、布局、表格、开关、多帖、Emoji、持久化、设置页 | ui-spec |
 | PROTO | 接口协议与证据 | protocol |
 | ENG | 工程规范 | standards |
 
@@ -82,7 +82,6 @@ spec-index.md
 | UI-013 | 多帖切换与导出范围 |
 | UI-014 | Emoji 显示与输入 |
 | UI-015 | 最近结果持久化 |
-| UI-016 | 界面验收 |
 | UI-017 | 设置页布局 |
 | UI-018 | 界面验收（含设置页） |
 
