@@ -552,9 +552,9 @@ class App:
                 )
 
     # ------------------------------------------------------- 参与者与查用户
-    def _aggregate_users(self):
+    def _aggregate_users(self, threads=None):
         buckets = {}
-        for thread in self.last_threads:
+        for thread in (self.last_threads if threads is None else threads):
             for item in thread.user_stats():
                 key = (
                     f"uid:{item['uid']}"
@@ -638,6 +638,12 @@ class App:
         self.post_date_mode_var.trace_add("write", lambda *_: self._on_post_date_changed())
         self.post_start_var.set(self._group_date(self.post_start_parts))
         self.post_end_var.set(self._group_date(self.post_end_parts))
+        self.people_range_var = tk.StringVar(value="全部帖子")
+        self.people_range_box = ttk.Combobox(
+            bar, textvariable=self.people_range_var, width=24, state="readonly"
+        )
+        self.people_range_box.pack(side="left", padx=(6, 0))
+        self.people_range_box.bind("<<ComboboxSelected>>", lambda _event: self._on_people_range_changed())
         self.batch_btn = ttk.Button(bar, text="一键红绿灯", command=self._batch_refresh_marks, width=10)
         self.batch_btn.pack(side="left", padx=(8, 0))
         self.include_follows_var = tk.BooleanVar(value=False)
@@ -1555,8 +1561,24 @@ class App:
             self._filter_resetting = False
         self._refresh_people()
 
+    def _people_threads(self):
+        value = self.people_range_var.get()
+        if value.startswith("全部"):
+            return list(self.last_threads)
+        for index, thread in enumerate(self.last_threads, start=1):
+            if value.startswith(f"{index}. "):
+                return [thread]
+        return list(self.last_threads)
+
     def _refresh_people(self) -> None:
-        users = self._aggregate_users()
+        values = ["全部帖子"]
+        for index, thread in enumerate(self.last_threads, start=1):
+            values.append(f"{index}. {encode_display(thread.meta.title or thread.meta.tid)}")
+        if hasattr(self, "people_range_box"):
+            self.people_range_box.configure(values=values)
+            if self.people_range_var.get() not in values:
+                self.people_range_var.set("全部帖子")
+        users = self._aggregate_users(self._people_threads())
         self.people_users = users
         self._people_index = {id(user): index for index, user in enumerate(users)}
         for index, user in enumerate(users):
@@ -1621,6 +1643,10 @@ class App:
             self._people_page = pages - 1
         else:
             self._people_page = min(max(0, self._people_page + int(value)), pages - 1)
+        self._refresh_people()
+
+    def _on_people_range_changed(self) -> None:
+        self._people_page = 0
         self._refresh_people()
 
     def _on_person_select(self, _event=None) -> None:
