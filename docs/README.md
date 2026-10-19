@@ -10,6 +10,7 @@
 | [backlog.md](backlog.md) | 待办、缺口、优先级 |
 | [proposals.md](proposals.md) | 待确认的功能规范草案 |
 | [aiotieba-capabilities.md](aiotieba-capabilities.md) | aiotieba 删除内容能力研究 |
+| [credentials.md](credentials.md) | Cookie / BDUSS / STOKEN 说明 |
 
 用户向文档在仓库根目录：[使用说明.txt](../使用说明.txt)。
 
