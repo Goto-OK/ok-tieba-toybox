@@ -8,6 +8,7 @@
 | [release.md](release.md) | 版本、构建、发布检查清单 |
 | [standards.md](standards.md) | 代码风格、测试、Git、完成定义 |
 | [backlog.md](backlog.md) | 待办、缺口、优先级 |
+| [proposals.md](proposals.md) | 待确认的功能规范草案 |
 
 用户向文档在仓库根目录：[使用说明.txt](../使用说明.txt)。
 
