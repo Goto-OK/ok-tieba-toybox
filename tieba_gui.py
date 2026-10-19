@@ -3235,7 +3235,7 @@ class App:
 
     def _split_export_threads(self, threads, limit: int = 500_000):
         parts = []
-        current = []
+        current: list = []
         rows = 0
         for thread in threads:
             size = len(thread.floors) + len(thread.comments)
