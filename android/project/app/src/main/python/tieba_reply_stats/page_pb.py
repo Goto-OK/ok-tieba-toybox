@@ -509,6 +509,8 @@ def fill_comments_anon(thread: ThreadData, fetcher, options) -> None:
     """用 floor 接口把免登录楼中楼补全（最大保护 + 可配置并发）。"""
     from concurrent.futures import ThreadPoolExecutor
 
+    if not getattr(options, "include_comments", True):
+        return
     depth = int(getattr(options, "comment_depth", 0) or 0)
     concurrency = max(1, min(3, int(getattr(options, "comment_concurrency", 1) or 1)))
     existing: Dict[int, set] = {}
