@@ -168,7 +168,7 @@ class App:
         self._auto_filled = False
         self.blacklist = load_blacklist()
         self.settings = load_settings()
-        self.mode_var = tk.StringVar(value=str(self.settings.get("mode", "guest")))
+        self.mode_var = tk.StringVar(value="guest")
 
         self._build_ui()
         self._apply_table_density()

@@ -12,7 +12,7 @@ def _use_tmp(monkeypatch, tmp_path: Path):
 def test_defaults(monkeypatch, tmp_path):
     _use_tmp(monkeypatch, tmp_path)
     loaded = settings_module.load_settings()
-    assert loaded["mode"] == "guest"
+    assert "mode" not in loaded
     assert "mode_chosen" not in loaded
     assert loaded["risk_enabled"] is True
     assert loaded["follow_enhance"] is False
@@ -23,7 +23,6 @@ def test_roundtrip(monkeypatch, tmp_path):
     _use_tmp(monkeypatch, tmp_path)
     assert settings_module.save_settings(
         {
-            "mode": "login",
             "follow_enhance": True,
             "risk_enabled": False,
             "batch_concurrency": 3,
@@ -44,11 +43,10 @@ def test_roundtrip(monkeypatch, tmp_path):
 def test_invalid_values_fall_back(monkeypatch, tmp_path):
     _use_tmp(monkeypatch, tmp_path)
     (tmp_path / "settings.json").write_text(
-        '{"mode": "bogus", "batch_concurrency": 9, "page_size": 7, "risk_enabled": "false"}',
+        '{"batch_concurrency": 9, "page_size": 7, "risk_enabled": "false"}',
         encoding="utf-8",
     )
     loaded = settings_module.load_settings()
-    assert loaded["mode"] == "guest"
     assert loaded["batch_concurrency"] == 1
     assert loaded["page_size"] == 1000
     assert loaded["risk_enabled"] is False
