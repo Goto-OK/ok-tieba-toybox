@@ -57,6 +57,7 @@ from tieba_reply_stats.pbapi import fill_thread_levels
 from tieba_reply_stats.profile import fetch_user_profile, resolve_user
 from tieba_reply_stats.report import export_user_report, report_base
 from tieba_reply_stats.settings import APP_DIR, SETTINGS_PATH, load_settings, save_settings
+from tieba_reply_stats.skin_store import clear_custom, import_zip, read_custom
 from tieba_reply_stats.storage import (
     IncompatibleResult,
     archive_incompatible,
@@ -174,12 +175,16 @@ class App:
         self._auto_filled = False
         self.blacklist = load_blacklist()
         self.settings = load_settings()
+        self.custom_skin: Optional[Dict] = read_custom()
         if self.settings.get("skin") == "bluefish":
             self.settings["theme_mode"] = "dark"
+        if self.settings.get("skin") == "custom" and not self.custom_skin:
+            self.settings["skin"] = "default"
         self.palette = resolve_palette(
             str(self.settings.get("theme_mode", "light")),
             str(self.settings.get("accent", "blue")),
             str(self.settings.get("skin", "default")),
+            self.custom_skin,
         )
         self.mode_var = tk.StringVar(value="guest")
 
@@ -2100,16 +2105,29 @@ class App:
         row3 = tk.Frame(theme_box, bg="#eef1f5")
         row3.pack(anchor="w", fill="x", padx=8, pady=(2, 4))
         tk.Label(row3, text="皮肤：", width=14, anchor="w", bg="#eef1f5", fg="#475569").pack(side="left")
-        self.skin_var = tk.StringVar(
-            value="蓝鱼（内置）" if self.settings.get("skin") == "bluefish" else "默认"
-        )
-        ttk.Combobox(
+        skin_value = {
+            "default": "默认",
+            "bluefish": "蓝鱼（内置）",
+            "custom": self.custom_skin.get("name", "自定义") if self.custom_skin else "默认",
+        }.get(str(self.settings.get("skin", "default")), "默认")
+        self.skin_var = tk.StringVar(value=skin_value)
+        self.skin_values = ["默认", "蓝鱼（内置）"]
+        if self.custom_skin:
+            self.skin_values.append(self.custom_skin.get("name", "自定义"))
+        self.skin_combo = ttk.Combobox(
             row3,
-            values=("默认", "蓝鱼（内置）"),
+            values=self.skin_values,
             textvariable=self.skin_var,
-            width=12,
+            width=16,
             state="readonly",
-        ).pack(side="left")
+        )
+        self.skin_combo.pack(side="left")
+        ttk.Button(row3, text="导入皮肤 ZIP", command=self._import_skin, width=12).pack(
+            side="left", padx=(8, 0)
+        )
+        ttk.Button(row3, text="清除自定义", command=self._clear_custom_skin, width=12).pack(
+            side="left", padx=(6, 0)
+        )
         self.skin_var.trace_add("write", lambda *_: self._on_skin_changed())
 
         note = ttk.LabelFrame(box, text=" 说明 ")
@@ -2125,13 +2143,61 @@ class App:
         ).pack(anchor="w", padx=8, pady=6)
 
     def _on_skin_changed(self) -> None:
-        skin = "bluefish" if self.skin_var.get().startswith("蓝鱼") else "default"
+        value = self.skin_var.get()
+        if value.startswith("蓝鱼"):
+            skin = "bluefish"
+        elif self.custom_skin and value == self.custom_skin.get("name", "自定义"):
+            skin = "custom"
+        else:
+            skin = "default"
         self.settings["skin"] = skin
         if skin == "bluefish":
             self.settings["theme_mode"] = "dark"
             self.theme_mode_var.set("深色")
         save_settings(self.settings)
         self._apply_theme()
+
+    def _import_skin(self) -> None:
+        path = filedialog.askopenfilename(
+            title="导入皮肤 ZIP",
+            filetypes=[("皮肤包", "*.zip"), ("所有文件", "*.*")],
+            parent=self.root,
+        )
+        if not path:
+            return
+        try:
+            custom = import_zip(path)
+        except Exception as error:  # noqa: BLE001
+            messagebox.showerror("导入皮肤失败", friendly_error(error), parent=self.root)
+            return
+        self.custom_skin = custom
+        name = custom.get("name", "自定义")
+        self.skin_values = ["默认", "蓝鱼（内置）", name]
+        self.skin_combo.configure(values=self.skin_values)
+        self.settings["skin"] = "custom"
+        self.skin_var.set(name)
+        save_settings(self.settings)
+        self._apply_theme()
+        self.status_var.set(f"已导入皮肤：{name}")
+
+    def _clear_custom_skin(self) -> None:
+        if not self.custom_skin:
+            self.status_var.set("没有自定义皮肤")
+            return
+        if not messagebox.askyesno(
+            "清除自定义皮肤", "删除已导入的自定义皮肤？", parent=self.root, default=messagebox.NO
+        ):
+            return
+        clear_custom()
+        self.custom_skin = None
+        self.skin_values = ["默认", "蓝鱼（内置）"]
+        self.skin_combo.configure(values=self.skin_values)
+        if self.settings.get("skin") == "custom":
+            self.settings["skin"] = "default"
+            self.skin_var.set("默认")
+        save_settings(self.settings)
+        self._apply_theme()
+        self.status_var.set("自定义皮肤已清除")
 
     def _apply_skin_banner(self) -> None:
         banner = getattr(self, "skin_banner", None)
@@ -2141,10 +2207,14 @@ class App:
             except tk.TclError:
                 pass
             self.skin_banner = None
-        if self.settings.get("skin") != "bluefish":
+        skin = self.settings.get("skin", "default")
+        if skin == "bluefish":
+            path = _asset_path("assets", "skins", "bluefish", "header.png")
+        elif skin == "custom" and self.custom_skin:
+            path = self.custom_skin.get("assets", {}).get("header", "")
+        else:
             return
-        path = _asset_path("assets", "skins", "bluefish", "header.png")
-        if not os.path.isfile(path):
+        if not path or not os.path.isfile(path):
             return
         try:
             image = tk.PhotoImage(file=path)
@@ -2221,6 +2291,7 @@ class App:
             str(self.settings.get("theme_mode", "light")),
             str(self.settings.get("accent", "blue")),
             str(self.settings.get("skin", "default")),
+            self.custom_skin,
         )
         self.palette = palette
         self.root.configure(bg=palette["window_bg"])
@@ -2468,7 +2539,7 @@ class App:
             if entry:
                 entry[0].configure(fg=palette[value])
         skin = self.settings.get("skin", "default")
-        state = "disabled" if skin == "bluefish" else "readonly"
+        state = "disabled" if skin in ("bluefish", "custom") else "readonly"
         for name in ("theme_combo", "accent_combo"):
             combo = getattr(self, name, None)
             if combo is not None:
@@ -2477,6 +2548,7 @@ class App:
                 except tk.TclError:
                     pass
         self._apply_skin_banner()
+        self._update_empty_skin()
 
     def _build_storage_tab(self) -> None:
         box = tk.Frame(self.tab_storage, bg="#eef1f5", padx=14, pady=10)
@@ -3462,6 +3534,7 @@ class App:
 
         self.grid_nb = ttk.Notebook(self.tab_grid, style="Sub.TNotebook")
         self.grid_nb.pack(fill="both", expand=True, padx=8, pady=8)
+        self.empty_skin_label = tk.Label(self.grid_nb, bd=0)
 
     def _apply_table_density(self) -> None:
         compact = self.settings.get("table_density") == "compact"
@@ -3472,6 +3545,30 @@ class App:
         self.settings["table_density"] = "compact" if self.table_density_var.get() == "紧凑" else "comfortable"
         save_settings(self.settings)
         self._apply_table_density()
+
+    def _update_empty_skin(self) -> None:
+        label = getattr(self, "empty_skin_label", None)
+        if label is None:
+            return
+        if self.last_threads or self.settings.get("skin") != "custom" or not self.custom_skin:
+            label.place_forget()
+            return
+        path = self.custom_skin.get("assets", {}).get("empty") or self.custom_skin.get("assets", {}).get("side")
+        if not path or not os.path.isfile(path):
+            label.place_forget()
+            return
+        try:
+            image = tk.PhotoImage(file=path)
+        except tk.TclError:
+            label.place_forget()
+            return
+        if image.width() > 520:
+            factor = (image.width() + 519) // 520
+            image = image.subsample(factor, factor)
+        self.empty_skin_image = image
+        label.configure(image=image, bg=self.palette["surface"])
+        label.place(in_=self.grid_nb, relx=0.5, rely=0.55, anchor="center")
+        label.lift()
 
     def _update_grid_selector(self) -> None:
         if not hasattr(self, "grid_thread_box"):
@@ -3552,6 +3649,7 @@ class App:
             self.grid_nb.forget(tab)
         if not self.last_threads:
             self.grid_hint.configure(text="还没有数据")
+            self._update_empty_skin()
             return
         self._update_grid_selector()
         threads = self._selected_grid_threads()

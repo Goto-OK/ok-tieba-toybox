@@ -45,7 +45,7 @@ _CHOICES = {
     "table_density": ("comfortable", "compact"),
     "theme_mode": ("light", "dark", "system"),
     "accent": ("blue", "green", "purple"),
-    "skin": ("default", "bluefish"),
+    "skin": ("default", "bluefish", "custom"),
 }
 
 

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import os
-from typing import Dict
+from typing import Dict, Optional
 
 LIGHT: Dict[str, str] = {
     "window_bg": "#eef1f5",
@@ -107,7 +107,7 @@ BLUEFISH: Dict[str, str] = {
     "banner_text": "#a5f3fc",
 }
 
-SKINS = ("default", "bluefish")
+SKINS = ("default", "bluefish", "custom")
 
 ACCENTS = {
     "blue": {"accent": "#1F4E79", "accent_hover": "#163b5c", "selection_bg": "#dbeafe", "selection_text": "#1F4E79"},
@@ -144,9 +144,23 @@ def detect_system_theme() -> str:
         return "light"
 
 
-def resolve_palette(theme_mode: str, accent: str, skin: str = "default") -> Dict[str, str]:
+def resolve_palette(
+    theme_mode: str,
+    accent: str,
+    skin: str = "default",
+    custom: Optional[Dict] = None,
+) -> Dict[str, str]:
     if skin == "bluefish":
         return dict(BLUEFISH)
+    if skin == "custom" and custom:
+        mode = str(custom.get("mode") or "light")
+        palette = dict(DARK if mode == "dark" else LIGHT)
+        colors = custom.get("colors") or {}
+        if isinstance(colors, dict):
+            palette.update(
+                {key: value for key, value in colors.items() if key in palette and isinstance(value, str)}
+            )
+        return palette
     mode = theme_mode if theme_mode in THEME_MODES else "light"
     if mode == "system":
         mode = detect_system_theme()
