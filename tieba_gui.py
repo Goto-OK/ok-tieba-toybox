@@ -594,14 +594,11 @@ class App:
         if not paths:
             return
         if len(paths) > 1:
-            choice = messagebox.askyesnocancel(
+            choice = self._ask_choice(
                 "打开拆分文件",
-                f"共 {len(paths)} 个文件。" + chr(10) +
-                "是：全部打开" + chr(10) +
-                "否：只打开第一个（默认）" + chr(10) +
-                "取消：不打开",
-                parent=self.root,
-                default=messagebox.NO,
+                f"共 {len(paths)} 个文件，选择打开方式。",
+                [("只打开第一个", False), ("全部打开", True), ("取消", None)],
+                default=0,
             )
             if choice is None:
                 return
@@ -2289,6 +2286,73 @@ class App:
         self.root.clipboard_append(chr(10).join(lines))
         self.status_var.set("诊断信息已复制（不含 Cookie/昵称/正文）")
 
+    def _ask_choice(self, title: str, message: str, choices, default: int = 0):
+        """带明确按钮文案的模态选择框；choices=[(label,value),...]，None 表示取消。"""
+        win = tk.Toplevel(self.root)
+        win.title(title)
+        win.configure(bg="#ffffff")
+        win.resizable(False, False)
+        win.transient(self.root)
+        win.grab_set()
+        frame = tk.Frame(win, bg="#ffffff", padx=20, pady=16)
+        frame.pack(fill="both", expand=True)
+        tk.Label(
+            frame,
+            text=title,
+            bg="#ffffff",
+            fg="#1f2937",
+            font=("Microsoft YaHei UI", 12, "bold"),
+        ).pack(anchor="w")
+        tk.Label(
+            frame,
+            text=message,
+            bg="#ffffff",
+            fg="#475569",
+            font=("Microsoft YaHei UI", 9),
+            wraplength=440,
+            justify="left",
+            anchor="w",
+        ).pack(fill="x", pady=(8, 14))
+        result = {"value": None}
+        buttons = tk.Frame(frame, bg="#ffffff")
+        buttons.pack(fill="x")
+
+        def finish(value) -> None:
+            result["value"] = value
+            win.destroy()
+
+        for index in range(len(choices) - 1, -1, -1):
+            label, value = choices[index]
+            if index == default:
+                tk.Button(
+                    buttons,
+                    text=label,
+                    command=lambda v=value: finish(v),
+                    bg="#1F4E79",
+                    fg="#ffffff",
+                    activebackground="#163b5c",
+                    activeforeground="#ffffff",
+                    relief="flat",
+                    padx=14,
+                    pady=5,
+                    cursor="hand2",
+                    font=("Microsoft YaHei UI", 9, "bold"),
+                ).pack(side="right", padx=(8, 0))
+            else:
+                ttk.Button(buttons, text=label, command=lambda v=value: finish(v), width=12).pack(
+                    side="right", padx=(8, 0)
+                )
+        win.bind("<Return>", lambda _event: finish(choices[default][1]))
+        win.bind("<Escape>", lambda _event: finish(None))
+        win.protocol("WM_DELETE_WINDOW", lambda: finish(None))
+        win.update_idletasks()
+        width, height = win.winfo_reqwidth(), win.winfo_reqheight()
+        x = self.root.winfo_rootx() + max(0, (self.root.winfo_width() - width) // 2)
+        y = self.root.winfo_rooty() + max(0, (self.root.winfo_height() - height) // 3)
+        win.geometry(f"+{x}+{y}")
+        self.root.wait_window(win)
+        return result["value"]
+
     def _show_quick_guide(self) -> None:
         existing = getattr(self, "_guide_window", None)
         try:
@@ -2837,13 +2901,12 @@ class App:
         merged = merge_blacklists(self.blacklist, data)
         merged_total = sum(len(value) for value in merged.values())
         imported_total = total
-        choice = messagebox.askyesnocancel(
+        choice = self._ask_choice(
             "导入方式",
-            f"现有 {existing_total} 条；导入 {imported_total} 条。" + chr(10) +
-            f"合并后 {merged_total} 条；覆盖后 {imported_total} 条。" + chr(10) + chr(10) +
-            "是：合并（保留现有）" + chr(10) + "否：覆盖（默认）" + chr(10) + "取消：不导入",
-            parent=self.root,
-            default=messagebox.NO,
+            f"现有 {existing_total} 条；导入 {imported_total} 条。"
+            f"合并后 {merged_total} 条；覆盖后 {imported_total} 条。",
+            [("覆盖（默认）", False), ("合并（保留现有）", True), ("取消", None)],
+            default=0,
         )
         if choice is None:
             return
@@ -3506,6 +3569,11 @@ class App:
             else:
                 messagebox.showerror("保存失败", "无法写入本地标记配置文件。", parent=win)
 
+        win.update_idletasks()
+        width, height = win.winfo_reqwidth(), win.winfo_reqheight()
+        x = self.root.winfo_rootx() + max(0, (self.root.winfo_width() - width) // 2)
+        y = self.root.winfo_rooty() + max(0, (self.root.winfo_height() - height) // 3)
+        win.geometry(f"+{x}+{y}")
         buttons = tk.Frame(win, bg="#f5f7fa")
         buttons.pack(fill="x", padx=12, pady=(4, 12))
         ttk.Button(buttons, text="取消", command=win.destroy, width=10).pack(side="right")
@@ -3651,19 +3719,21 @@ class App:
             return
         threads = self._selected_grid_threads()
         if len(self.last_threads) > 1 and not self.grid_thread_var.get().startswith("全部"):
-            scope = messagebox.askyesnocancel(
+            scope = self._ask_choice(
                 "导出帖子范围",
-                "是：当前表格范围\n否：全部帖子\n取消：不导出",
-                parent=self.root,
+                "选择这次导出的帖子范围。",
+                [("当前表格", True), ("全部帖子", False), ("取消", None)],
+                default=0,
             )
             if scope is None:
                 return
             threads = list(self.last_threads) if scope is False else threads
         if self._people_filter_active():
-            scope = messagebox.askyesnocancel(
+            scope = self._ask_choice(
                 "导出用户范围",
-                "是：当前筛选用户（默认）\n否：全部用户\n取消：不导出",
-                parent=self.root,
+                "当前有参与者筛选，选择导出哪些用户。",
+                [("当前筛选用户", True), ("全部用户", False), ("取消", None)],
+                default=0,
             )
             if scope is None:
                 return
@@ -4531,12 +4601,13 @@ class App:
         if not active:
             self.root.destroy()
             return
-        if not messagebox.askyesno(
+        choice = self._ask_choice(
             "任务仍在进行",
-            "停止任务并退出？" + chr(10) + "未导出的已完成部分可能不会保留。",
-            parent=self.root,
-            default=messagebox.NO,
-        ):
+            "未导出的已完成部分可能不会保留。",
+            [("继续", False), ("停止并退出", True)],
+            default=0,
+        )
+        if not choice:
             return
         self._closing = True
         self.stop_event.set()
