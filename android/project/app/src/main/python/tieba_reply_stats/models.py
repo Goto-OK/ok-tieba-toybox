@@ -119,8 +119,13 @@ class ThreadData:
                     "comment_count": 0,
                     "total": 0,
                     "first_floor": floor_no,
+                    "aliases": [],
                 }
                 buckets[key] = bucket
+            if name and name != bucket["name"]:
+                if bucket["name"] and bucket["name"] not in bucket["aliases"]:
+                    bucket["aliases"].append(bucket["name"])
+                bucket["name"] = name
             if not bucket["username"] and username:
                 bucket["username"] = username
             if not bucket["portrait"] and portrait:
@@ -160,6 +165,8 @@ class ThreadData:
             bucket["comment_count"] += 1
             bucket["total"] += 1
 
+        for bucket in buckets.values():
+            bucket["aliases"] = [name for name in bucket["aliases"] if name and name != bucket["name"]]
         stats = list(buckets.values())
         stats.sort(key=lambda item: (-item["total"], -item["floor_count"], item["first_floor"]))
         return stats

@@ -106,6 +106,7 @@ def export_user_report(
         ("抓取模式", mode),
         ("软件版本", VERSION),
         ("帖子范围", f"{len(threads)} 个帖子"),
+        ("关注增强", "开" if mode == "登录" else "关"),
         ("关注数据状态", "已加载" if profile.get("follow_loaded", True) else "未加载"),
         ("数据完整性", f"有警告 {sum(len(t.warnings) for t in threads)} 条" if any(t.warnings for t in threads) else "完整"),
         ("红绿灯状态", "已完成" if mark else "未启用"),

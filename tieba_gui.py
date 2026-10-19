@@ -182,6 +182,7 @@ class App:
         self.root.after(120, self._poll_queue)
         self.root.protocol("WM_DELETE_WINDOW", self._on_close)
         self.root.bind("<F1>", lambda _event: self._show_quick_guide())
+        self.root.bind("<Escape>", self._on_escape)
 
         saved = load_cookie()
         if saved:
@@ -288,6 +289,7 @@ class App:
             pady=6,
         )
         self.url_text.grid(row=0, column=0, sticky="ew")
+        self.url_text.bind("<Control-Return>", self._start_from_key)
         tk.Label(
             box,
             text="每行一个链接，也可以直接粘贴帖子 ID（如 1234567890）",
@@ -2162,7 +2164,7 @@ class App:
             os.makedirs(path, exist_ok=True)
             os.startfile(path)  # type: ignore[attr-defined]
         except OSError as error:
-            messagebox.showerror("打不开目录", str(error), parent=self.root)
+            messagebox.showerror("打不开目录", friendly_error(error), parent=self.root)
 
     def _copy_diagnostics(self) -> None:
         lines = [
@@ -2494,7 +2496,7 @@ class App:
         try:
             saved = write_backup(path, self.settings, self.blacklist)
         except Exception as error:  # noqa: BLE001
-            messagebox.showerror("备份失败", str(error), parent=self.root)
+            messagebox.showerror("备份失败", friendly_error(error), parent=self.root)
             return
         self._append_log(f"配置已备份：{saved}", "ok")
         messagebox.showinfo(
@@ -2514,7 +2516,7 @@ class App:
         try:
             data = read_backup(path)
         except ValueError as error:
-            messagebox.showerror("无法恢复", str(error), parent=self.root)
+            messagebox.showerror("无法恢复", friendly_error(error), parent=self.root)
             return
         if not messagebox.askyesno(
             "恢复配置",
@@ -2634,10 +2636,14 @@ class App:
                 parent=self.root,
             )
             return
+        existing_total = sum(len(value) for value in self.blacklist.values())
+        merged = merge_blacklists(self.blacklist, data)
+        merged_total = sum(len(value) for value in merged.values())
+        imported_total = total
         choice = messagebox.askyesnocancel(
             "导入方式",
-            f"读到：安全 {len(data['safe'])} 个、警告 {len(data['warn'])} 个、"
-            f"禁止 {len(data['ban'])} 个。" + chr(10) + chr(10) +
+            f"现有 {existing_total} 条；导入 {imported_total} 条。" + chr(10) +
+            f"合并后 {merged_total} 条；覆盖后 {imported_total} 条。" + chr(10) + chr(10) +
             "是：合并（保留现有）" + chr(10) + "否：覆盖（默认）" + chr(10) + "取消：不导入",
             parent=self.root,
             default=messagebox.NO,
@@ -3032,7 +3038,10 @@ class App:
         notes.append(["A", self._compare_label(0)])
         notes.append(["B", self._compare_label(1)])
         notes.append(["软件版本", VERSION])
-        warnings = sum(len(thread.warnings) for thread in self.last_threads)
+        notes.append(["生成时间", datetime.now().strftime("%Y-%m-%d %H:%M:%S")])
+        notes.append(["结果行数", str(len(rows))])
+        selected = [i for i, var in enumerate(getattr(self, "compare_vars", [])) if var.get()]
+        warnings = sum(len(self.last_threads[i].warnings) for i in selected)
         notes.append(["数据警告", str(warnings) if warnings else "无"])
         book.save(path)
         self._append_log(f"对比结果已导出：{path}", "ok")
@@ -3857,7 +3866,7 @@ class App:
                 mark=mark,
             )
         except Exception as error:  # noqa: BLE001
-            messagebox.showerror("导出失败", str(error), parent=self.root)
+            messagebox.showerror("导出失败", friendly_error(error), parent=self.root)
             return
         self._append_log(f"用户报告已导出：{xlsx}；{md}", "ok")
         messagebox.showinfo(
@@ -3877,7 +3886,7 @@ class App:
 
         if not profile.get("ok"):
             self.profile_status.configure(
-                text=f"查询失败：{profile.get('error') or '未知错误'}（可能是 Cookie 失效或对方设置了隐私）"
+                text="查询失败：" + friendly_error(RuntimeError(str(profile.get("error") or "未知错误")))
             )
             return
 
@@ -4099,6 +4108,10 @@ class App:
             pass
         self.status_var.set(f"已恢复 {len(threads)} 个帖子（{len(self._aggregate_users())} 位用户）")
 
+    def _start_from_key(self, _event=None):
+        self._on_start()
+        return "break"
+
     def _on_start(self) -> None:
         if self.running:
             return
@@ -4214,6 +4227,16 @@ class App:
         self.stop_event.set()
         self.stop_btn.configure(state="disabled")
         self.status_var.set("正在停止…")
+
+    def _on_escape(self, _event=None):
+        grab = self.root.grab_current()
+        if grab is not None and isinstance(grab, tk.Toplevel):
+            try:
+                grab.destroy()
+            except tk.TclError:
+                pass
+            return "break"
+        return None
 
     def _on_close(self) -> None:
         try:
@@ -4443,7 +4466,7 @@ class App:
         elif kind == "lookup_ready":
             _, profile, error = message
             if error:
-                self._set_lookup_text(f"查询失败：{error}")
+                self._set_lookup_text("查询失败：" + friendly_error(error))
                 self.lookup_status.configure(text="查询失败")
             else:
                 self._render_lookup(profile)
