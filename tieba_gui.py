@@ -163,6 +163,7 @@ class App:
         self.worker: threading.Thread | None = None
         self.running = False
         self.last_output: str | None = None
+        self.last_outputs: List[str] = []
         self.last_threads: list = []
         self._auto_filled = False
         self.blacklist = load_blacklist()
@@ -202,8 +203,8 @@ class App:
     # ------------------------------------------------------------------ UI
     def _build_ui(self) -> None:
         self.root.title(f"{APP_TITLE} v{VERSION}")
-        self.root.geometry("880x780")
-        self.root.minsize(840, 720)
+        self.root.geometry("980x820")
+        self.root.minsize(840, 680)
         self.root.configure(bg="#eef1f5")
 
         style = ttk.Style(self.root)
@@ -364,6 +365,7 @@ class App:
             body, text=" Cookie（被安全验证拦截时填写，粘贴一次后会自动记住） ", style="Card.TLabelframe"
         )
         cookie_box.grid(row=3, column=0, sticky="ew", pady=(10, 0))
+        self.cookie_box = cookie_box
         cookie_box.columnconfigure(0, weight=1)
         self.cookie_var = tk.StringVar()
         self.cookie_entry = ttk.Entry(cookie_box, textvariable=self.cookie_var, show="•", font=text_font)
@@ -550,13 +552,34 @@ class App:
         )
 
     def _open_result(self) -> None:
-        if self.last_output and os.path.isfile(self.last_output):
+        raw = self.last_outputs or ([self.last_output] if self.last_output else [])
+        paths = [path for path in raw if isinstance(path, str) and os.path.isfile(path)]
+        if not paths:
+            return
+        if len(paths) > 1:
+            choice = messagebox.askyesnocancel(
+                "打开拆分文件",
+                f"共 {len(paths)} 个文件。" + chr(10) +
+                "是：全部打开" + chr(10) +
+                "否：只打开第一个（默认）" + chr(10) +
+                "取消：不打开",
+                parent=self.root,
+                default=messagebox.NO,
+            )
+            if choice is None:
+                return
+            if not choice:
+                paths = paths[:1]
+        failed = []
+        for path in paths:
             try:
-                os.startfile(self.last_output)  # type: ignore[attr-defined]
-            except OSError as error:
-                messagebox.showerror(
-                    "打不开文件", f"{error}\n\n文件位置：{self.last_output}", parent=self.root
-                )
+                os.startfile(path)  # type: ignore[attr-defined]
+            except OSError:
+                failed.append(path)
+        if failed:
+            messagebox.showerror(
+                "部分文件打不开", "打不开：" + chr(10) + chr(10).join(failed), parent=self.root
+            )
 
     # ------------------------------------------------------- 参与者与查用户
     def _aggregate_users(self, threads=None):
@@ -1801,6 +1824,11 @@ class App:
                 widget.configure(state=state)
             except tk.TclError:
                 pass
+        if hasattr(self, "cookie_box"):
+            if login:
+                self.cookie_box.grid()
+            else:
+                self.cookie_box.grid_remove()
         if hasattr(self, "mode_hint"):
             self.mode_hint.configure(
                 text="完整楼中楼 · 关注列表 · 完整资料"
@@ -1904,7 +1932,7 @@ class App:
 
     def _build_settings_tab(self) -> None:
         style = ttk.Style(self.root)
-        style.layout("Side.TNotebook", [("Side.TNotebook.client", {"sticky": "nswe"})])
+        style.layout("Side.TNotebook", [("Notebook.client", {"sticky": "nswe"})])
         wrap = tk.Frame(self.tab_settings, bg="#eef1f5")
         wrap.pack(fill="both", expand=True, padx=6, pady=6)
         sidebar = tk.Frame(wrap, bg="#ffffff", width=118)
@@ -1939,6 +1967,8 @@ class App:
         self._build_general_tab()
         self._build_storage_tab()
         self._build_about_tab()
+        for tab_id in inner.tabs():
+            inner.hide(tab_id)
         for label in ("常规", "本地标记", "结果与存储", "使用说明", "关于 / 帮助"):
             self.settings_nav.insert("end", f"  {label}")
         self.settings_nav.bind("<<ListboxSelect>>", self._on_settings_nav)
@@ -1972,6 +2002,10 @@ class App:
         )
         self.settings_hint.pack(side="left", padx=(10, 0))
         self._build_help_tab()
+
+    def _hide_settings_tabs(self) -> None:
+        for tab_id in self.settings_inner.tabs():
+            self.settings_inner.hide(tab_id)
 
     def _on_settings_start_changed(self) -> None:
         self.settings["settings_start"] = "last" if self.settings_start_var.get() == "上次分类" else "general"
@@ -2120,7 +2154,9 @@ class App:
         save_settings(self.settings)
 
     def _clear_result(self) -> None:
-        if not messagebox.askyesno("清空最近结果", "删除本机保存的最近结果？", parent=self.root):
+        if not messagebox.askyesno(
+            "清空最近结果", "删除本机保存的最近结果？", parent=self.root, default=messagebox.NO
+        ):
             return
         clear_stored_result()
         self.last_threads = []
@@ -2135,7 +2171,9 @@ class App:
         if not files:
             messagebox.showinfo("没有旧文件", "没有需要清理的旧结果文件。", parent=self.root)
             return
-        if not messagebox.askyesno("清理旧结果", f"删除 {len(files)} 个旧结果文件？", parent=self.root):
+        if not messagebox.askyesno(
+            "清理旧结果", f"删除 {len(files)} 个旧结果文件？", parent=self.root, default=messagebox.NO
+        ):
             return
         for path in files:
             try:
@@ -2202,6 +2240,7 @@ class App:
             "恢复默认设置",
             "只重置设置，保留结果、本地标记和 BDUSS。继续？",
             parent=self.root,
+            default=messagebox.NO,
         ):
             return
         keep_onboarding = bool(self.settings.get("onboarding_seen"))
@@ -2277,7 +2316,7 @@ class App:
         self.risk_var = tk.BooleanVar(value=bool(self.settings.get("risk_enabled", False)))
         ttk.Checkbutton(
             risk_box,
-            text="启用本地标记与红绿灯（默认关闭）",
+            text="启用本地标记与红绿灯",
             variable=self.risk_var,
             command=self._on_risk_toggle,
         ).pack(anchor="w")
@@ -2308,7 +2347,9 @@ class App:
         mode_row = tk.Frame(enhance_box, bg="#eef1f5")
         mode_row.pack(anchor="w", padx=20, pady=(4, 0))
         tk.Label(mode_row, text="关注加载：", bg="#eef1f5", fg="#475569").pack(side="left")
-        self.follow_load_mode_var = tk.StringVar(value=self.settings.get("follow_load_mode", "auto"))
+        self.follow_load_mode_var = tk.StringVar(
+            value="手动" if self.settings.get("follow_load_mode") == "manual" else "自动"
+        )
         ttk.Combobox(
             mode_row,
             values=("自动", "手动"),
