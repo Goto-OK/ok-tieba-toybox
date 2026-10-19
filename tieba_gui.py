@@ -548,7 +548,15 @@ class App:
         buckets = {}
         for thread in self.last_threads:
             for item in thread.user_stats():
-                key = item["uid"] or f"name:{item['name']}"
+                key = (
+                    f"uid:{item['uid']}"
+                    if item.get("uid")
+                    else (
+                        f"portrait:{str(item.get('portrait') or '').split('?')[0]}"
+                        if item.get("portrait")
+                        else (f"name:{item['username']}" if item.get("username") else f"anon:{item['name']}")
+                    )
+                )
                 bucket = buckets.setdefault(
                     key,
                     {
@@ -2495,7 +2503,15 @@ class App:
         buckets = {}
         for thread in threads:
             for item in thread.user_stats():
-                key = item["uid"] or f"name:{item['name']}"
+                key = (
+                    f"uid:{item['uid']}"
+                    if item.get("uid")
+                    else (
+                        f"portrait:{str(item.get('portrait') or '').split('?')[0]}"
+                        if item.get("portrait")
+                        else (f"name:{item['username']}" if item.get("username") else f"anon:{item['name']}")
+                    )
+                )
                 bucket = buckets.setdefault(
                     key,
                     {
@@ -2763,7 +2779,8 @@ class App:
     def _add_grid_tab(
         self, notebook, title: str, headers: List[str], rows: List[list], urls: Optional[List[str]] = None
     ) -> None:
-        urls = list(urls or [])
+        all_rows = [list(row) for row in rows]
+        all_urls = list(urls or [])
         frame = tk.Frame(notebook)
         notebook.add(frame, text=f"  {title}  ")
         columns = [str(index) for index in range(len(headers))]
@@ -2774,14 +2791,12 @@ class App:
                 width = 240
             elif header in ("用户ID", "用户名"):
                 width = 110
+            elif header == "帖子":
+                width = 180
             else:
                 width = 80
-            tree.column(columns[index], width=width, anchor="w" if header in ("内容", "昵称") else "center")
+            tree.column(columns[index], width=width, anchor="w" if header in ("内容", "昵称", "帖子") else "center")
         tree.links = {}  # type: ignore[attr-defined]
-        for row_index, row in enumerate(rows):
-            values = ["" if value is None else value for value in row]
-            iid = tree.insert("", "end", values=values)
-            tree.links[iid] = urls[row_index] if row_index < len(urls) else ""  # type: ignore[attr-defined]
         yscroll = ttk.Scrollbar(frame, orient="vertical", command=tree.yview)
         xscroll = ttk.Scrollbar(frame, orient="horizontal", command=tree.xview)
         tree.configure(yscrollcommand=yscroll.set, xscrollcommand=xscroll.set)
@@ -2790,6 +2805,58 @@ class App:
         xscroll.grid(row=1, column=0, sticky="ew")
         frame.rowconfigure(0, weight=1)
         frame.columnconfigure(0, weight=1)
+
+        pager = tk.Frame(frame, bg="#ffffff")
+        pager.grid(row=2, column=0, columnspan=2, sticky="ew", pady=(4, 0))
+        page_label = tk.Label(pager, text="", bg="#ffffff", fg="#475569", font=("Microsoft YaHei UI", 9))
+        page_label.pack(side="left")
+        page_size_var = tk.StringVar(value=str(self.settings.get("page_size", 1000)))
+        ttk.Combobox(
+            pager,
+            values=("100", "500", "1000", "2000"),
+            textvariable=page_size_var,
+            width=6,
+            state="readonly",
+        ).pack(side="left", padx=(8, 0))
+        state: Dict[str, Any] = {"page": 0, "column": None, "reverse": False}
+
+        def page_size() -> int:
+            try:
+                return max(1, int(page_size_var.get()))
+            except ValueError:
+                return 1000
+
+        def render() -> None:
+            for item in tree.get_children():
+                tree.delete(item)
+            size = page_size()
+            pages = max(1, (len(all_rows) + size - 1) // size)
+            state["page"] = min(max(0, state["page"]), pages - 1)
+            start_index = state["page"] * size
+            for offset, row in enumerate(all_rows[start_index : start_index + size]):
+                values = ["" if value is None else value for value in row]
+                iid = tree.insert("", "end", values=values)
+                index = start_index + offset
+                tree.links[iid] = all_urls[index] if index < len(all_urls) else ""  # type: ignore[attr-defined]
+            page_label.configure(text=f"第 {state['page'] + 1}/{pages} 页，共 {len(all_rows)} 行")
+            for button, target in ((first_btn, 0), (prev_btn, state["page"] - 1), (next_btn, state["page"] + 1), (last_btn, pages - 1)):
+                button.configure(state="normal" if 0 <= target < pages and target != state["page"] else "disabled")
+            if pages <= 1:
+                pager.grid_remove()
+            else:
+                pager.grid()
+
+        def go(page: int) -> None:
+            state["page"] = page
+            render()
+
+        first_btn = ttk.Button(pager, text="首页", width=5, command=lambda: go(0))
+        prev_btn = ttk.Button(pager, text="上一页", width=6, command=lambda: go(state["page"] - 1))
+        next_btn = ttk.Button(pager, text="下一页", width=6, command=lambda: go(state["page"] + 1))
+        last_btn = ttk.Button(pager, text="末页", width=5, command=lambda: go(10**9))
+        for button in (first_btn, prev_btn, next_btn, last_btn):
+            button.pack(side="left", padx=(4, 0))
+        page_size_var.trace_add("write", lambda *_: go(0))
 
         def open_row(_event=None) -> None:
             selection = tree.selection()
@@ -2821,38 +2888,37 @@ class App:
 
         tree.bind("<Button-3>", show_menu)
 
-        sort_state: Dict[str, Any] = {"column": None, "reverse": False}
-
         def sort_by(column: str) -> None:
-            if sort_state["column"] == column:
-                sort_state["reverse"] = not sort_state["reverse"]
+            if state["column"] == column:
+                state["reverse"] = not state["reverse"]
             else:
-                sort_state["column"] = column
-                sort_state["reverse"] = False
-            reverse = bool(sort_state["reverse"])
+                state["column"] = column
+                state["reverse"] = False
+            reverse = bool(state["reverse"])
+            index = int(column)
 
-            def key(item):
-                value = tree.set(item, column)
+            def key(row):
+                value = row[index] if index < len(row) else ""
                 try:
                     return (0, float(value))
-                except ValueError:
+                except (TypeError, ValueError):
                     return (1, str(value))
 
-            items = list(tree.get_children())
-            items.sort(key=key, reverse=reverse)
-            for position, item in enumerate(items):
-                tree.move(item, "", position)
-            for index, header in enumerate(headers):
+            all_rows.sort(key=key, reverse=reverse)
+            state["page"] = 0
+            render()
+            for position, header in enumerate(headers):
                 arrow = ""
-                if columns[index] == column:
+                if columns[position] == column:
                     arrow = " ▼" if reverse else " ▲"
-                tree.heading(columns[index], text=header + arrow)
+                tree.heading(columns[position], text=header + arrow)
 
         def make_command(column: str) -> Callable[[], None]:
             return lambda: sort_by(column)
 
         for index, header in enumerate(headers):
             tree.heading(columns[index], command=make_command(columns[index]))
+        render()
 
     def _open_blacklist_dialog(self) -> None:
         win = tk.Toplevel(self.root)
@@ -2945,6 +3011,23 @@ class App:
             result.append(replace(thread, floors=floors, comments=comments))
         return result
 
+    def _filter_summary(self) -> str:
+        if not self._people_filter_active():
+            return "无"
+        parts = []
+        keyword = self.people_keyword_var.get().strip()
+        if keyword:
+            parts.append(f"关键词「{keyword}」")
+        level = self.people_level_var.get()
+        if level and level not in ("全部", "无等级"):
+            parts.append(f"等级 {level}")
+        elif level == "无等级":
+            parts.append("等级 无")
+        mark = self.people_mark_var.get()
+        if mark and mark != "全部":
+            parts.append(f"标记 {mark}")
+        return "；".join(parts) or "无"
+
     def _export_now(self) -> None:
         if not self.last_threads:
             messagebox.showinfo("还没有数据", "先点「开始统计」抓一个帖子。", parent=self.root)
@@ -2987,8 +3070,26 @@ class App:
         )
         if not path:
             return
+        visible = self._visible_people()
+        scope_user = "当前筛选用户" if self._people_filter_active() else "全部用户"
+        warnings = [f"{thread.meta.title or thread.meta.tid}：{len(thread.warnings)} 条"
+                    for thread in threads if thread.warnings]
+        empty = [thread.meta.title or thread.meta.tid for thread in threads if not (thread.floors or thread.comments)]
+        meta = {
+            "软件版本": VERSION,
+            "帖子范围": "当前表格范围" if len(threads) < len(self.last_threads) else "全部帖子",
+            "帖子数": str(len(threads)),
+            "用户范围": scope_user,
+            "筛选后人数": str(len(visible)),
+            "实际导出用户数": str(len(visible) if scope_user == "当前筛选用户" else len(self.people_users)),
+            "筛选条件": self._filter_summary(),
+            "关注增强": "开" if self.settings.get("follow_enhance") else "关",
+            "包含关注": "是" if self.include_follows_var.get() else "否",
+            "数据警告": "；".join(warnings) if warnings else "无",
+            "空帖子": "；".join(empty) if empty else "无",
+        }
         try:
-            export_workbook(path, threads, include_op=getattr(self, "last_include_op", True))
+            export_workbook(path, threads, include_op=getattr(self, "last_include_op", True), meta=meta)
         except Exception as error:  # noqa: BLE001
             messagebox.showerror("导出失败", str(error), parent=self.root)
             return

@@ -255,6 +255,7 @@ def export_workbook(
     threads: List[ThreadData],
     generated_at: Optional[datetime] = None,
     include_op: bool = True,
+    meta: Optional[Dict[str, str]] = None,
 ) -> str:
     """写出 xlsx，返回文件路径。"""
     if not threads:
@@ -274,8 +275,30 @@ def export_workbook(
         prefix = f"{index}·" if len(threads) > 1 else ""
         _write_thread(workbook, thread, prefix, generated_at, include_op)
 
+    if meta:
+        _write_export_notes(workbook, meta, generated_at)
     workbook.save(path)
     return path
+
+
+def _write_export_notes(workbook: Workbook, meta: Dict[str, str], generated_at: datetime) -> None:
+    sheet = workbook.create_sheet("导出说明")
+    sheet.sheet_properties.tabColor = "7F7F7F"
+    sheet.column_dimensions["A"].width = 18
+    sheet.column_dimensions["B"].width = 80
+    rows = [("生成时间", generated_at.strftime("%Y-%m-%d %H:%M:%S"))]
+    rows.extend((str(key), str(value)) for key, value in meta.items())
+    for index, (key, value) in enumerate(rows, start=1):
+        cell_key = sheet.cell(row=index, column=1, value=key)
+        cell_key.font = BOLD_FONT
+        cell_key.fill = PatternFill("solid", fgColor="EAEFF7")
+        cell_key.border = BORDER
+        cell = sheet.cell(row=index, column=2)
+        set_text(cell, value)
+        cell.font = BODY_FONT
+        cell.border = BORDER
+        cell.alignment = Alignment(wrap_text=True, vertical="top", horizontal="left")
+    sheet.freeze_panes = "A1"
 
 
 def _write_thread(
