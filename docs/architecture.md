@@ -193,6 +193,23 @@ profile（查用户或参与者缓存）
 - 不支持 Cookie/快照/历史；
 - 校验失败不覆盖现有配置。
 
+### 3.10 吧务删除内容（只读）
+
+```text
+吧名 + 用户（uid/username/nickname）
+  → 解析 uid
+  → get_recovers(forum, uid, pn)
+  → 列表（Recover：text/tid/pid/user/op_time/content_type/is_hide）
+  → 选中一条
+  → get_recover_info(forum, tid, pid)
+  → 标题 + 正文详情
+```
+
+- 只用只读接口；
+- 不调用 `recover` / `del_post` / `del_thread`；
+- STOKEN 只存在凭据层，不进入日志/导出；
+- 无权限、缺 STOKEN、过期分别提示。
+
 ## 4. 平台差异
 
 | 能力 | Windows | Android |

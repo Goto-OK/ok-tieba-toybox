@@ -61,6 +61,35 @@
   - `tid` / `pid`
   - `user` 作者
 
+## 2.4 STOKEN 是什么、在哪找
+
+### 是什么
+
+- `BDUSS`：贴吧登录态的主 Cookie，证明“你是这个账号”；
+- `STOKEN`：百度账号的安全令牌，用于吧务后台等敏感操作；
+- 两者经常一起出现，但 **STOKEN 权限更高、更敏感**；
+- 它不是独立的 API Key，就是 Cookie 里的一个字段：`STOKEN=...`。
+
+### 在哪找（桌面浏览器）
+
+1. 用 Chrome / Edge 登录 `tieba.baidu.com`；
+2. 按 `F12` 打开开发者工具；
+3. 选 `Application`（应用）→ `Storage` → `Cookies` → `https://tieba.baidu.com`；
+4. 在列表里找 `STOKEN`，复制它的 `Value`。
+
+如果列表里没有：
+
+1. 切到 `Network`（网络）→ 刷新页面；
+2. 点第一个 `tieba.baidu.com` 请求；
+3. 看 `Request Headers` → `Cookie`，里面找 `STOKEN=...`。
+
+注意：
+
+- 有些账号/登录态可能没有 STOKEN；没有就重新登录一次再试；
+- STOKEN 会过期，重新登录会变；
+- **不要截图、不要发聊天、不要提交到仓库**；
+- 软件里应单独保存（DPAPI），且不进入配置备份。
+
 ## 3. 限制与风险
 
 - **只有吧务能用**：只能查自己管理的吧；
