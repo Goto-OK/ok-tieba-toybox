@@ -12,6 +12,8 @@ venv/
 # Local configuration / secrets
 pip-unpack-*/
 pip-ephem-wheel-cache-*/
+pip-build-tracker-*/
+pip-install-*/
 .env
 cookie*.json
 *.cookie

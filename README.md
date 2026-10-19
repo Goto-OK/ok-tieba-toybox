@@ -157,6 +157,8 @@ python scripts/sync_android.py
 - [发布流程](docs/release.md)
 - [开发规范](docs/standards.md)
 - [参与开发](CONTRIBUTING.md)
+- [规范总览](docs/spec-summary.md)
+- [代码地图](docs/code-map.md)
 - [待办与缺口](docs/backlog.md)
 - [更新日志](CHANGELOG.md)
 - [用户使用说明](使用说明.txt)
