@@ -9,25 +9,45 @@ def _use_tmp(monkeypatch, tmp_path: Path):
     monkeypatch.setattr(settings_module, "SETTINGS_PATH", str(tmp_path / "settings.json"))
 
 
-def test_mode_defaults_to_guest(monkeypatch, tmp_path):
+def test_defaults(monkeypatch, tmp_path):
     _use_tmp(monkeypatch, tmp_path)
     loaded = settings_module.load_settings()
     assert loaded["mode"] == "guest"
-    assert loaded["mode_chosen"] is False
-    assert loaded["risk_enabled"] is False
-
-
-def test_mode_roundtrip(monkeypatch, tmp_path):
-    _use_tmp(monkeypatch, tmp_path)
-    assert settings_module.save_settings({"mode": "login", "mode_chosen": True, "risk_enabled": True})
-    loaded = settings_module.load_settings()
-    assert loaded["mode"] == "login"
-    assert loaded["mode_chosen"] is True
     assert loaded["risk_enabled"] is True
-    assert json.loads((tmp_path / "settings.json").read_text(encoding="utf-8"))["mode"] == "login"
+    assert loaded["follow_enhance"] is False
+    assert loaded["page_size"] == 1000
 
 
-def test_invalid_mode_falls_back(monkeypatch, tmp_path):
+def test_roundtrip(monkeypatch, tmp_path):
     _use_tmp(monkeypatch, tmp_path)
-    (tmp_path / "settings.json").write_text('{"mode": "bogus"}', encoding="utf-8")
-    assert settings_module.load_settings()["mode"] == "guest"
+    assert settings_module.save_settings(
+        {
+            "mode": "login",
+            "follow_enhance": True,
+            "risk_enabled": False,
+            "batch_concurrency": 3,
+            "page_size": 500,
+            "proxy_mode": "custom",
+            "proxy_url": "http://127.0.0.1:8080",
+        }
+    )
+    loaded = settings_module.load_settings()
+    assert loaded["follow_enhance"] is True
+    assert loaded["risk_enabled"] is False
+    assert loaded["batch_concurrency"] == 3
+    assert loaded["page_size"] == 500
+    assert loaded["proxy_mode"] == "custom"
+    assert json.loads((tmp_path / "settings.json").read_text(encoding="utf-8"))["proxy_url"] == "http://127.0.0.1:8080"
+
+
+def test_invalid_values_fall_back(monkeypatch, tmp_path):
+    _use_tmp(monkeypatch, tmp_path)
+    (tmp_path / "settings.json").write_text(
+        '{"mode": "bogus", "batch_concurrency": 9, "page_size": 7, "risk_enabled": "false"}',
+        encoding="utf-8",
+    )
+    loaded = settings_module.load_settings()
+    assert loaded["mode"] == "guest"
+    assert loaded["batch_concurrency"] == 1
+    assert loaded["page_size"] == 1000
+    assert loaded["risk_enabled"] is False

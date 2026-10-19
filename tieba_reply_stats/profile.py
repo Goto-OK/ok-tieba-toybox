@@ -431,6 +431,7 @@ def fetch_user_profile(
     start_date: str = "",
     end_date: str = "",
     prefer: str = "end",
+    load_follow: bool = True,
 ) -> Dict:
     """组合查询：关注的吧（含等级）+ 最近发言 + 本吧等级。"""
     pb = profile_pb.fetch_profile(fetcher, user_id) if user_id else {}
@@ -438,7 +439,10 @@ def fetch_user_profile(
         username = pb["username"]
     if not portrait:
         portrait = pb.get("portrait") or fetch_portrait(fetcher, username)
-    follow = fetch_follow_forums(fetcher, user_id)
+    if load_follow:
+        follow = fetch_follow_forums(fetcher, user_id)
+    else:
+        follow = {"forums": [], "private": False, "error": ""}
     posts = (
         fetch_user_posts(fetcher, portrait, post_count, start_date, end_date, prefer, uid=user_id)
         if portrait or user_id
@@ -457,7 +461,7 @@ def fetch_user_profile(
 
     # 关注列表被隐藏时，用面板“等级头衔吧” + 客户端 likeForum 恢复一部分
     hidden_forums = []
-    if not follow.get("forums"):
+    if load_follow and not follow.get("forums"):
         merged: Dict[str, Dict] = {}
         for forum in (panel.get("forums") or []) + (pb.get("forums") or []):
             name = forum.get("name") or ""
@@ -486,6 +490,7 @@ def fetch_user_profile(
         "followed_forums": follow.get("forums") or [],
         "followed_private": follow.get("private", False),
         "follow_error": follow.get("error", ""),
+        "follow_loaded": bool(load_follow),
         "hidden_forums": hidden_forums,
         "like_forum": pb.get("forums") or [],
         "priv_like": pb.get("priv_like"),

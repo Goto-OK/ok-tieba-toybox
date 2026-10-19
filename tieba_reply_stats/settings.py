@@ -1,4 +1,4 @@
-"""应用设置（通用选项卡），保存在 %APPDATA%\\TiebaReplyStats\\settings.json。"""
+r"""应用设置，保存在 %APPDATA%\TiebaReplyStats\settings.json。"""
 
 from __future__ import annotations
 
@@ -13,10 +13,52 @@ DEFAULTS: Dict[str, Any] = {
     "color_people": True,
     "color_forum": True,
     "color_posts": True,
-    "mode": "guest",  # guest / login
-    "mode_chosen": False,  # 是否已完成首次选择
-    "risk_enabled": False,  # 本地标记 / 红绿灯，默认关闭
+    "mode": "guest",  # 兼容旧字段；界面不再选择
+    "mode_chosen": True,
+    "follow_enhance": False,
+    "follow_load_mode": "auto",  # auto / manual
+    "remember_bduss": True,
+    "risk_enabled": True,
+    "save_result": True,
+    "restore_mode": "auto",  # auto / ask
+    "encrypt_result": False,
+    "auto_refresh_old": False,
+    "removed_thread_action": "keep",  # keep / remove / ask
+    "batch_concurrency": 1,
+    "proxy_mode": "system",  # system / none / custom
+    "proxy_url": "",
+    "log_enabled": False,
+    "page_size": 1000,
+    "settings_start": "general",  # general / last
+    "onboarding_seen": False,
+    "window_geometry": "",
 }
+
+_CHOICES = {
+    "mode": ("guest", "login"),
+    "follow_load_mode": ("auto", "manual"),
+    "restore_mode": ("auto", "ask"),
+    "removed_thread_action": ("keep", "remove", "ask"),
+    "proxy_mode": ("system", "none", "custom"),
+    "settings_start": ("general", "last"),
+}
+
+
+def _coerce(key: str, value: Any, default: Any) -> Any:
+    if key in _CHOICES:
+        return value if value in _CHOICES[key] else default
+    if isinstance(default, bool):
+        if isinstance(value, str):
+            return value.strip().lower() in ("1", "true", "yes", "on")
+        return bool(value)
+    if isinstance(default, int):
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return default
+    if isinstance(default, str):
+        return value if isinstance(value, str) else str(value)
+    return value
 
 
 def load_settings() -> Dict[str, Any]:
@@ -28,24 +70,24 @@ def load_settings() -> Dict[str, Any]:
         data = {}
     result = dict(DEFAULTS)
     if isinstance(data, dict):
-        for key in DEFAULTS:
-            if key not in data:
-                continue
-            if key == "mode":
-                result[key] = data[key] if data[key] in ("guest", "login") else "guest"
-            else:
-                result[key] = bool(data[key])
+        for key, default in DEFAULTS.items():
+            if key in data:
+                result[key] = _coerce(key, data[key], default)
+    if result["batch_concurrency"] not in (1, 2, 3):
+        result["batch_concurrency"] = 1
+    if result["page_size"] not in (100, 500, 1000, 2000):
+        result["page_size"] = 1000
     return result
 
 
 def save_settings(data: Dict[str, Any]) -> bool:
     payload: Dict[str, Any] = {}
     for key, default in DEFAULTS.items():
-        value = data.get(key, default)
-        if key == "mode":
-            payload[key] = value if value in ("guest", "login") else "guest"
-        else:
-            payload[key] = bool(value)
+        payload[key] = _coerce(key, data.get(key, default), default)
+    if payload["batch_concurrency"] not in (1, 2, 3):
+        payload["batch_concurrency"] = 1
+    if payload["page_size"] not in (100, 500, 1000, 2000):
+        payload["page_size"] = 1000
     try:
         os.makedirs(APP_DIR, exist_ok=True)
         with open(SETTINGS_PATH, "w", encoding="utf-8") as handle:

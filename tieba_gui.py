@@ -10,13 +10,14 @@ from __future__ import annotations
 import os
 import queue
 import re
+import shutil
 import sys
 import threading
 import tkinter as tk
 import traceback
 import webbrowser
 from datetime import datetime
-from tkinter import filedialog, messagebox, ttk
+from tkinter import filedialog, messagebox, simpledialog, ttk
 from typing import Any, Callable, Dict, List, Optional
 from urllib.parse import quote
 
@@ -51,7 +52,19 @@ from tieba_reply_stats.follow_probe import candidate_bars, probe_forums
 from tieba_reply_stats.pbapi import fill_thread_levels
 from tieba_reply_stats.profile import fetch_user_profile, resolve_user
 from tieba_reply_stats.report import export_user_report, report_base
-from tieba_reply_stats.settings import load_settings, save_settings
+from tieba_reply_stats.settings import APP_DIR, SETTINGS_PATH, load_settings, save_settings
+from tieba_reply_stats.storage import (
+    IncompatibleResult,
+    archive_incompatible,
+    load_threads,
+    save_threads,
+)
+from tieba_reply_stats.storage import (
+    clear as clear_stored_result,
+)
+from tieba_reply_stats.storage import (
+    old_files as stored_old_files,
+)
 from tieba_reply_stats.version import __version__ as VERSION
 
 APP_TITLE = "贴吧楼层回复统计"
@@ -162,9 +175,15 @@ class App:
         if saved:
             self.cookie_var.set(saved)
             self._append_log("已自动填入上次保存的 Cookie（如果失效，请重新粘贴一次）。", "muted")
+        if self.settings.get("follow_enhance") and parse_cookie_input(self.cookie_var.get()).get("BDUSS"):
+            self.mode_var.set("login")
+        else:
+            self.settings["follow_enhance"] = False
+            self.mode_var.set("guest")
         self._apply_mode_ui()
         self._apply_risk_ui()
-        self.root.after(250, self._maybe_choose_mode)
+        self._restore_last_result()
+        self.root.after(300, self._maybe_onboarding)
 
     # ------------------------------------------------------------------ UI
     def _build_ui(self) -> None:
@@ -230,8 +249,6 @@ class App:
         self.post_nb.add(self.tab_fetch, text="  抓取  ")
         self.post_nb.add(self.tab_grid, text="  表格查看  ")
         self.post_nb.add(self.tab_people, text="  参与者  ")
-
-        self._build_mode_bar(self.tab_fetch)
 
         body = tk.Frame(self.tab_fetch, bg="#eef1f5", padx=16, pady=12)
         body.pack(fill="both", expand=True)
@@ -607,6 +624,14 @@ class App:
         self.post_end_var.set(self._group_date(self.post_end_parts))
         self.batch_btn = ttk.Button(bar, text="一键红绿灯", command=self._batch_refresh_marks, width=10)
         self.batch_btn.pack(side="left", padx=(8, 0))
+        self.include_follows_var = tk.BooleanVar(value=False)
+        self.include_follows_check = ttk.Checkbutton(
+            bar,
+            text="包含关注（慢）",
+            variable=self.include_follows_var,
+            command=self._on_include_follows_changed,
+        )
+        self.include_follows_check.pack(side="left", padx=(6, 0))
         self._batch_running = False
         self._batch_cancel = False
         ttk.Button(bar, text="刷新", command=self._refresh_people, width=6).pack(side="left", padx=(8, 0))
@@ -780,6 +805,9 @@ class App:
         )
         self.profile_report_btn = ttk.Button(
             forum_frame, text="导出此人报告", command=self._export_profile_report, width=16
+        )
+        self.profile_follow_btn = ttk.Button(
+            forum_frame, text="加载公开关注", command=self._reload_profile_follow, width=16
         )
         self._profile_forum_names: Dict[str, str] = {}
 
@@ -1030,6 +1058,29 @@ class App:
 
         threading.Thread(target=worker, daemon=True).start()
 
+    def _insert_emoji_code(self) -> None:
+        value = simpledialog.askstring(
+            "插入 Emoji 代码",
+            "输入十六进制码点，例如 1F600 或 2764：",
+            parent=self.root,
+        )
+        if not value:
+            return
+        text = value.strip().upper().replace("U+", "").replace("[", "").replace("]", "")
+        try:
+            code = int(text, 16)
+            if not (0 <= code <= 0x10FFFF):
+                raise ValueError
+        except ValueError:
+            messagebox.showerror("Emoji 代码无效", "请输入 0~10FFFF 的十六进制码点。", parent=self.root)
+            return
+        code_text = f"[U+{code:04X}]"
+        widget = self.root.focus_get()
+        if isinstance(widget, ttk.Entry) or isinstance(widget, tk.Entry):
+            widget.insert("insert", code_text)
+        else:
+            self.lookup_query_var.set(self.lookup_query_var.get() + code_text)
+
     def _build_lookup_tab(self) -> None:
         bar = tk.Frame(self.tab_lookup, bg="#ffffff", padx=12, pady=8)
         bar.pack(fill="x")
@@ -1051,6 +1102,9 @@ class App:
         entry = ttk.Entry(bar, textvariable=self.lookup_query_var, width=24, font=("Microsoft YaHei UI", 10))
         entry.pack(side="left", padx=(4, 0))
         entry.bind("<Return>", lambda _event: self._on_lookup())
+        ttk.Button(bar, text="Emoji 代码", command=self._insert_emoji_code, width=10).pack(
+            side="left", padx=(6, 0)
+        )
         tk.Label(bar, text="  条数：", bg="#ffffff", fg="#475569", font=("Microsoft YaHei UI", 9)).pack(
             side="left"
         )
@@ -1549,14 +1603,40 @@ class App:
             except tk.TclError:
                 pass
         if hasattr(self, "batch_btn"):
-            text = "一键红绿灯"
-            if enabled and self.mode_var.get() == "guest":
-                text = "一键红绿灯（仅发言）"
-            self.batch_btn.configure(state="normal" if enabled else "disabled", text=text)
+            self.batch_btn.configure(state="normal" if enabled else "disabled", text="一键红绿灯")
+        if hasattr(self, "include_follows_check"):
+            allow_follow = enabled and bool(self.settings.get("follow_enhance"))
+            self.include_follows_check.configure(state="normal" if allow_follow else "disabled")
+            if not allow_follow:
+                self.include_follows_var.set(False)
         if hasattr(self, "people_mark_box"):
             self.people_mark_box.configure(state="readonly" if enabled else "disabled")
             if not enabled:
                 self.people_mark_var.set("全部")
+
+    def _on_include_follows_changed(self) -> None:
+        if self.include_follows_var.get() and not self.settings.get("follow_enhance"):
+            self.include_follows_var.set(False)
+
+    def _on_follow_toggle(self) -> None:
+        enabled = bool(self.follow_enhance_var.get())
+        self.settings["follow_enhance"] = enabled
+        if enabled:
+            self._set_mode("login")
+            if not parse_cookie_input(self.cookie_var.get()).get("BDUSS"):
+                messagebox.showinfo(
+                    "需要 BDUSS",
+                    "关注增强需要 BDUSS 或整段 Cookie。请在抓取页粘贴后再开始。",
+                    parent=self.root,
+                )
+        else:
+            self._set_mode("guest")
+        save_settings(self.settings)
+
+    def _on_follow_load_mode_changed(self) -> None:
+        value = "manual" if self.follow_load_mode_var.get() == "手动" else "auto"
+        self.settings["follow_load_mode"] = value
+        save_settings(self.settings)
 
     def _on_risk_toggle(self) -> None:
         enabled = bool(self.risk_var.get())
@@ -1716,10 +1796,16 @@ class App:
         self.tab_general = tk.Frame(inner, bg="#eef1f5")
         self.tab_blacklist = tk.Frame(inner, bg="#eef1f5")
         self.tab_help = tk.Frame(inner, bg="#eef1f5")
+        self.tab_storage = tk.Frame(inner, bg="#eef1f5")
+        self.tab_about = tk.Frame(inner, bg="#eef1f5")
         inner.add(self.tab_general, text="  通用  ")
         inner.add(self.tab_blacklist, text="  本地标记  ")
+        inner.add(self.tab_storage, text="  结果与存储  ")
         inner.add(self.tab_help, text="  使用说明  ")
+        inner.add(self.tab_about, text="  关于 / 帮助  ")
         self._build_general_tab()
+        self._build_storage_tab()
+        self._build_about_tab()
 
         box = tk.Frame(self.tab_blacklist, bg="#eef1f5", padx=16, pady=12)
         box.pack(fill="both", expand=True)
@@ -1749,6 +1835,274 @@ class App:
         self.settings_hint.pack(side="left", padx=(10, 0))
         self._build_help_tab()
 
+    def _build_storage_tab(self) -> None:
+        box = tk.Frame(self.tab_storage, bg="#eef1f5", padx=16, pady=12)
+        box.pack(fill="both", expand=True)
+
+        self.save_result_var = tk.BooleanVar(value=bool(self.settings.get("save_result", True)))
+        ttk.Checkbutton(
+            box,
+            text="保存最近结果（默认开启）",
+            variable=self.save_result_var,
+            command=self._on_save_result_toggle,
+        ).pack(anchor="w", pady=3)
+        self.encrypt_var = tk.BooleanVar(value=bool(self.settings.get("encrypt_result", False)))
+        ttk.Checkbutton(
+            box,
+            text="加密保存结果（DPAPI，仅当前 Windows 用户可读）",
+            variable=self.encrypt_var,
+            command=self._on_encrypt_toggle,
+        ).pack(anchor="w", pady=3)
+        self.log_enabled_var = tk.BooleanVar(value=bool(self.settings.get("log_enabled", False)))
+        ttk.Checkbutton(
+            box,
+            text="保存运行日志（默认关闭，不含 Cookie/正文）",
+            variable=self.log_enabled_var,
+            command=self._on_log_toggle,
+        ).pack(anchor="w", pady=3)
+
+        row = tk.Frame(box, bg="#eef1f5")
+        row.pack(anchor="w", pady=(8, 0))
+        tk.Label(row, text="启动时恢复：", bg="#eef1f5", fg="#475569").pack(side="left")
+        self.restore_mode_var = tk.StringVar(
+            value="询问" if self.settings.get("restore_mode") == "ask" else "自动"
+        )
+        ttk.Combobox(
+            row,
+            values=("自动", "询问"),
+            textvariable=self.restore_mode_var,
+            width=6,
+            state="readonly",
+        ).pack(side="left")
+        self.restore_mode_var.trace_add("write", lambda *_: self._on_restore_mode_changed())
+
+        ttk.Button(box, text="清空最近结果", command=self._clear_result).pack(anchor="w", pady=(12, 0))
+        ttk.Button(box, text="打开数据目录", command=lambda: self._open_folder(APP_DIR)).pack(
+            anchor="w", pady=(6, 0)
+        )
+        tk.Label(
+            box,
+            text="结果只保存最近一次；不保存 Cookie 和本地标记。",
+            bg="#eef1f5",
+            fg="#8a94a6",
+            font=("Microsoft YaHei UI", 8),
+        ).pack(anchor="w", pady=(8, 0))
+
+    def _build_about_tab(self) -> None:
+        box = tk.Frame(self.tab_about, bg="#eef1f5", padx=16, pady=12)
+        box.pack(fill="both", expand=True)
+        tk.Label(
+            box,
+            text=f"{APP_TITLE} v{VERSION}",
+            bg="#eef1f5",
+            fg="#1F4E79",
+            font=("Microsoft YaHei UI", 12, "bold"),
+        ).pack(anchor="w")
+        tk.Label(
+            box,
+            text=f"数据目录：{APP_DIR}",
+            bg="#eef1f5",
+            fg="#475569",
+            font=("Microsoft YaHei UI", 8),
+            wraplength=760,
+            justify="left",
+        ).pack(anchor="w", pady=(6, 0))
+        tk.Label(
+            box,
+            text="临时目录：%TEMP%\\TiebaReplyStats",
+            bg="#eef1f5",
+            fg="#475569",
+            font=("Microsoft YaHei UI", 8),
+        ).pack(anchor="w")
+        self.old_files_label = tk.Label(
+            box, text="", bg="#eef1f5", fg="#8a94a6", font=("Microsoft YaHei UI", 8)
+        )
+        self.old_files_label.pack(anchor="w", pady=(4, 0))
+        self._refresh_old_files_label()
+
+        row = tk.Frame(box, bg="#eef1f5")
+        row.pack(anchor="w", pady=(10, 0))
+        ttk.Button(row, text="打开数据目录", command=lambda: self._open_folder(APP_DIR)).pack(side="left")
+        ttk.Button(row, text="查看快速说明", command=self._show_quick_guide).pack(side="left", padx=(6, 0))
+        ttk.Button(row, text="复制诊断信息", command=self._copy_diagnostics).pack(side="left", padx=(6, 0))
+
+        ttk.Button(box, text="清理旧结果文件", command=self._cleanup_old_results).pack(anchor="w", pady=(10, 0))
+        ttk.Button(box, text="恢复默认设置", command=self._restore_defaults).pack(anchor="w", pady=(6, 0))
+        ttk.Button(box, text="清空所有本地数据", command=self._clear_all_data).pack(anchor="w", pady=(6, 0))
+
+        tk.Label(
+            box,
+            text="第三方组件：Python / PyInstaller / lxml / openpyxl / Tcl-Tk，各自按其许可证分发。",
+            bg="#eef1f5",
+            fg="#8a94a6",
+            font=("Microsoft YaHei UI", 8),
+            wraplength=760,
+            justify="left",
+        ).pack(anchor="w", pady=(12, 0))
+
+    def _on_save_result_toggle(self) -> None:
+        self.settings["save_result"] = bool(self.save_result_var.get())
+        save_settings(self.settings)
+        if not self.save_result_var.get():
+            clear_stored_result()
+
+    def _on_encrypt_toggle(self) -> None:
+        self.settings["encrypt_result"] = bool(self.encrypt_var.get())
+        save_settings(self.settings)
+        if self.last_threads:
+            self._persist_result(self.last_threads)
+
+    def _on_log_toggle(self) -> None:
+        self.settings["log_enabled"] = bool(self.log_enabled_var.get())
+        save_settings(self.settings)
+
+    def _on_restore_mode_changed(self) -> None:
+        self.settings["restore_mode"] = "ask" if self.restore_mode_var.get() == "询问" else "auto"
+        save_settings(self.settings)
+
+    def _clear_result(self) -> None:
+        if not messagebox.askyesno("清空最近结果", "删除本机保存的最近结果？", parent=self.root):
+            return
+        clear_stored_result()
+        self.last_threads = []
+        self.last_output = None
+        self.open_btn.configure(state="disabled")
+        self._refresh_people()
+        self._refresh_grid()
+        self._append_log("最近结果已清空。", "muted")
+
+    def _cleanup_old_results(self) -> None:
+        files = stored_old_files()
+        if not files:
+            messagebox.showinfo("没有旧文件", "没有需要清理的旧结果文件。", parent=self.root)
+            return
+        if not messagebox.askyesno("清理旧结果", f"删除 {len(files)} 个旧结果文件？", parent=self.root):
+            return
+        for path in files:
+            try:
+                os.remove(path)
+            except OSError:
+                pass
+        self._refresh_old_files_label()
+        self._append_log(f"已清理旧结果文件：{len(files)} 个", "muted")
+
+    def _refresh_old_files_label(self) -> None:
+        if not hasattr(self, "old_files_label"):
+            return
+        files = stored_old_files()
+        size = 0
+        for path in files:
+            try:
+                size += os.path.getsize(path)
+            except OSError:
+                pass
+        self.old_files_label.configure(
+            text=f"旧不兼容结果：{len(files)} 个，{size / 1024 / 1024:.1f} MB"
+        )
+
+    def _open_folder(self, path: str) -> None:
+        try:
+            os.makedirs(path, exist_ok=True)
+            os.startfile(path)  # type: ignore[attr-defined]
+        except OSError as error:
+            messagebox.showerror("打不开目录", str(error), parent=self.root)
+
+    def _copy_diagnostics(self) -> None:
+        lines = [
+            f"version={VERSION}",
+            f"data_dir={APP_DIR}",
+            f"follow_enhance={bool(self.settings.get('follow_enhance'))}",
+            f"save_result={bool(self.settings.get('save_result'))}",
+            f"encrypt_result={bool(self.settings.get('encrypt_result'))}",
+            f"risk_enabled={bool(self.settings.get('risk_enabled'))}",
+            f"page_size={self.settings.get('page_size')}",
+        ]
+        self.root.clipboard_clear()
+        self.root.clipboard_append(chr(10).join(lines))
+        messagebox.showinfo("已复制", "诊断信息已复制（不含 Cookie/昵称/正文）。", parent=self.root)
+
+    def _show_quick_guide(self) -> None:
+        messagebox.showinfo(
+            "快速说明",
+            "1. 默认匿名，不需要 Cookie。\n"
+            "2. 红绿灯和本地标记默认开启，只记录在本机。\n"
+            "3. 关注增强默认关闭，需要时在设置里开启。\n"
+            "4. 仅用于本地记录，请勿用于挂人、骚扰或公开曝光。",
+            parent=self.root,
+        )
+
+    def _maybe_onboarding(self) -> None:
+        if self.settings.get("onboarding_seen"):
+            return
+        self.settings["onboarding_seen"] = True
+        save_settings(self.settings)
+        self._show_quick_guide()
+
+    def _restore_defaults(self) -> None:
+        if not messagebox.askyesno(
+            "恢复默认设置",
+            "只重置设置，保留结果、本地标记和 BDUSS。继续？",
+            parent=self.root,
+        ):
+            return
+        keep_onboarding = bool(self.settings.get("onboarding_seen"))
+        keep_geometry = self.settings.get("window_geometry", "")
+        self.settings = load_settings()
+        self.settings["onboarding_seen"] = keep_onboarding
+        self.settings["window_geometry"] = keep_geometry
+        save_settings(self.settings)
+        self.risk_var.set(True)
+        self.follow_enhance_var.set(False)
+        self._set_mode("guest")
+        self._apply_risk_ui()
+        self._append_log("设置已恢复默认（结果、标记、BDUSS 保留）。", "muted")
+
+    def _clear_all_data(self) -> None:
+        if not messagebox.askyesno(
+            "清空软件数据（不会删除导出文件）",
+            "会删除：最近结果、保存的 BDUSS、本地标记、设置、临时文件、日志。\n"
+            "不会删除：导出的 Excel、Markdown 或你保存到其他位置的文件。\n\n继续？",
+            parent=self.root,
+        ):
+            return
+        if simpledialog.askstring("确认清空", "输入“清空”后继续：", parent=self.root) != "清空":
+            return
+        clear_stored_result()
+        for path in stored_old_files():
+            try:
+                os.remove(path)
+            except OSError:
+                pass
+        for path in (os.path.join(APP_DIR, "cookie.bin"), SETTINGS_PATH):
+            try:
+                os.remove(path)
+            except OSError:
+                pass
+        shutil.rmtree(os.path.join(APP_DIR, "logs"), ignore_errors=True)
+        clear_cookie()
+        save_blacklist({"safe": [], "warn": [], "ban": []})
+        save_settings({})
+        self.settings = load_settings()
+        self.blacklist = {"safe": [], "warn": [], "ban": []}
+        self.last_threads = []
+        self.last_output = None
+        self.cookie_var.set("")
+        self.save_result_var.set(True)
+        self.encrypt_var.set(False)
+        self.log_enabled_var.set(False)
+        self.restore_mode_var.set("自动")
+        self.risk_var.set(True)
+        self.follow_enhance_var.set(False)
+        self._set_mode("guest")
+        self._apply_risk_ui()
+        self.open_btn.configure(state="disabled")
+        for key, editor in getattr(self, "blacklist_editors", {}).items():
+            editor.delete("1.0", "end")
+        self._refresh_people()
+        self._refresh_grid()
+        self._refresh_old_files_label()
+        self._append_log("软件数据已清空；导出文件未受影响。", "ok")
+
     def _build_general_tab(self) -> None:
         box = tk.Frame(self.tab_general, bg="#eef1f5", padx=16, pady=12)
         box.pack(fill="both", expand=True)
@@ -1775,6 +2129,61 @@ class App:
             fg="#8a94a6",
             font=("Microsoft YaHei UI", 8),
         ).pack(anchor="w", padx=20, pady=(2, 0))
+
+        enhance_box = ttk.LabelFrame(box, text=" 关注增强（可选） ")
+        enhance_box.pack(fill="x", pady=(0, 10))
+        self.follow_enhance_var = tk.BooleanVar(value=bool(self.settings.get("follow_enhance", False)))
+        ttk.Checkbutton(
+            enhance_box,
+            text="启用公开关注 / 隐藏关注检测（需要 BDUSS）",
+            variable=self.follow_enhance_var,
+            command=self._on_follow_toggle,
+        ).pack(anchor="w")
+        tk.Label(
+            enhance_box,
+            text="默认关闭；开启后红绿灯可选“包含关注（慢）”。",
+            bg="#eef1f5",
+            fg="#8a94a6",
+            font=("Microsoft YaHei UI", 8),
+        ).pack(anchor="w", padx=20, pady=(2, 0))
+        mode_row = tk.Frame(enhance_box, bg="#eef1f5")
+        mode_row.pack(anchor="w", padx=20, pady=(4, 0))
+        tk.Label(mode_row, text="关注加载：", bg="#eef1f5", fg="#475569").pack(side="left")
+        self.follow_load_mode_var = tk.StringVar(value=self.settings.get("follow_load_mode", "auto"))
+        ttk.Combobox(
+            mode_row,
+            values=("自动", "手动"),
+            textvariable=self.follow_load_mode_var,
+            width=6,
+            state="readonly",
+        ).pack(side="left")
+        self.follow_load_mode_var.trace_add("write", lambda *_: self._on_follow_load_mode_changed())
+
+        fetch_box = ttk.LabelFrame(box, text=" 抓取行为 ")
+        fetch_box.pack(fill="x", pady=(0, 10))
+        self.auto_refresh_var = tk.BooleanVar(value=bool(self.settings.get("auto_refresh_old", False)))
+        ttk.Checkbutton(
+            fetch_box,
+            text="再次抓取时自动刷新已抓帖子",
+            variable=self.auto_refresh_var,
+            command=self._on_fetch_settings_changed,
+        ).pack(anchor="w")
+        removed_row = tk.Frame(fetch_box, bg="#eef1f5")
+        removed_row.pack(anchor="w", pady=(4, 0))
+        tk.Label(removed_row, text="输入框已移除的旧帖：", bg="#eef1f5", fg="#475569").pack(side="left")
+        self.removed_action_var = tk.StringVar(
+            value={"keep": "保留旧结果", "remove": "移除旧结果", "ask": "每次询问"}.get(
+                self.settings.get("removed_thread_action", "keep"), "保留旧结果"
+            )
+        )
+        ttk.Combobox(
+            removed_row,
+            values=("保留旧结果", "移除旧结果", "每次询问"),
+            textvariable=self.removed_action_var,
+            width=10,
+            state="readonly",
+        ).pack(side="left")
+        self.removed_action_var.trace_add("write", lambda *_: self._on_fetch_settings_changed())
 
         backup_box = ttk.LabelFrame(box, text=" 配置备份 / 恢复 ")
         backup_box.pack(fill="x", pady=(0, 10))
@@ -1809,6 +2218,14 @@ class App:
             font=("Microsoft YaHei UI", 9),
         )
         self.general_hint.pack(anchor="w", pady=(10, 0))
+
+    def _on_fetch_settings_changed(self) -> None:
+        self.settings["auto_refresh_old"] = bool(self.auto_refresh_var.get())
+        value = {"保留旧结果": "keep", "移除旧结果": "remove", "每次询问": "ask"}.get(
+            self.removed_action_var.get(), "keep"
+        )
+        self.settings["removed_thread_action"] = value
+        save_settings(self.settings)
 
     def _on_settings_changed(self) -> None:
         for key, var in getattr(self, "setting_vars", {}).items():
@@ -2008,6 +2425,12 @@ class App:
             fg="#6b7280",
             font=("Microsoft YaHei UI", 9),
         ).pack(side="left")
+        self.grid_thread_var = tk.StringVar()
+        self.grid_thread_box = ttk.Combobox(
+            bar, textvariable=self.grid_thread_var, width=34, state="readonly"
+        )
+        self.grid_thread_box.pack(side="left", padx=(8, 0))
+        self.grid_thread_box.bind("<<ComboboxSelected>>", lambda _event: self._refresh_grid())
         self.export_btn = tk.Button(
             bar,
             text="导出 Excel",
@@ -2038,12 +2461,71 @@ class App:
         )
         self.open_btn.pack(side="left", padx=(8, 0))
         self.grid_hint = tk.Label(
-            bar, text="抓取完成后这里会显示表格", bg="#ffffff", fg="#8a94a6", font=("Microsoft YaHei UI", 9)
+            bar, text="界面用 [U+XXXX] 显示 emoji，导出 Excel 保留原样", bg="#ffffff", fg="#8a94a6", font=("Microsoft YaHei UI", 9)
         )
         self.grid_hint.pack(side="right")
 
         self.grid_nb = ttk.Notebook(self.tab_grid)
         self.grid_nb.pack(fill="both", expand=True, padx=8, pady=8)
+
+    def _update_grid_selector(self) -> None:
+        if not hasattr(self, "grid_thread_box"):
+            return
+        values = ["全部帖子（汇总）"]
+        for index, thread in enumerate(self.last_threads, start=1):
+            title = encode_display(thread.meta.title or thread.meta.tid)
+            values.append(f"{index}. {title}")
+        self.grid_thread_box.configure(values=values)
+        current = self.grid_thread_var.get()
+        if current not in values:
+            self.grid_thread_var.set(values[1] if len(values) > 1 else values[0])
+
+    def _selected_grid_threads(self):
+        if not self.last_threads:
+            return []
+        value = self.grid_thread_var.get()
+        if value.startswith("全部"):
+            return list(self.last_threads)
+        for index, thread in enumerate(self.last_threads, start=1):
+            if value.startswith(f"{index}. "):
+                return [thread]
+        return [self.last_threads[0]]
+
+    def _aggregate_threads(self, threads):
+        buckets = {}
+        for thread in threads:
+            for item in thread.user_stats():
+                key = item["uid"] or f"name:{item['name']}"
+                bucket = buckets.setdefault(
+                    key,
+                    {
+                        "name": item["name"],
+                        "username": item["username"],
+                        "uid": item["uid"],
+                        "portrait": item["portrait"],
+                        "level": item["level"],
+                        "badge": item["badge"],
+                        "floor": 0,
+                        "comment": 0,
+                        "total": 0,
+                        "threads": 0,
+                    },
+                )
+                bucket["floor"] += item["floor_count"]
+                bucket["comment"] += item["comment_count"]
+                bucket["total"] += item["total"]
+                bucket["threads"] += 1
+                if not bucket["username"] and item["username"]:
+                    bucket["username"] = item["username"]
+                if not bucket["portrait"] and item["portrait"]:
+                    bucket["portrait"] = item["portrait"]
+                if not bucket["level"] and item["level"]:
+                    bucket["level"] = item["level"]
+                if not bucket["badge"] and item["badge"]:
+                    bucket["badge"] = item["badge"]
+        users = list(buckets.values())
+        users.sort(key=lambda item: (-item["total"], -item["floor"], item["name"]))
+        return users
 
     def _refresh_grid(self) -> None:
         for tab in list(self.grid_nb.tabs()):
@@ -2051,9 +2533,10 @@ class App:
         if not self.last_threads:
             self.grid_hint.configure(text="还没有数据")
             return
-        thread = self.last_threads[0]
+        self._update_grid_selector()
+        threads = self._selected_grid_threads()
+        all_mode = len(threads) > 1 or self.grid_thread_var.get().startswith("全部")
         include_op = getattr(self, "last_include_op", True)
-        stats = thread.user_stats(include_op)
 
         def user_url(item):
             if item.get("username"):
@@ -2063,68 +2546,130 @@ class App:
                 return "https://tieba.baidu.com/home/main?id=" + quote(portrait)
             return ""
 
-        user_rows = [
-            [
-                index,
-                item["name"],
-                item["username"],
-                item["uid"],
-                item["level"],
-                item["badge"],
-                item["floor_count"],
-                item["comment_count"],
-                item["total"],
+        stats = self._aggregate_threads(threads)
+        if all_mode:
+            headers = ["#", "昵称", "用户名", "用户ID", "等级", "头衔", "参与帖子", "楼层", "楼中楼", "合计"]
+            user_rows = [
+                [
+                    index,
+                    encode_display(item["name"]),
+                    encode_display(item["username"]),
+                    item["uid"],
+                    item["level"],
+                    encode_display(item["badge"]),
+                    item["threads"],
+                    item["floor"],
+                    item["comment"],
+                    item["total"],
+                ]
+                for index, item in enumerate(stats, start=1)
             ]
-            for index, item in enumerate(stats, start=1)
-        ]
+        else:
+            headers = ["#", "昵称", "用户名", "用户ID", "等级", "头衔", "楼层", "楼中楼", "合计"]
+            user_rows = [
+                [
+                    index,
+                    encode_display(item["name"]),
+                    encode_display(item["username"]),
+                    item["uid"],
+                    item["level"],
+                    encode_display(item["badge"]),
+                    item["floor"],
+                    item["comment"],
+                    item["total"],
+                ]
+                for index, item in enumerate(stats, start=1)
+            ]
         self._add_grid_tab(
             self.grid_nb,
             "回复统计",
-            ["#", "昵称", "用户名", "用户ID", "等级", "头衔", "楼层", "楼中楼", "合计"],
+            headers,
             user_rows,
             urls=[user_url(item) for item in stats],
         )
-        floor_rows = [
-            [
-                floor.post_no,
-                floor.author,
-                floor.author_name,
-                floor.author_id,
-                floor.level,
-                floor.badge,
-                floor.content,
-            ]
-            for floor in thread.floors
+
+        if all_mode:
+            per_rows = []
+            per_urls = []
+            for thread_index, thread in enumerate(threads, start=1):
+                title = encode_display(thread.meta.title or thread.meta.tid)
+                for item in thread.user_stats(include_op):
+                    per_rows.append(
+                        [
+                            f"{thread_index}. {title}",
+                            encode_display(item["name"]),
+                            encode_display(item["username"]),
+                            item["uid"],
+                            item["level"],
+                            encode_display(item["badge"]),
+                            item["floor_count"],
+                            item["comment_count"],
+                            item["total"],
+                        ]
+                    )
+                    per_urls.append(user_url(item))
+            self._add_grid_tab(
+                self.grid_nb,
+                "分帖统计",
+                ["帖子", "昵称", "用户名", "用户ID", "等级", "头衔", "楼层", "楼中楼", "合计"],
+                per_rows,
+                urls=per_urls,
+            )
+
+        floor_rows = []
+        floor_urls = []
+        comment_rows = []
+        comment_urls = []
+        for thread_index, thread in enumerate(threads, start=1):
+            title = encode_display(thread.meta.title or thread.meta.tid)
+            for floor in thread.floors:
+                prefix = [f"{thread_index}. {title}"] if all_mode else []
+                floor_rows.append(
+                    prefix
+                    + [
+                        floor.post_no,
+                        encode_display(floor.author),
+                        encode_display(floor.author_name),
+                        floor.author_id,
+                        floor.level,
+                        encode_display(floor.badge),
+                        encode_display(floor.content),
+                    ]
+                )
+                floor_urls.append(f"https://tieba.baidu.com/p/{thread.meta.tid}?pid={floor.pid}")
+            for comment in thread.comments:
+                prefix = [f"{thread_index}. {title}"] if all_mode else []
+                comment_rows.append(
+                    prefix
+                    + [
+                        comment.floor_no,
+                        encode_display(comment.author),
+                        encode_display(comment.author_name),
+                        comment.author_id,
+                        comment.level,
+                        encode_display(comment.content),
+                    ]
+                )
+                comment_urls.append(f"https://tieba.baidu.com/p/{thread.meta.tid}?pid={comment.pid}")
+        floor_headers = (["帖子"] if all_mode else []) + [
+            "楼层",
+            "昵称",
+            "用户名",
+            "用户ID",
+            "等级",
+            "头衔",
+            "内容",
         ]
-        self._add_grid_tab(
-            self.grid_nb,
-            "楼层明细",
-            ["楼层", "昵称", "用户名", "用户ID", "等级", "头衔", "内容"],
-            floor_rows,
-            urls=[f"https://tieba.baidu.com/p/{thread.meta.tid}?pid={floor.pid}" for floor in thread.floors],
-        )
-        comment_rows = [
-            [
-                comment.floor_no,
-                comment.author,
-                comment.author_name,
-                comment.author_id,
-                comment.level,
-                comment.content,
-            ]
-            for comment in thread.comments
+        comment_headers = (["帖子"] if all_mode else []) + [
+            "所在楼层",
+            "回复者",
+            "用户名",
+            "用户ID",
+            "等级",
+            "内容",
         ]
-        self._add_grid_tab(
-            self.grid_nb,
-            "楼中楼明细",
-            ["所在楼层", "回复者", "用户名", "用户ID", "等级", "内容"],
-            comment_rows,
-            urls=[
-                f"https://tieba.baidu.com/p/{thread.meta.tid}?pid={comment.pid}"
-                for comment in thread.comments
-            ],
-        )
-        self.grid_hint.configure(text=f"帖子：{thread.meta.title or thread.meta.tid}")
+        self._add_grid_tab(self.grid_nb, "楼层明细", floor_headers, floor_rows, urls=floor_urls)
+        self._add_grid_tab(self.grid_nb, "楼中楼明细", comment_headers, comment_rows, urls=comment_urls)
         self._add_compare_tab()
 
     def _add_compare_tab(self) -> None:
@@ -2138,7 +2683,7 @@ class App:
         self.compare_vars = []
         for index, thread in enumerate(self.last_threads):
             var = tk.BooleanVar(value=index < 2)
-            label = (thread.meta.title or thread.meta.tid)[:16]
+            label = encode_display(thread.meta.title or thread.meta.tid)[:16]
             tk.Checkbutton(
                 top, text=label, variable=var, bg="#ffffff", anchor="w", font=("Microsoft YaHei UI", 8)
             ).pack(side="left", padx=(2, 0))
@@ -2181,7 +2726,11 @@ class App:
             self.compare_tree.delete(item)
         rows = []
         for row in result["rows"]:
-            values = [row["name"], row["username"], row["uid"]] + row["counts"] + [row["total"], row["type"]]
+            values = [
+                encode_display(row["name"]),
+                row["username"],
+                row["uid"],
+            ] + row["counts"] + [row["total"], row["type"]]
             rows.append([str(value) for value in values])
             self.compare_tree.insert("", "end", values=values)
         self.compare_result = (headers, rows)
@@ -2400,6 +2949,33 @@ class App:
         if not self.last_threads:
             messagebox.showinfo("还没有数据", "先点「开始统计」抓一个帖子。", parent=self.root)
             return
+        threads = self._selected_grid_threads()
+        if len(self.last_threads) > 1 and not self.grid_thread_var.get().startswith("全部"):
+            scope = messagebox.askyesnocancel(
+                "导出帖子范围",
+                "是：当前表格范围\n否：全部帖子\n取消：不导出",
+                parent=self.root,
+            )
+            if scope is None:
+                return
+            threads = list(self.last_threads) if scope is False else threads
+        if self._people_filter_active():
+            scope = messagebox.askyesnocancel(
+                "导出用户范围",
+                "是：当前筛选用户（默认）\n否：全部用户\n取消：不导出",
+                parent=self.root,
+            )
+            if scope is None:
+                return
+            if scope is True:
+                filtered_ids = {thread.meta.tid for thread in self._filtered_threads()}
+                threads = [thread for thread in threads if thread.meta.tid in filtered_ids]
+                if not any(thread.floors or thread.comments for thread in threads):
+                    messagebox.showinfo("没有结果", "当前筛选没有可导出的用户。", parent=self.root)
+                    return
+        if not threads:
+            messagebox.showinfo("没有结果", "当前范围没有可导出的帖子。", parent=self.root)
+            return
         initial = self.last_output or default_output_path()
         path = filedialog.asksaveasfilename(
             title="导出 Excel",
@@ -2411,24 +2987,6 @@ class App:
         )
         if not path:
             return
-        threads = self.last_threads
-        if self._people_filter_active():
-            scope = messagebox.askyesnocancel(
-                "导出范围",
-                """当前有参与者筛选条件。
-
-是：导出全部用户
-否：只导出当前筛选结果
-取消：不导出""",
-                parent=self.root,
-            )
-            if scope is None:
-                return
-            if scope is False:
-                threads = self._filtered_threads()
-                if not any(thread.floors or thread.comments for thread in threads):
-                    messagebox.showinfo("没有结果", "当前筛选没有可导出的用户。", parent=self.root)
-                    return
         try:
             export_workbook(path, threads, include_op=getattr(self, "last_include_op", True))
         except Exception as error:  # noqa: BLE001
@@ -2533,8 +3091,10 @@ class App:
         start_date, end_date = self._date_params()
         prefer = "start" if "开始" in self.post_prefer_var.get() else "end"
 
+        include_follows = bool(self.include_follows_var.get() and self.settings.get("follow_enhance"))
+        guest = self.mode_var.get() == "guest" or not include_follows
+
         def worker():
-            guest = self.mode_var.get() == "guest"
             fetcher = Fetcher(
                 cookie={} if guest else parse_cookie_input(self.cookie_var.get()), delay=0.3, verbose=False
             )
@@ -2621,10 +3181,10 @@ class App:
         except tk.TclError:
             pass
 
-    def _load_profile(self, user, force: bool = False) -> None:
+    def _load_profile(self, user, force: bool = False, force_follow: bool = False) -> None:
         key = user["uid"] or f"name:{user['name']}"
-        cached = None if force else getattr(self, "_profile_cache", {}).get(key)
-        if cached:
+        cached = None if (force or force_follow) else getattr(self, "_profile_cache", {}).get(key)
+        if cached and (cached.get("follow_loaded") or not force_follow):
             self._render_profile(user, cached)
             return
         self.profile_status.configure(text=f"正在查询 {encode_display(user['name'])} …")
@@ -2648,12 +3208,18 @@ class App:
                     start_date,
                     end_date,
                     "start" if "开始" in self.post_prefer_var.get() else "end",
+                    load_follow=force_follow or self.settings.get("follow_load_mode", "auto") == "auto",
                 )
             except Exception as error:  # noqa: BLE001
                 profile = {"ok": False, "error": str(error)}
             self._post(("profile_ready", key, user, profile))
 
         threading.Thread(target=worker, daemon=True).start()
+
+    def _reload_profile_follow(self) -> None:
+        user = getattr(self, "_profile_user", None)
+        if user:
+            self._load_profile(user, force=True, force_follow=True)
 
     def _apply_level_to_threads(self, user, level: str) -> None:
         """把某个人的本吧等级写回楼层/楼中楼数据，刷新和导出时都不会丢。"""
@@ -2874,6 +3440,10 @@ class App:
         posts = profile.get("recent_posts") or []
         combined = self._merge_forum_lists(profile, self._user_bar(user), level or "")
         self.profile_report_btn.pack(anchor="w", pady=(4, 0))
+        if profile.get("follow_loaded") is False:
+            self.profile_follow_btn.pack(anchor="w", pady=(4, 0))
+        else:
+            self.profile_follow_btn.pack_forget()
         if self._hidden_follows(profile):
             self.profile_probe_btn.pack(anchor="w", pady=(4, 0))
             self.profile_probe_btn.configure(state="normal", text="探测候选关注")
@@ -2912,8 +3482,10 @@ class App:
             )
             self._profile_post_urls[iid] = post.get("url") or ""
         forum_note = self._forum_note(profile, self._user_bar(user), level or "")
-        if self.mode_var.get() == "guest":
-            forum_note += "（免登录：关注列表可能不完整）"
+        if profile.get("follow_loaded") is False:
+            forum_note += "（未加载公开关注）"
+        elif self.mode_var.get() == "guest":
+            forum_note += "（匿名尝试：公开关注可能失败/不完整）"
         self.profile_forum_note.configure(text=forum_note)
 
         # 本地标记：默认关闭；免登录只看本帖发言，登录才看关注列表
@@ -2989,6 +3561,53 @@ class App:
             return 100
         return 0
 
+    def _merge_threads(self, new_threads) -> list:
+        merged = {thread.meta.tid: thread for thread in self.last_threads}
+        for thread in new_threads:
+            merged[thread.meta.tid] = thread
+        return list(merged.values())
+
+    def _persist_result(self, threads) -> None:
+        if not threads or not self.settings.get("save_result", True):
+            return
+        try:
+            save_threads(
+                list(threads),
+                VERSION,
+                encrypted=bool(self.settings.get("encrypt_result", False)),
+            )
+        except Exception as error:  # noqa: BLE001
+            self._post(("log", f"保存最近结果失败：{error}", "err"))
+
+    def _restore_last_result(self) -> None:
+        if not self.settings.get("save_result", True):
+            return
+        try:
+            threads, _meta = load_threads()
+        except IncompatibleResult as error:
+            archive_incompatible()
+            self._append_log(f"上次结果无法恢复：{error}；旧文件已保留。", "err")
+            return
+        except Exception as error:  # noqa: BLE001
+            self._append_log(f"读取上次结果失败：{error}", "err")
+            return
+        if not threads:
+            return
+        if self.settings.get("restore_mode", "auto") == "ask":
+            if not messagebox.askyesno(
+                "恢复上次结果",
+                f"发现上次保存的 {len(threads)} 个帖子，恢复吗？",
+                parent=self.root,
+            ):
+                return
+        self.last_threads = threads
+        try:
+            self._refresh_people()
+            self._refresh_grid()
+        except Exception:  # noqa: BLE001
+            pass
+        self.status_var.set(f"已恢复 {len(threads)} 个帖子（{len(self._aggregate_users())} 位用户）")
+
     def _on_start(self) -> None:
         if self.running:
             return
@@ -3015,6 +3634,20 @@ class App:
                 parent=self.root,
             )
 
+        existing = {thread.meta.tid for thread in self.last_threads}
+        current = {extract_tid(url) for url in urls}
+        removed = existing - current
+        if removed and self.settings.get("removed_thread_action") == "remove":
+            self.last_threads = [thread for thread in self.last_threads if thread.meta.tid not in removed]
+            existing = {thread.meta.tid for thread in self.last_threads}
+        if existing and not self.settings.get("auto_refresh_old", False):
+            fresh = [url for url in urls if extract_tid(url) not in existing]
+            if not fresh:
+                messagebox.showinfo("没有新帖", "这些帖子都已抓过；可在设置里开启自动刷新。", parent=self.root)
+                return
+            if len(fresh) != len(urls):
+                self._append_log(f"跳过已抓过的 {len(urls) - len(fresh)} 个帖子。", "muted")
+            urls = fresh
         export = self.export_var.get()
         output = self.output_var.get().strip() or default_output_path()
         if export:
@@ -3114,6 +3747,7 @@ class App:
         if worker_alive or batch_alive:
             self.root.after(100, self._wait_close)
             return
+        self._persist_result(self.last_threads)
         self.root.destroy()
 
     # ------------------------------------------------------------- worker
@@ -3191,7 +3825,8 @@ class App:
         elif kind == "done":
             _, output, count, threads = message
             self.last_output = output
-            self.last_threads = threads or []
+            self.last_threads = self._merge_threads(threads or [])
+            self._persist_result(self.last_threads)
             self._auto_filled = False
             self._set_running(False)
             self.status_var.set("完成")
