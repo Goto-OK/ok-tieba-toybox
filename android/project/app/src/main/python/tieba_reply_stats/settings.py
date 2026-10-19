@@ -14,7 +14,6 @@ DEFAULTS: Dict[str, Any] = {
     "color_forum": True,
     "color_posts": True,
     "mode": "guest",  # 兼容旧字段；界面不再选择
-    "mode_chosen": True,
     "follow_enhance": False,
     "follow_load_mode": "auto",  # auto / manual
     "remember_bduss": True,

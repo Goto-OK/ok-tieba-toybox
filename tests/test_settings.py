@@ -13,6 +13,7 @@ def test_defaults(monkeypatch, tmp_path):
     _use_tmp(monkeypatch, tmp_path)
     loaded = settings_module.load_settings()
     assert loaded["mode"] == "guest"
+    assert "mode_chosen" not in loaded
     assert loaded["risk_enabled"] is True
     assert loaded["follow_enhance"] is False
     assert loaded["page_size"] == 1000

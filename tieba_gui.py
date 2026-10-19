@@ -168,7 +168,6 @@ class App:
         self._auto_filled = False
         self.blacklist = load_blacklist()
         self.settings = load_settings()
-        self.mode_chosen = bool(self.settings.get("mode_chosen", False))
         self.mode_var = tk.StringVar(value=str(self.settings.get("mode", "guest")))
 
         self._build_ui()
@@ -1918,7 +1917,6 @@ class App:
         self.mode_var.set(mode)
         if persist:
             self.settings["mode"] = mode
-            self.settings["mode_chosen"] = True
             save_settings(self.settings)
         self._apply_mode_ui()
 
@@ -2802,9 +2800,13 @@ class App:
         save_settings(self.settings)
         self.blacklist = data["blacklist"]
         save_blacklist(self.blacklist)
-        mode = self.settings.get("mode")
-        if mode in ("guest", "login"):
-            self.mode_var.set(mode)
+        follow = bool(self.settings.get("follow_enhance", False))
+        if follow and not parse_cookie_input(self.cookie_var.get()).get("BDUSS"):
+            follow = False
+            self.settings["follow_enhance"] = False
+        if hasattr(self, "follow_enhance_var"):
+            self.follow_enhance_var.set(follow)
+        self.mode_var.set("login" if follow else "guest")
         self.risk_var.set(bool(self.settings.get("risk_enabled", False)))
         for key, var in getattr(self, "setting_vars", {}).items():
             var.set(bool(self.settings.get(key, True)))
@@ -2816,8 +2818,8 @@ class App:
         self._refresh_people()
         if getattr(self, "_last_lookup_profile", None):
             self._render_lookup(self._last_lookup_profile)
-        self._append_log("配置已恢复，重启后完全生效。", "ok")
-        messagebox.showinfo("恢复完成", "配置已恢复。建议重启软件。", parent=self.root)
+        self._append_log("配置已恢复。", "ok")
+        self.status_var.set("配置已恢复")
 
     def _build_help_tab(self) -> None:
         frame = tk.Frame(self.tab_help, bg="#eef1f5", padx=10, pady=10)
@@ -3536,54 +3538,6 @@ class App:
             apply_sort(columns[headers.index(default_sort)], default_reverse)
         else:
             render()
-
-    def _open_blacklist_dialog(self) -> None:
-        win = tk.Toplevel(self.root)
-        win.title("贴吧本地标记设置")
-        win.geometry("640x580")
-        win.configure(bg="#f5f7fa")
-        tk.Label(
-            win,
-            text="每行一个贴吧名（带不带“吧”都可以）。用户在这些吧发过言，就会打上对应颜色标记。",
-            bg="#f5f7fa",
-            fg="#6b7280",
-            font=("Microsoft YaHei UI", 9),
-        ).pack(anchor="w", padx=12, pady=(10, 4))
-        body = tk.Frame(win, bg="#f5f7fa")
-        body.pack(fill="both", expand=True, padx=12)
-        editors = {}
-        for key, title in (("safe", "安全（绿色）"), ("warn", "警告（黄色）"), ("ban", "禁止（红色）")):
-            frame = ttk.LabelFrame(body, text=f" {title} ")
-            frame.pack(fill="both", expand=True, pady=4)
-            text = tk.Text(frame, height=4, wrap="word", font=("Microsoft YaHei UI", 9))
-            text.pack(fill="both", expand=True, padx=6, pady=6)
-            text.insert("1.0", "\n".join(self.blacklist.get(key, [])))
-            editors[key] = text
-
-        def save() -> None:
-            data = {
-                key: [line.strip() for line in editor.get("1.0", "end").splitlines() if line.strip()]
-                for key, editor in editors.items()
-            }
-            if save_blacklist(data):
-                self.blacklist = data
-                self._append_log("本地标记已保存。", "ok")
-                win.destroy()
-            else:
-                messagebox.showerror("保存失败", "无法写入本地标记配置文件。", parent=win)
-
-        win.update_idletasks()
-        width, height = win.winfo_reqwidth(), win.winfo_reqheight()
-        x = self.root.winfo_rootx() + max(0, (self.root.winfo_width() - width) // 2)
-        y = self.root.winfo_rooty() + max(0, (self.root.winfo_height() - height) // 3)
-        win.geometry(f"+{x}+{y}")
-        buttons = tk.Frame(win, bg="#f5f7fa")
-        buttons.pack(fill="x", padx=12, pady=(4, 12))
-        ttk.Button(buttons, text="取消", command=win.destroy, width=10).pack(side="right")
-        ttk.Button(buttons, text="保存", command=save, width=10).pack(side="right", padx=(0, 8))
-        win.bind("<Escape>", lambda _event: win.destroy())
-        win.transient(self.root)
-        win.grab_set()
 
     def _people_filter_active(self) -> bool:
         if self.people_keyword_var.get().strip():

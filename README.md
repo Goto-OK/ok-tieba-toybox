@@ -166,10 +166,10 @@ python scripts/sync_android.py
 - [开发规范](docs/standards.md)
 - [参与开发](CONTRIBUTING.md)
 - [收尾规范（实现唯一依据）](SPEC.md)
-- [规范索引（历史）](docs/spec-index.md)
-- [界面规范](docs/ui-spec.md)
+- [文档索引](docs/README.md)
+- [历史界面规范（只读）](docs/ui-spec.md)
 - [代码地图](docs/code-map.md)
-- [待办与缺口](docs/backlog.md)
+- [实现状态](docs/status.md)
 - [更新日志](CHANGELOG.md)
 - [用户使用说明](使用说明.txt)
 - [Android 说明](android/README.md)
@@ -181,9 +181,9 @@ python scripts/sync_android.py
 
 - 本项目使用的是贴吧**网页/客户端内部接口**，不是百度官方开放 API；接口可能变更或限流；
 - 请控制抓取频率，不要用于商业采集或骚扰；
-- Cookie 是账号凭证，只保存在本机（Windows 用 DPAPI，Android 为 App 私有目录明文），不要提交到仓库或发给他人；
+- Cookie 是账号凭证，只保存在本机（Windows 用 DPAPI）；不要提交到仓库或发给他人；
 - 隐藏关注列表无法完整枚举，只能部分恢复；
-- 游客模式每层最多 10 条楼中楼。
+- 游客模式会按设置补全楼中楼；深度可选全部 / 10 / 50 / 100。
 
 ## 许可证
 
