@@ -236,7 +236,45 @@ def _collect_comments(
     collected: Dict[str, Comment] = {}
     floor_have: Dict[int, int] = {}
 
-    # 1) 按页批量拉 totalComment（每楼最多返回前 10 条）
+    # 1) 登录模式先用 floor 接口翻页；失败再走 totalComment + /p/comment
+    from .page_pb import fetch_floor_page
+
+    bduss = fetcher.cookie_dict().get("BDUSS", "")
+    for floor in targets:
+        _check_stop(options)
+        target = options.comment_depth or floor.reply_num
+        target = min(target, floor.reply_num)
+        pn = 1
+        while pn <= 50 and floor_have.get(floor.post_no, 0) < target:
+            try:
+                page = fetch_floor_page(fetcher, tid, floor.pid, pn, bduss=bduss)
+            except Exception as error:  # noqa: BLE001
+                if options.verbose:
+                    log(f"    ! {floor.post_no}楼 floor 失败，回退网页：{error}")
+                break
+            for row in page["comments"]:
+                key = row["pid"]
+                if key and key not in collected:
+                    collected[key] = Comment(
+                        floor_no=floor.post_no,
+                        floor_author=floor.author,
+                        pid=key,
+                        author=row["author"],
+                        author_name=row["author_name"],
+                        author_id=row["author_id"],
+                        portrait=row["portrait"],
+                        posted_at=datetime.fromtimestamp(row["time"]) if row["time"] else None,
+                        content=row["content"],
+                        reply_to=row["reply_to"],
+                        is_op=False,
+                        level=str(row["level"]) if row["level"] else "",
+                    )
+                    floor_have[floor.post_no] = floor_have.get(floor.post_no, 0) + 1
+            if not page["has_more"]:
+                break
+            pn += 1
+
+    # 2) 按页批量拉 totalComment（每楼最多返回前 10 条）
     pages: Dict[int, List[Floor]] = {}
     for floor in targets:
         pages.setdefault(floor_page.get(floor.pid, 1), []).append(floor)
@@ -258,7 +296,7 @@ def _collect_comments(
                     collected[comment.pid] = comment
                     floor_have[comment.floor_no] = floor_have.get(comment.floor_no, 0) + 1
 
-    # 2) 不足的楼用 /p/comment 逐楼补齐（翻页）
+    # 3) 不足的楼用 /p/comment 逐楼补齐（翻页）
     log(f"  楼中楼：{len(targets)} 层有回复，开始抓取…")
     for index, floor in enumerate(targets, start=1):
         _check_stop(options)
