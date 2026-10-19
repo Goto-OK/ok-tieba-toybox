@@ -3293,7 +3293,7 @@ class App:
         try:
             result = compare_threads(self.last_threads, selected, self.compare_mode_var.get())
         except ValueError as error:
-            messagebox.showinfo("无法对比", str(error), parent=self.root)
+            self.grid_hint.configure(text=friendly_error(error))
             return
         headers = ["昵称", "用户名", "用户ID"] + result["threads"] + ["合计", "类型"]
         columns = [str(index) for index in range(len(headers))]
@@ -3627,6 +3627,14 @@ class App:
             for floor in thread.floors:
                 comments = by_floor.pop(floor.post_no, [])
                 block = 1 + len(comments)
+                if block > limit:
+                    if part_floors or part_comments:
+                        groups.append((part_floors, part_comments))
+                        part_floors, part_comments, rows = [], [], 0
+                    chunk_size = max(1, limit - 1)
+                    for start in range(0, len(comments), chunk_size):
+                        groups.append(([floor], comments[start : start + chunk_size]))
+                    continue
                 if part_floors and rows + block > limit:
                     groups.append((part_floors, part_comments))
                     part_floors, part_comments, rows = [], [], 0
@@ -3634,7 +3642,14 @@ class App:
                 part_comments.extend(comments)
                 rows += block
             for comments in by_floor.values():
-                part_comments.extend(comments)
+                if not comments:
+                    continue
+                if part_floors or part_comments:
+                    groups.append((part_floors, part_comments))
+                    part_floors, part_comments, rows = [], [], 0
+                chunk_size = max(1, limit)
+                for start in range(0, len(comments), chunk_size):
+                    groups.append(([], comments[start : start + chunk_size]))
             if part_floors or part_comments:
                 groups.append((part_floors, part_comments))
             total = len(groups)
