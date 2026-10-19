@@ -31,6 +31,7 @@ DEFAULTS: Dict[str, Any] = {
     "theme_mode": "light",  # light / dark / system
     "accent": "blue",  # blue / green / purple
     "skin": "default",  # default / whalemaid / custom
+    "skin_animate": True,
     "settings_start": "general",  # general / last
     "onboarding_seen": False,
     "window_geometry": "",

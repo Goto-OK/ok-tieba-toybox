@@ -20,6 +20,7 @@ def test_defaults(monkeypatch, tmp_path):
     assert loaded["theme_mode"] == "light"
     assert loaded["accent"] == "blue"
     assert loaded["skin"] == "default"
+    assert loaded["skin_animate"] is True
 
 
 def test_roundtrip(monkeypatch, tmp_path):
@@ -35,6 +36,7 @@ def test_roundtrip(monkeypatch, tmp_path):
             "theme_mode": "dark",
             "accent": "green",
             "skin": "whalemaid",
+            "skin_animate": False,
         }
     )
     loaded = settings_module.load_settings()
@@ -46,6 +48,7 @@ def test_roundtrip(monkeypatch, tmp_path):
     assert loaded["theme_mode"] == "dark"
     assert loaded["accent"] == "green"
     assert loaded["skin"] == "whalemaid"
+    assert loaded["skin_animate"] is False
     assert json.loads((tmp_path / "settings.json").read_text(encoding="utf-8"))["proxy_url"] == "http://127.0.0.1:8080"
 
 

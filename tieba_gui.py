@@ -172,6 +172,10 @@ class App:
         self.last_output: str | None = None
         self.last_outputs: List[str] = []
         self.last_threads: list = []
+        self.side_label: Optional[tk.Label] = None
+        self.side_frames: list = []
+        self.side_frame_index = 0
+        self.skin_anim_job: Optional[str] = None
         self._auto_filled = False
         self.blacklist = load_blacklist()
         self.settings = load_settings()
@@ -2135,6 +2139,15 @@ class App:
             side="left", padx=(6, 0)
         )
         self.skin_var.trace_add("write", lambda *_: self._on_skin_changed())
+        row4 = tk.Frame(theme_box, bg="#eef1f5")
+        row4.pack(anchor="w", fill="x", padx=8, pady=(2, 4))
+        self.skin_animate_var = tk.BooleanVar(value=bool(self.settings.get("skin_animate", True)))
+        ttk.Checkbutton(
+            row4,
+            text="角色动画（3 fps）",
+            variable=self.skin_animate_var,
+            command=self._on_skin_animate_changed,
+        ).pack(side="left")
 
         note = ttk.LabelFrame(box, text=" 说明 ")
         note.pack(fill="x")
@@ -2162,6 +2175,11 @@ class App:
             self.theme_mode_var.set("深色")
         save_settings(self.settings)
         self._apply_theme()
+
+    def _on_skin_animate_changed(self) -> None:
+        self.settings["skin_animate"] = bool(self.skin_animate_var.get())
+        save_settings(self.settings)
+        self._update_side_skin()
 
     def _import_skin(self) -> None:
         path = filedialog.askopenfilename(
@@ -3553,13 +3571,64 @@ class App:
         save_settings(self.settings)
         self._apply_table_density()
 
+    def _stop_side_animation(self) -> None:
+        job = getattr(self, "skin_anim_job", None)
+        if job is not None:
+            try:
+                self.root.after_cancel(job)
+            except tk.TclError:
+                pass
+        self.skin_anim_job = None
+        self.side_frames = []
+        self.side_frame_index = 0
+
+    def _animate_side_frame(self) -> None:
+        frames = getattr(self, "side_frames", [])
+        label = getattr(self, "side_label", None)
+        if not frames or label is None:
+            self.skin_anim_job = None
+            return
+        self.side_frame_index = (self.side_frame_index + 1) % len(frames)
+        try:
+            label.configure(image=frames[self.side_frame_index])
+        except tk.TclError:
+            self.skin_anim_job = None
+            return
+        self.skin_anim_job = self.root.after(333, self._animate_side_frame)
+
     def _update_side_skin(self) -> None:
         panel = getattr(self, "side_panel", None)
         if panel is None:
             return
+        self._stop_side_animation()
         for child in panel.winfo_children():
             child.destroy()
+        self.side_label = None
         skin = self.settings.get("skin", "default")
+        animate = bool(self.settings.get("skin_animate", True))
+        if skin in ("whalemaid", "bluefish") and animate:
+            frame_dir = _asset_path("assets", "skins", "whalemaid", "frames")
+            names = sorted(
+                name for name in os.listdir(frame_dir) if name.lower().endswith(".png")
+            ) if os.path.isdir(frame_dir) else []
+            if len(names) >= 2:
+                frames = []
+                for name in names:
+                    try:
+                        frames.append(tk.PhotoImage(file=os.path.join(frame_dir, name)))
+                    except tk.TclError:
+                        continue
+                if len(frames) >= 2:
+                    panel.configure(bg=self.palette["window_bg"])
+                    label = tk.Label(panel, image=frames[0], bg=self.palette["window_bg"], bd=0)
+                    label.pack(side="bottom", padx=6, pady=8)
+                    self.side_label = label
+                    self.side_frames = frames
+                    self.side_frame_index = 0
+                    if not panel.winfo_manager():
+                        panel.pack(side="right", fill="y", before=self.notebook)
+                    self.skin_anim_job = self.root.after(333, self._animate_side_frame)
+                    return
         if skin in ("whalemaid", "bluefish"):
             path = _asset_path("assets", "skins", "whalemaid", "side.png")
         elif skin == "custom" and self.custom_skin:
