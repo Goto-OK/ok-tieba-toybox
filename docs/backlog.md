@@ -12,7 +12,8 @@
 ## 研究
 
 - [~] 无吧务权限的“删除痕迹”研究：已完成首轮样本（1 帖）
-- [ ] 扩大样本、检查 HTML 占位/用户主页缺口
+- [ ] HTML 占位验证（当前 IP 被安全验证拦截）
+- [ ] 扩大样本、检查用户主页缺口
 
 详见 [aiotieba-capabilities.md](aiotieba-capabilities.md)。
 
