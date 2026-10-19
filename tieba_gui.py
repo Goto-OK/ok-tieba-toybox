@@ -2301,6 +2301,10 @@ class App:
         self.settings_nav.selection_set(3)
         self._show_settings_page(3)
 
+    def _open_guide_from_banner(self, banner) -> None:
+        banner.destroy()
+        self._show_quick_guide()
+
     def _maybe_onboarding(self) -> None:
         if self.settings.get("onboarding_seen"):
             return
@@ -2319,7 +2323,7 @@ class App:
         ttk.Button(
             banner,
             text="查看说明",
-            command=lambda: (banner.destroy(), self._show_quick_guide()),
+            command=lambda: self._open_guide_from_banner(banner),
             width=8,
         ).pack(side="right", padx=(6, 0))
         ttk.Button(banner, text="关闭", command=banner.destroy, width=6).pack(side="right", padx=(6, 0))
