@@ -2108,7 +2108,7 @@ class App:
         ).pack(anchor="w")
         tk.Label(
             box,
-            text="默认匿名 · 结果只存本机 · 不保存 STOKEN",
+            text="默认匿名 · 结果只存本机 · 不保存 STOKEN · 浅色主题",
             bg="#eef1f5",
             fg="#8a94a6",
             font=("Microsoft YaHei UI", 8),

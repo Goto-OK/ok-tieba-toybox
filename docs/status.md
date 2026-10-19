@@ -86,7 +86,7 @@
 | BASE | 身份只用 UID/用户名/昵称 | 统一优先级；记录曾用昵称 |
 | UI-018 | 无第三方组件/许可声明 | 关于页增加只读许可页 |
 | ENG | 错误提示分散 | 统一错误目录与处理策略 |
-| UI-020 | 高 DPI/键盘未定义 | ✅ DPI/F1/Esc/Ctrl+Enter/Enter | 🟡 GUI 冒烟 | ❌ |
+| UI-020 | 高 DPI/键盘未定义 | ✅ DPI/F1/Esc/Ctrl+Enter/Enter；固定浅色 | 🟡 GUI 冒烟 | ❌ |
 | ENG | 升级保留数据未定义 | 原地升级，APPDATA 保留 |
 | ENG | 无代理设置 | 系统代理默认，支持自定义 HTTP/HTTPS |
 | ENG | 日期用时区本地 | 统一北京时间 UTC+8 |
