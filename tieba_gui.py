@@ -3233,6 +3233,22 @@ class App:
             parts.append(f"标记 {mark}")
         return "；".join(parts) or "无"
 
+    def _split_export_threads(self, threads, limit: int = 500_000):
+        parts = []
+        current = []
+        rows = 0
+        for thread in threads:
+            size = len(thread.floors) + len(thread.comments)
+            if current and rows + size > limit:
+                parts.append(current)
+                current = []
+                rows = 0
+            current.append(thread)
+            rows += size
+        if current:
+            parts.append(current)
+        return parts
+
     def _export_now(self) -> None:
         if not self.last_threads:
             messagebox.showinfo("还没有数据", "先点「开始统计」抓一个帖子。", parent=self.root)
@@ -3293,17 +3309,33 @@ class App:
             "数据警告": "；".join(warnings) if warnings else "无",
             "空帖子": "；".join(empty) if empty else "无",
         }
+        parts = self._split_export_threads(threads)
+        paths = []
         try:
-            export_workbook(path, threads, include_op=getattr(self, "last_include_op", True), meta=meta)
+            for index, part in enumerate(parts, start=1):
+                if index == 1:
+                    part_path = path
+                else:
+                    root, ext = os.path.splitext(path)
+                    part_path = f"{root}_part{index}{ext or '.xlsx'}"
+                part_meta = dict(meta)
+                part_meta["分片"] = f"{index}/{len(parts)}"
+                export_workbook(
+                    part_path,
+                    part,
+                    include_op=getattr(self, "last_include_op", True),
+                    meta=part_meta,
+                )
+                paths.append(part_path)
         except Exception as error:  # noqa: BLE001
-            messagebox.showerror("导出失败", str(error), parent=self.root)
+            messagebox.showerror("导出失败", friendly_error(error), parent=self.root)
             return
-        self.last_output = path
+        self.last_output = paths[0]
         self.open_btn.configure(state="normal")
-        self._append_log(f"已导出 Excel：{path}", "ok")
+        self._append_log("已导出 Excel：" + "；".join(paths), "ok")
         messagebox.showinfo(
             "导出完成",
-            "已保存到：" + chr(10) + path + chr(10) + chr(10) + "现在打开吗？",
+            "已保存到：" + chr(10) + chr(10).join(paths) + chr(10) + chr(10) + "现在打开第一个吗？",
             parent=self.root,
         )
         self._open_result()
