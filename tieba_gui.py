@@ -227,6 +227,7 @@ class App:
             style.theme_use("vista")
         except tk.TclError:
             pass
+        style.configure("TButton", padding=(8, 4), font=("Microsoft YaHei UI", 9))
         style.configure("Card.TLabelframe", padding=10)
         style.configure("Card.TLabelframe.Label", font=("Microsoft YaHei UI", 10, "bold"))
         style.configure("Main.TNotebook", background="#e2e8f0")
@@ -443,8 +444,8 @@ class App:
             activebackground="#2E75B6",
             activeforeground="white",
             relief="flat",
-            padx=22,
-            pady=8,
+            padx=16,
+            pady=6,
             cursor="hand2",
             font=("Microsoft YaHei UI", 11, "bold"),
             state="disabled",
@@ -459,9 +460,9 @@ class App:
             activebackground="#d5dbe5",
             relief="flat",
             padx=16,
-            pady=8,
+            pady=6,
             cursor="hand2",
-            font=("Microsoft YaHei UI", 10),
+            font=("Microsoft YaHei UI", 9),
             state="disabled",
         )
         self.stop_btn.pack(side="left", padx=(10, 0))
@@ -1269,8 +1270,8 @@ class App:
             activebackground="#163b5c",
             activeforeground="#ffffff",
             relief="flat",
-            padx=14,
-            pady=4,
+            padx=16,
+            pady=6,
             cursor="hand2",
             font=("Microsoft YaHei UI", 9, "bold"),
         ).pack(side="left", padx=(8, 0))
@@ -2190,8 +2191,8 @@ class App:
             activebackground="#fecaca",
             activeforeground="#991b1b",
             relief="flat",
-            padx=10,
-            pady=4,
+            padx=14,
+            pady=6,
             cursor="hand2",
             font=("Microsoft YaHei UI", 9),
         ).pack(side="left", padx=(8, 0))
@@ -2881,7 +2882,7 @@ class App:
             fg="#334155",
             activebackground="#d5dbe5",
             relief="flat",
-            padx=14,
+            padx=16,
             pady=6,
             cursor="hand2",
             font=("Microsoft YaHei UI", 9),
