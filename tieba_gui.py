@@ -46,6 +46,7 @@ from tieba_reply_stats.compare import MODES, compare_threads
 from tieba_reply_stats.config_backup import preview as backup_preview
 from tieba_reply_stats.config_backup import read_backup, write_backup
 from tieba_reply_stats.cookie_store import clear_cookie, load_cookie, save_cookie
+from tieba_reply_stats.errors import friendly_error
 from tieba_reply_stats.export import export_workbook
 from tieba_reply_stats.fetch import CaptchaError, Fetcher, FetchError, ThreadGoneError, parse_cookie_input
 from tieba_reply_stats.filters import LEVEL_OPTIONS, MARK_OPTIONS, filter_users
@@ -4135,7 +4136,8 @@ class App:
             else:
                 self._post(("cancelled",))
         except Exception as error:  # noqa: BLE001 - 界面上要给出可读信息
-            self._post(("error", f"{type(error).__name__}: {error}\n\n{traceback.format_exc()}"))
+            self._post(("log", traceback.format_exc(), "muted"))
+            self._post(("error", friendly_error(error)))
 
     def _post(self, message: tuple) -> None:
         self.log_queue.put(message)
