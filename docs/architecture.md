@@ -77,8 +77,9 @@ URL → extract_tid
 ```text
 URL → extract_tid
   → POST /c/f/pb/page?cmd=302001（protobuf，无 BDUSS）
-  → 每页：floors + sub_post_list（每层 ≤10）+ user_list
-  → 翻页至 total_page
+  → 每页：floors + user_list（sub_post_list 只是前 10 条预览）
+  → 对每层 POST /c/f/pb/floor?cmd=302002（protobuf，无 BDUSS）
+  → 按 pn 翻页，直到 has_more = false
   → ThreadData
 ```
 

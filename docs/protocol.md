@@ -65,6 +65,30 @@ x_bd_data_type: protobuf
 sub_post_list=15, author_id=19, author=23`。  
 `SubPostList`：`id=1, content=2, time=3, author_id=4, author=6 floor, author=7`。
 
+## 2.3 按层翻楼中楼（匿名可用）
+
+```text
+POST https://tiebac.baidu.com/c/f/pb/floor?cmd=302002
+Content-Type: multipart/form-data; boundary=-*_r1999
+x_bd_data_type: protobuf
+```
+
+请求 `PbFloorReqIdl.data`：
+
+| 字段 | 编号 | 说明 |
+|---|---|---|
+| `common` | 1 | `_client_type=2`、`_client_version` |
+| `kz` | 2 | 帖子 tid |
+| `pid` | 3 | 楼层 pid（`is_comment=false`） |
+| `spid` | 4 | 楼中楼 pid（`is_comment=true`） |
+| `pn` | 5 | 页码 |
+| `sort` | 6 | 排序 |
+
+响应 `PbFloorResIdl.data`：`comment_list`（评论列表）、`page`。
+
+实测：无 BDUSS 也能翻页；某层 32 条回复时，`pn=1` 返回 29 条、`pn=2` 返回 2 条，`has_more=false`。
+因此免登录可以抓完整楼中楼，不必受 `page` 接口每层 10 条预览的限制。
+
 ## 3. 用户资料 protobuf
 
 ```text
