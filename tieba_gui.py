@@ -3097,7 +3097,7 @@ class App:
             return
         if not messagebox.askyesno(
             "任务仍在进行",
-            "停止任务并退出？" + chr(10) + "已完成的部分会保留。",
+            "停止任务并退出？" + chr(10) + "未导出的已完成部分可能不会保留。",
             parent=self.root,
         ):
             return
