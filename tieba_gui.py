@@ -2525,10 +2525,12 @@ class App:
             text="再次抓取时自动刷新已抓帖子",
             variable=self.auto_refresh_var,
             command=self._on_fetch_settings_changed,
-        ).pack(anchor="w")
+        ).pack(anchor="w", padx=8, pady=(4, 0))
         removed_row = tk.Frame(fetch_box, bg="#eef1f5")
-        removed_row.pack(anchor="w", pady=(4, 0))
-        tk.Label(removed_row, text="输入框已移除的旧帖：", bg="#eef1f5", fg="#475569").pack(side="left")
+        removed_row.pack(anchor="w", fill="x", padx=8, pady=(4, 0))
+        tk.Label(
+            removed_row, text="输入框已移除的旧帖：", width=18, anchor="w", bg="#eef1f5", fg="#475569"
+        ).pack(side="left")
         self.removed_action_var = tk.StringVar(
             value={"keep": "保留旧结果", "remove": "移除旧结果", "ask": "每次询问"}.get(
                 self.settings.get("removed_thread_action", "keep"), "保留旧结果"
@@ -2543,8 +2545,8 @@ class App:
         ).pack(side="left")
         self.removed_action_var.trace_add("write", lambda *_: self._on_fetch_settings_changed())
         proxy_row = tk.Frame(fetch_box, bg="#eef1f5")
-        proxy_row.pack(anchor="w", pady=(4, 0))
-        tk.Label(proxy_row, text="网络代理：", bg="#eef1f5", fg="#475569").pack(side="left")
+        proxy_row.pack(anchor="w", fill="x", padx=8, pady=(4, 0))
+        tk.Label(proxy_row, text="网络代理：", width=18, anchor="w", bg="#eef1f5", fg="#475569").pack(side="left")
         self.proxy_mode_var = tk.StringVar(
             value={"system": "跟随系统", "none": "不使用", "custom": "自定义"}.get(
                 self.settings.get("proxy_mode", "system"), "跟随系统"
@@ -2562,8 +2564,8 @@ class App:
         self.proxy_mode_var.trace_add("write", lambda *_: self._on_proxy_changed())
         self.proxy_url_var.trace_add("write", lambda *_: self._on_proxy_changed())
         batch_row = tk.Frame(fetch_box, bg="#eef1f5")
-        batch_row.pack(anchor="w", pady=(4, 0))
-        tk.Label(batch_row, text="一键红绿灯并发：", bg="#eef1f5", fg="#475569").pack(side="left")
+        batch_row.pack(anchor="w", fill="x", padx=8, pady=(4, 0))
+        tk.Label(batch_row, text="一键红绿灯并发：", width=18, anchor="w", bg="#eef1f5", fg="#475569").pack(side="left")
         self.batch_concurrency_var = tk.StringVar(value=str(self.settings.get("batch_concurrency", 1)))
         ttk.Combobox(
             batch_row,
@@ -2577,9 +2579,11 @@ class App:
             side="left", padx=(6, 0)
         )
 
-        start_row = tk.Frame(box, bg="#eef1f5")
-        start_row.pack(anchor="w", pady=(0, 8))
-        tk.Label(start_row, text="打开设置时停在：", bg="#eef1f5", fg="#475569").pack(side="left")
+        ui_box = ttk.LabelFrame(box, text=" 界面 ")
+        ui_box.pack(fill="x", pady=(0, 6))
+        start_row = tk.Frame(ui_box, bg="#eef1f5", padx=8, pady=4)
+        start_row.pack(anchor="w", fill="x")
+        tk.Label(start_row, text="打开设置时停在：", width=18, anchor="w", bg="#eef1f5", fg="#475569").pack(side="left")
         self.settings_start_var = tk.StringVar(
             value="上次分类" if self.settings.get("settings_start") == "last" else "常规"
         )
@@ -2595,9 +2599,11 @@ class App:
         backup_box = ttk.LabelFrame(box, text=" 配置备份 / 恢复 ")
         backup_box.pack(fill="x", pady=(0, 6))
         ttk.Button(backup_box, text="备份配置", command=self._backup_config, width=12).pack(
-            side="left", padx=(0, 8)
+            side="left", padx=(8, 8), pady=4
         )
-        ttk.Button(backup_box, text="恢复配置", command=self._restore_config, width=12).pack(side="left")
+        ttk.Button(backup_box, text="恢复配置", command=self._restore_config, width=12).pack(
+            side="left", pady=4
+        )
         tk.Label(
             backup_box,
             text="只含设置和本地标记，不含 Cookie",
@@ -2606,6 +2612,8 @@ class App:
             font=("Microsoft YaHei UI", 8),
         ).pack(side="left", padx=(10, 0))
 
+        color_box = ttk.LabelFrame(box, text=" 表格标色 ")
+        color_box.pack(fill="x", pady=(0, 6))
         self.setting_vars = {}
         for key, text in (
             ("color_people", "在参与者列表里标色"),
@@ -2613,8 +2621,8 @@ class App:
             ("color_posts", "在「最近发言」表格里标色"),
         ):
             var = tk.BooleanVar(value=bool(self.settings.get(key, True)))
-            ttk.Checkbutton(box, text=text, variable=var, command=self._on_settings_changed).pack(
-                anchor="w", pady=4
+            ttk.Checkbutton(color_box, text=text, variable=var, command=self._on_settings_changed).pack(
+                anchor="w", padx=8, pady=3
             )
             self.setting_vars[key] = var
         self.general_hint = tk.Label(
