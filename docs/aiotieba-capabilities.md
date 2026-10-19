@@ -113,6 +113,53 @@
 结论：**10 条是预览上限，不是匿名接口的硬上限**；免登录也能抓完整楼中楼，
 代价是每层多一次（或多次）请求。
 
+## 2.6 隐藏关注贴吧
+
+### 全量列表
+
+不能。
+
+`get_follow_forums`（`/c/f/forum/like`，参数 `friend_uid`）在对方隐藏关注时，
+服务端不会返回完整列表；匿名实测直接报“用户未登录或登录失败”。
+
+### 单个贴吧的“是否关注”
+
+可以探测。
+
+`get_user_forum_info`（`/c/f/forum/getUserForumLevelInfo`，参数 `forum_id` +
+`friend_portrait`）返回：
+
+- `is_follow`：是否关注该吧；
+- `follow_days`：关注天数；
+- `level` / `level_name` / `exp`。
+
+匿名实测（`priv_like=3` 的隐藏用户）：
+
+```text
+uid=100000001
+示例吧 → is_follow=True, level=14
+北京       → is_follow=False, level=1
+原神       → is_follow=False, level=1
+```
+
+也就是说：
+
+> **不能列出“他关注了哪些吧”，但能回答“他是否关注这个吧”。**
+
+### 部分恢复来源
+
+- `profile.likeForum`：约 6 个精选关注；
+- `panel` 的 `honor.grade`：部分等级/关注；
+- 本帖发言吧：只能说明发过言，不等于关注；
+- `get_user_forum_info`：按候选吧探测 `is_follow`。
+
+### 产品建议
+
+- 只对“本帖发言吧 / 最近发言吧 / 本地标记吧”等候选做探测；
+- 不做“遍历所有贴吧”；
+- 结果标注“推断关注（候选）”，不标注“完整关注列表”；
+- 控制频率，避免大量请求。
+
 ## 3. 限制与风险
 
 - **只有吧务能用**：只能查自己管理的吧；
