@@ -4318,6 +4318,13 @@ def main() -> int:
             sys.stdout.reconfigure(encoding="utf-8", errors="replace")
         except Exception:  # noqa: BLE001
             pass
+    if os.name == "nt":
+        try:
+            import ctypes
+
+            ctypes.windll.shcore.SetProcessDpiAwareness(2)
+        except Exception:  # noqa: BLE001
+            pass
     if _acquire_instance() is None:
         _focus_existing_window()
         messagebox.showinfo("软件已在运行", "已有一个窗口在运行，请使用已有窗口。")

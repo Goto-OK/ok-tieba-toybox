@@ -150,6 +150,8 @@ def _decompress(body: bytes, headers) -> bytes:
 class Fetcher:
     """带 Cookie、限速、缓存与重试的抓取器。"""
 
+    DEFAULT_PROXY: Optional[str] = None
+
     def __init__(
         self,
         cookie: Optional[Dict[str, str]] = None,
@@ -163,6 +165,8 @@ class Fetcher:
         refresh: bool = False,
         verbose: bool = True,
     ) -> None:
+        if proxy is None:
+            proxy = Fetcher.DEFAULT_PROXY
         self.user_agent = user_agent
         self.timeout = timeout
         self.retries = max(1, retries)
