@@ -7,6 +7,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import queue
 import re
@@ -4033,6 +4034,30 @@ class App:
             merged[thread.meta.tid] = thread
         return list(merged.values())
 
+    def _write_log(self, event: str, **fields) -> None:
+        if not self.settings.get("log_enabled", False):
+            return
+        try:
+            log_dir = os.path.join(APP_DIR, "logs")
+            os.makedirs(log_dir, exist_ok=True)
+            path = os.path.join(log_dir, f"app-{datetime.now():%Y%m%d}.log")
+            record = {"time": datetime.now().isoformat(timespec="seconds"), "event": event}
+            record.update({key: value for key, value in fields.items() if value not in (None, "")})
+            with open(path, "a", encoding="utf-8") as handle:
+                handle.write(json.dumps(record, ensure_ascii=False) + chr(10))
+            files = sorted(
+                (os.path.join(log_dir, name) for name in os.listdir(log_dir) if name.startswith("app-")),
+                key=os.path.getmtime,
+                reverse=True,
+            )
+            for old in files[7:]:
+                try:
+                    os.remove(old)
+                except OSError:
+                    pass
+        except OSError:
+            pass
+
     def _persist_result(self, threads) -> None:
         if not threads or not self.settings.get("save_result", True):
             return
@@ -4173,6 +4198,7 @@ class App:
         self.last_include_op = include_op
 
         self.stop_event.clear()
+        self._write_log("fetch_start", threads=len(urls))
         self._set_running(True)
         self._append_log(f"\n开始统计 {len(urls)} 个帖子，请耐心等待…", "title")
         self.worker = threading.Thread(
@@ -4238,6 +4264,12 @@ class App:
                     self._post(("log", f"  ✗ 抓取失败：{error}", "err"))
                     continue
                 completed.append(thread)
+                self._write_log(
+                    "thread_done",
+                    tid=thread.meta.tid,
+                    floors=len(thread.floors),
+                    comments=len(thread.comments),
+                )
                 title = thread.meta.title or thread.meta.tid
                 self._post(
                     (
@@ -4271,6 +4303,7 @@ class App:
             else:
                 self._post(("cancelled",))
         except Exception as error:  # noqa: BLE001 - 界面上要给出可读信息
+            self._write_log("error", error=type(error).__name__)
             self._post(("log", traceback.format_exc(), "muted"))
             self._post(("error", friendly_error(error)))
 
