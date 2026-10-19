@@ -29,6 +29,7 @@ DEFAULTS: Dict[str, Any] = {
     "proxy_url": "",
     "log_enabled": False,
     "page_size": 1000,
+    "table_density": "comfortable",  # comfortable / compact
     "settings_start": "general",  # general / last
     "onboarding_seen": False,
     "window_geometry": "",
@@ -41,6 +42,7 @@ _CHOICES = {
     "removed_thread_action": ("keep", "remove", "ask"),
     "proxy_mode": ("system", "none", "custom"),
     "settings_start": ("general", "last"),
+    "table_density": ("comfortable", "compact"),
 }
 
 

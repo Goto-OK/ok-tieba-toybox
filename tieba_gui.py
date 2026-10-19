@@ -172,6 +172,7 @@ class App:
         self.mode_var = tk.StringVar(value=str(self.settings.get("mode", "guest")))
 
         self._build_ui()
+        self._apply_table_density()
         self.notebook.bind("<<NotebookTabChanged>>", self._on_main_tab_changed)
         saved_geometry = str(self.settings.get("window_geometry") or "")
         if saved_geometry:
@@ -205,10 +206,20 @@ class App:
         self.root.title(f"{APP_TITLE} v{VERSION}")
         screen_w = self.root.winfo_screenwidth()
         screen_h = self.root.winfo_screenheight()
-        width = max(980, min(1240, screen_w - 80))
-        height = max(720, min(860, screen_h - 100))
+        try:
+            scale = float(self.root.tk.call("tk", "scaling")) / (96 / 72)
+        except (tk.TclError, ValueError):
+            scale = 1.0
+        if scale >= 1.45:
+            base_w, base_h = 1240, 860
+        elif scale >= 1.2:
+            base_w, base_h = 1100, 840
+        else:
+            base_w, base_h = 980, 820
+        width = max(900, min(base_w, screen_w - 80))
+        height = max(720, min(base_h, screen_h - 100))
         self.root.geometry(f"{width}x{height}")
-        self.root.minsize(min(1000, screen_w - 40), min(680, screen_h - 80))
+        self.root.minsize(min(900 if scale >= 1.2 else 840, screen_w - 40), min(680, screen_h - 80))
         self.root.configure(bg="#eef1f5")
 
         style = ttk.Style(self.root)
@@ -754,7 +765,7 @@ class App:
             var.trace_add("write", lambda *_: self._on_people_filter_changed())
 
         paned = ttk.PanedWindow(self.tab_people, orient="horizontal")
-        paned.pack(fill="both", expand=True, padx=10, pady=(0, 10))
+        paned.pack(fill="both", expand=True, padx=10, pady=(0, 6))
         self.people_paned = paned
         left = tk.Frame(paned)
         right = tk.Frame(paned)
@@ -1250,7 +1261,7 @@ class App:
         self.lookup_info.pack(fill="x", padx=12, pady=(0, 4))
 
         paned = ttk.PanedWindow(self.tab_lookup, orient="horizontal")
-        paned.pack(fill="both", expand=True, padx=10, pady=(0, 10))
+        paned.pack(fill="both", expand=True, padx=10, pady=(0, 6))
         self.lookup_paned = paned
         left = tk.Frame(paned)
         right = tk.Frame(paned)
@@ -2295,7 +2306,23 @@ class App:
             return
         self.settings["onboarding_seen"] = True
         save_settings(self.settings)
-        self._show_quick_guide()
+        banner = tk.Frame(self.root, bg="#fff7e6", padx=14, pady=7)
+        banner.pack(fill="x", before=self.notebook)
+        tk.Label(
+            banner,
+            text="首次使用：默认匿名；红绿灯/本地标记只存本机；关注增强默认关闭，可在设置里开启。",
+            bg="#fff7e6",
+            fg="#7c4a03",
+            font=("Microsoft YaHei UI", 9),
+            anchor="w",
+        ).pack(side="left", fill="x", expand=True)
+        ttk.Button(
+            banner,
+            text="查看说明",
+            command=lambda: (banner.destroy(), self._show_quick_guide()),
+            width=8,
+        ).pack(side="right", padx=(6, 0))
+        ttk.Button(banner, text="关闭", command=banner.destroy, width=6).pack(side="right", padx=(6, 0))
 
     def _restore_defaults(self) -> None:
         if not messagebox.askyesno(
@@ -2364,7 +2391,7 @@ class App:
         self._append_log("软件数据已清空；导出文件未受影响。", "ok")
 
     def _build_general_tab(self) -> None:
-        box = tk.Frame(self.tab_general, bg="#eef1f5", padx=16, pady=12)
+        box = tk.Frame(self.tab_general, bg="#eef1f5", padx=14, pady=10)
         box.pack(fill="both", expand=True)
         tk.Label(
             box,
@@ -2372,9 +2399,9 @@ class App:
             bg="#eef1f5",
             fg="#475569",
             font=("Microsoft YaHei UI", 9),
-        ).pack(anchor="w", pady=(0, 10))
+        ).pack(anchor="w", pady=(0, 6))
         risk_box = ttk.LabelFrame(box, text=" 本地标记（红绿灯） ")
-        risk_box.pack(fill="x", pady=(0, 10))
+        risk_box.pack(fill="x", pady=(0, 6))
         self.risk_var = tk.BooleanVar(value=bool(self.settings.get("risk_enabled", False)))
         ttk.Checkbutton(
             risk_box,
@@ -2391,7 +2418,7 @@ class App:
         ).pack(anchor="w", padx=20, pady=(2, 0))
 
         enhance_box = ttk.LabelFrame(box, text=" 关注增强（可选） ")
-        enhance_box.pack(fill="x", pady=(0, 10))
+        enhance_box.pack(fill="x", pady=(0, 6))
         self.follow_enhance_var = tk.BooleanVar(value=bool(self.settings.get("follow_enhance", False)))
         ttk.Checkbutton(
             enhance_box,
@@ -2422,7 +2449,7 @@ class App:
         self.follow_load_mode_var.trace_add("write", lambda *_: self._on_follow_load_mode_changed())
 
         fetch_box = ttk.LabelFrame(box, text=" 抓取行为 ")
-        fetch_box.pack(fill="x", pady=(0, 10))
+        fetch_box.pack(fill="x", pady=(0, 6))
         self.auto_refresh_var = tk.BooleanVar(value=bool(self.settings.get("auto_refresh_old", False)))
         ttk.Checkbutton(
             fetch_box,
@@ -2497,7 +2524,7 @@ class App:
         self.settings_start_var.trace_add("write", lambda *_: self._on_settings_start_changed())
 
         backup_box = ttk.LabelFrame(box, text=" 配置备份 / 恢复 ")
-        backup_box.pack(fill="x", pady=(0, 10))
+        backup_box.pack(fill="x", pady=(0, 6))
         ttk.Button(backup_box, text="备份配置", command=self._backup_config, width=12).pack(
             side="left", padx=(0, 8)
         )
@@ -2781,6 +2808,20 @@ class App:
         )
         self.grid_thread_box.pack(side="left", padx=(8, 0))
         self.grid_thread_box.bind("<<ComboboxSelected>>", lambda _event: self._refresh_grid())
+        tk.Label(bar, text="密度：", bg="#ffffff", fg="#475569", font=("Microsoft YaHei UI", 8)).pack(
+            side="left", padx=(8, 0)
+        )
+        self.table_density_var = tk.StringVar(
+            value="紧凑" if self.settings.get("table_density") == "compact" else "舒适"
+        )
+        ttk.Combobox(
+            bar,
+            values=("舒适", "紧凑"),
+            textvariable=self.table_density_var,
+            width=5,
+            state="readonly",
+        ).pack(side="left")
+        self.table_density_var.trace_add("write", lambda *_: self._on_table_density_changed())
         self.export_btn = tk.Button(
             bar,
             text="导出 Excel",
@@ -2817,6 +2858,16 @@ class App:
 
         self.grid_nb = ttk.Notebook(self.tab_grid)
         self.grid_nb.pack(fill="both", expand=True, padx=8, pady=8)
+
+    def _apply_table_density(self) -> None:
+        compact = self.settings.get("table_density") == "compact"
+        style = ttk.Style(self.root)
+        style.configure("Treeview", rowheight=25 if compact else 31)
+
+    def _on_table_density_changed(self) -> None:
+        self.settings["table_density"] = "compact" if self.table_density_var.get() == "紧凑" else "comfortable"
+        save_settings(self.settings)
+        self._apply_table_density()
 
     def _update_grid_selector(self) -> None:
         if not hasattr(self, "grid_thread_box"):
