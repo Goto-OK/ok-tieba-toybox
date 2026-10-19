@@ -7,6 +7,7 @@
 | [protocol.md](protocol.md) | 贴吧接口、protobuf、本地 HTTP API |
 | [release.md](release.md) | 版本、构建、发布检查清单 |
 | [standards.md](standards.md) | 代码风格、测试、Git、完成定义 |
+| [status.md](status.md) | 规范 / 源码 / 测试 / 成品状态 |
 | [backlog.md](backlog.md) | 待办、缺口、优先级 |
 | [proposals.md](proposals.md) | 待确认的功能规范草案 |
 | [aiotieba-capabilities.md](aiotieba-capabilities.md) | aiotieba 删除内容能力研究 |
