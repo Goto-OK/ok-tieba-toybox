@@ -4,7 +4,7 @@
 
 ## 启动时读什么
 
-1. 先读 [docs/spec-index.md](docs/spec-index.md)（规范入口）；
+1. 先读 [SPEC.md](SPEC.md)（收尾规范，后续实现的唯一依据）；
 2. 需要判断做没做，读 [docs/status.md](docs/status.md) 和 [docs/spec-gaps.md](docs/spec-gaps.md)；
    - 规范已冻结，新增/变更需求要先说明；
 3. 需要改代码，再读目标功能正文 + [docs/code-map.md](docs/code-map.md)；

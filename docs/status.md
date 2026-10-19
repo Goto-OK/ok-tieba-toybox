@@ -5,7 +5,7 @@
 
 ## 0. 规范冻结
 
-2026-10-20 规范审查完成并冻结；实现差距与顺序见 [spec-gaps.md](spec-gaps.md)。
+2026-10-20 规范审查完成并冻结；收尾规范为 [SPEC.md](../SPEC.md)，实现只看这一份；差距见 [spec-gaps.md](spec-gaps.md)。
 
 ## 1. 图例
 
