@@ -1873,29 +1873,6 @@ class App:
             self._refresh_people()
 
     # ------------------------------------------------------------------ mode
-    def _build_mode_bar(self, parent) -> None:
-        bar = tk.Frame(parent, bg="#ffffff", padx=16, pady=8)
-        bar.pack(fill="x")
-        tk.Label(
-            bar,
-            text="使用方式：",
-            bg="#ffffff",
-            fg="#334155",
-            font=("Microsoft YaHei UI", 9, "bold"),
-        ).pack(side="left")
-        ttk.Radiobutton(
-            bar, text="免登录", value="guest", variable=self.mode_var, command=self._on_mode_select
-        ).pack(side="left", padx=(4, 0))
-        ttk.Radiobutton(
-            bar,
-            text="登录（Cookie）",
-            value="login",
-            variable=self.mode_var,
-            command=self._on_mode_select,
-        ).pack(side="left", padx=(12, 0))
-        self.mode_hint = tk.Label(bar, text="", bg="#ffffff", fg="#6b7280", font=("Microsoft YaHei UI", 8))
-        self.mode_hint.pack(side="left", padx=(12, 0))
-
     def _apply_mode_ui(self) -> None:
         login = self.mode_var.get() == "login"
         state = "normal" if login else "disabled"
@@ -1917,11 +1894,6 @@ class App:
             )
         self._apply_risk_ui()
 
-    def _on_mode_select(self) -> None:
-        mode = self.mode_var.get()
-        self._set_mode(mode)
-        self._append_log(f"已切换为{'登录' if mode == 'login' else '免登录'}模式", "muted")
-
     def _set_mode(self, mode: str, persist: bool = True) -> None:
         mode = mode if mode in ("guest", "login") else "guest"
         self.mode_var.set(mode)
@@ -1930,85 +1902,6 @@ class App:
             self.settings["mode_chosen"] = True
             save_settings(self.settings)
         self._apply_mode_ui()
-
-    def _maybe_choose_mode(self) -> None:
-        if self.mode_chosen:
-            return
-        self._show_mode_dialog()
-
-    def _show_mode_dialog(self) -> None:
-        win = tk.Toplevel(self.root)
-        win.title("选择使用方式")
-        win.configure(bg="#ffffff")
-        win.resizable(False, False)
-        win.transient(self.root)
-        win.grab_set()
-        frame = tk.Frame(win, bg="#ffffff", padx=20, pady=16)
-        frame.pack(fill="both", expand=True)
-        tk.Label(
-            frame,
-            text="选择使用方式",
-            bg="#ffffff",
-            fg="#1f2937",
-            font=("Microsoft YaHei UI", 12, "bold"),
-        ).pack(anchor="w")
-        tk.Label(
-            frame,
-            text="之后可在「抓取」页顶部随时切换。",
-            bg="#ffffff",
-            fg="#6b7280",
-            font=("Microsoft YaHei UI", 8),
-        ).pack(anchor="w", pady=(2, 10))
-        choice = tk.StringVar(value=self.mode_var.get())
-        cards = tk.Frame(frame, bg="#ffffff")
-        cards.pack(fill="x")
-        for value, title, desc in (
-            ("guest", "免登录（推荐）", "公开帖子；楼中楼按设置补全；红绿灯只看发言"),
-            ("login", "登录（Cookie）", "完整楼中楼、关注列表、完整资料；需要 BDUSS"),
-        ):
-            row = tk.Frame(
-                cards,
-                bg="#f8fafc",
-                highlightthickness=1,
-                highlightbackground="#e2e8f0",
-                padx=10,
-                pady=8,
-            )
-            row.pack(fill="x", pady=4)
-            ttk.Radiobutton(row, text=title, value=value, variable=choice).pack(anchor="w")
-            tk.Label(
-                row,
-                text=desc,
-                bg="#f8fafc",
-                fg="#64748b",
-                font=("Microsoft YaHei UI", 8),
-            ).pack(anchor="w", padx=20)
-        remember = tk.BooleanVar(value=True)
-        ttk.Checkbutton(frame, text="记住选择（下次不再询问）", variable=remember).pack(
-            anchor="w", pady=(10, 8)
-        )
-        buttons = tk.Frame(frame, bg="#ffffff")
-        buttons.pack(fill="x")
-
-        def finish(mode: str) -> None:
-            chosen = bool(remember.get())
-            self.mode_chosen = chosen
-            self.settings["mode"] = mode
-            self.settings["mode_chosen"] = chosen
-            save_settings(self.settings)
-            self.mode_var.set(mode)
-            self._apply_mode_ui()
-            self._append_log(f"已选择{'登录' if mode == 'login' else '免登录'}模式", "muted")
-            win.destroy()
-
-        ttk.Button(buttons, text="先免登录", command=lambda: finish("guest")).pack(side="left")
-        ttk.Button(buttons, text="使用所选模式", command=lambda: finish(choice.get())).pack(side="right")
-        win.protocol("WM_DELETE_WINDOW", lambda: finish("guest"))
-        win.update_idletasks()
-        width, height = win.winfo_reqwidth(), win.winfo_reqheight()
-        x = self.root.winfo_rootx() + max(0, (self.root.winfo_width() - width) // 2)
-        y = self.root.winfo_rooty() + max(0, (self.root.winfo_height() - height) // 3)
-        win.geometry(f"+{x}+{y}")
 
     def _build_settings_tab(self) -> None:
         wrap = tk.Frame(self.tab_settings, bg="#eef1f5")
@@ -3513,7 +3406,13 @@ class App:
             else:
                 messagebox.showerror("保存失败", "无法写入本地标记配置文件。", parent=win)
 
-        ttk.Button(win, text="保存", command=save).pack(pady=10)
+        buttons = tk.Frame(win, bg="#f5f7fa")
+        buttons.pack(fill="x", padx=12, pady=(4, 12))
+        ttk.Button(buttons, text="取消", command=win.destroy, width=10).pack(side="right")
+        ttk.Button(buttons, text="保存", command=save, width=10).pack(side="right", padx=(0, 8))
+        win.bind("<Escape>", lambda _event: win.destroy())
+        win.transient(self.root)
+        win.grab_set()
 
     def _people_filter_active(self) -> bool:
         if self.people_keyword_var.get().strip():
@@ -4442,7 +4341,10 @@ class App:
                 output += ".xlsx"
             self._set_output(output)
             if os.path.exists(output) and not messagebox.askyesno(
-                "文件已存在", f"这个文件已经存在：\n{output}\n\n要覆盖它吗？", parent=self.root
+                "文件已存在",
+                f"这个文件已经存在：\n{output}\n\n要覆盖它吗？",
+                parent=self.root,
+                default=messagebox.NO,
             ):
                 return
         else:
@@ -4535,6 +4437,7 @@ class App:
             "任务仍在进行",
             "停止任务并退出？" + chr(10) + "未导出的已完成部分可能不会保留。",
             parent=self.root,
+            default=messagebox.NO,
         ):
             return
         self._closing = True
