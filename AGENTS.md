@@ -9,6 +9,26 @@
 3. 需要改代码，再读目标功能正文 + [docs/code-map.md](docs/code-map.md)；
 4. 不要默认通读 `docs/` 全部文件。
 
+## 修改意见先归类
+
+收到用户修改意见时，先判断归属，再动文档/代码：
+
+| 类型 | 归属 |
+|---|---|
+| 功能行为、统计口径、批量逻辑 | `docs/requirements.md` |
+| 按钮、日志、窗口、表格、文案 | `docs/ui-spec.md` |
+| Cookie / BDUSS / STOKEN / 权限 | `docs/credentials.md` |
+| 接口字段、签名、分页 | `docs/protocol.md` |
+| 测试、构建、版本 | `docs/standards.md` / `docs/release.md` |
+| 状态、差距 | `docs/status.md` |
+
+规则：
+
+- 一条规则只写一次正文，其他文档只放链接；
+- 行为进 requirements，呈现进 ui-spec；
+- 凭据矩阵只放 credentials，requirements 只留验收；
+- 新增 FR/UI ID 时同步更新 `docs/spec-index.md`。
+
 ## 硬规则
 
 - **默认只改规范，不改代码**；
