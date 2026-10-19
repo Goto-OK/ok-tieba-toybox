@@ -6,6 +6,7 @@
 
 1. 先读 [docs/spec-index.md](docs/spec-index.md)（规范入口）；
 2. 需要判断做没做，读 [docs/status.md](docs/status.md) 和 [docs/spec-gaps.md](docs/spec-gaps.md)；
+   - 规范已冻结，新增/变更需求要先说明；
 3. 需要改代码，再读目标功能正文 + [docs/code-map.md](docs/code-map.md)；
 4. 不要默认通读 `docs/` 全部文件。
 
