@@ -32,6 +32,7 @@
 | `config_backup.py` | 配置备份/恢复 |
 | `blacklist.py` | 本地标记、优先级、导入导出、合并 |
 | `settings.py` | 设置默认值、类型校验、持久化 |
+| `theme.py` | 浅色/深色/系统、强调色、颜色映射 |
 | `cookie_store.py` | Windows DPAPI Cookie |
 | `storage.py` | 最近结果 SQLite / DPAPI / 恢复 |
 | `errors.py` | 统一错误文案 |
@@ -73,7 +74,7 @@
 | `tests/test_errors.py` | 错误文案 |
 | `tests/test_version.py` | 版本一致性 |
 
-当前：61 个 pytest 通过，selftest 通过。
+当前：64 个 pytest 通过，selftest 通过。
 
 ## 5. 脚本
 

@@ -5,7 +5,7 @@
 
 > 当前版本：**1.4.0**
 
-界面固定浅色主题，不提供深色模式。　详细改动见 [CHANGELOG.md](CHANGELOG.md)
+支持浅色 / 深色 / 跟随系统，以及蓝/绿/紫强调色。　详细改动见 [CHANGELOG.md](CHANGELOG.md)
 
 ---
 

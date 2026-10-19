@@ -69,6 +69,7 @@ from tieba_reply_stats.storage import (
 from tieba_reply_stats.storage import (
     old_files as stored_old_files,
 )
+from tieba_reply_stats.theme import map_color, resolve_palette
 from tieba_reply_stats.version import __version__ as VERSION
 
 APP_TITLE = "贴吧楼层回复统计"
@@ -168,9 +169,14 @@ class App:
         self._auto_filled = False
         self.blacklist = load_blacklist()
         self.settings = load_settings()
+        self.palette = resolve_palette(
+            str(self.settings.get("theme_mode", "light")),
+            str(self.settings.get("accent", "blue")),
+        )
         self.mode_var = tk.StringVar(value="guest")
 
         self._build_ui()
+        self._apply_theme()
         self._apply_table_density()
         self.notebook.bind("<<NotebookTabChanged>>", self._on_main_tab_changed)
         saved_geometry = str(self.settings.get("window_geometry") or "")
@@ -846,9 +852,9 @@ class App:
         for col in columns:
             self.people_tree.heading(col, text=headings[col])
             self.people_tree.column(col, width=widths[col], anchor="center" if col != "name" else "w")
-        self.people_tree.tag_configure("ban", background="#ffdede")
-        self.people_tree.tag_configure("warn", background="#fff4cc")
-        self.people_tree.tag_configure("safe", background="#e3f6e3")
+        self.people_tree.tag_configure("ban", background=self.palette["danger_bg"])
+        self.people_tree.tag_configure("warn", background=self.palette["warning_bg"])
+        self.people_tree.tag_configure("safe", background=self.palette["safe_bg"])
         scroll = ttk.Scrollbar(tree_wrap, orient="vertical", command=self.people_tree.yview)
         xscroll = ttk.Scrollbar(tree_wrap, orient="horizontal", command=self.people_tree.xview)
         self.people_tree.configure(yscrollcommand=scroll.set, xscrollcommand=xscroll.set)
@@ -1302,8 +1308,18 @@ class App:
             bar2, text="", bg="#ffffff", fg="#6b7280", font=("Microsoft YaHei UI", 8)
         )
         self.lookup_traffic_text.pack(side="right", padx=(0, 6))
-        for key, color in (("ban", "#dc2626"), ("warn", "#f59e0b"), ("safe", "#16a34a")):
-            label = tk.Label(bar2, text="●", fg="#d1d5db", bg="#ffffff", font=("Microsoft YaHei UI", 12))
+        for key, color in (
+            ("ban", self.palette["danger"]),
+            ("warn", self.palette["warning"]),
+            ("safe", self.palette["safe"]),
+        ):
+            label = tk.Label(
+                bar2,
+                text="●",
+                fg=self.palette["disabled_text"],
+                bg="#ffffff",
+                font=("Microsoft YaHei UI", 12),
+            )
             label.pack(side="right", padx=(0, 2))
             self.lookup_traffic_labels[key] = (label, color)
         tk.Label(bar2, text="标记：", bg="#ffffff", fg="#6b7280", font=("Microsoft YaHei UI", 8)).pack(
@@ -1630,7 +1646,9 @@ class App:
         hidden_follows = False
         label = {"ban": "禁止", "warn": "警告", "safe": "安全"}.get(hit_level, "")
         for key, (traffic_label, traffic_color) in getattr(self, "lookup_traffic_labels", {}).items():
-            traffic_label.configure(fg=traffic_color if key == hit_level else "#d1d5db")
+            traffic_label.configure(
+                fg=traffic_color if key == hit_level else self.palette["disabled_text"]
+            )
         risk = " · 关注列表隐藏，未命中禁止时标黄" if hidden_follows else ""
         try:
             self.lookup_traffic_text.configure(
@@ -1943,21 +1961,24 @@ class App:
         inner.pack(side="left", fill="both", expand=True)
         self.settings_inner = inner
         self.tab_general = tk.Frame(inner, bg="#eef1f5")
+        self.tab_appearance = tk.Frame(inner, bg="#eef1f5")
         self.tab_blacklist = tk.Frame(inner, bg="#eef1f5")
         self.tab_help = tk.Frame(inner, bg="#eef1f5")
         self.tab_storage = tk.Frame(inner, bg="#eef1f5")
         self.tab_about = tk.Frame(inner, bg="#eef1f5")
         self.settings_pages = [
             self.tab_general,
+            self.tab_appearance,
             self.tab_blacklist,
             self.tab_storage,
             self.tab_help,
             self.tab_about,
         ]
         self._build_general_tab()
+        self._build_appearance_tab()
         self._build_storage_tab()
         self._build_about_tab()
-        for label in ("常规", "本地标记", "结果与存储", "使用说明", "关于 / 帮助"):
+        for label in ("常规", "外观", "本地标记", "结果与存储", "使用说明", "关于 / 帮助"):
             self.settings_nav.insert("end", f"  {label}")
         self.settings_nav.bind("<<ListboxSelect>>", self._on_settings_nav)
         self.settings_nav.selection_set(0)
@@ -2018,6 +2039,377 @@ class App:
         if selection:
             self._last_settings_index = selection[0]
             self._show_settings_page(selection[0])
+
+    def _build_appearance_tab(self) -> None:
+        box = tk.Frame(self.tab_appearance, bg="#eef1f5", padx=14, pady=10)
+        box.pack(fill="both", expand=True)
+        tk.Label(
+            box,
+            text="主题与强调色只影响应用内容区；系统文件选择框和系统提示框保持系统样式。",
+            bg="#eef1f5",
+            fg="#475569",
+            font=("Microsoft YaHei UI", 9),
+            wraplength=760,
+            justify="left",
+        ).pack(anchor="w", pady=(0, 8))
+
+        theme_box = ttk.LabelFrame(box, text=" 主题 ")
+        theme_box.pack(fill="x", pady=(0, 6))
+        row = tk.Frame(theme_box, bg="#eef1f5")
+        row.pack(anchor="w", fill="x", padx=8, pady=(6, 3))
+        tk.Label(row, text="主题：", width=14, anchor="w", bg="#eef1f5", fg="#475569").pack(side="left")
+        self.theme_mode_var = tk.StringVar(
+            value={"light": "浅色", "dark": "深色", "system": "跟随系统"}.get(
+                self.settings.get("theme_mode", "light"), "浅色"
+            )
+        )
+        ttk.Combobox(
+            row,
+            values=("浅色", "深色", "跟随系统"),
+            textvariable=self.theme_mode_var,
+            width=10,
+            state="readonly",
+        ).pack(side="left")
+        self.theme_mode_var.trace_add("write", lambda *_: self._on_theme_changed())
+        row2 = tk.Frame(theme_box, bg="#eef1f5")
+        row2.pack(anchor="w", fill="x", padx=8, pady=(2, 4))
+        tk.Label(row2, text="强调色：", width=14, anchor="w", bg="#eef1f5", fg="#475569").pack(side="left")
+        self.accent_var = tk.StringVar(
+            value={"blue": "蓝", "green": "绿", "purple": "紫"}.get(
+                self.settings.get("accent", "blue"), "蓝"
+            )
+        )
+        ttk.Combobox(
+            row2,
+            values=("蓝", "绿", "紫"),
+            textvariable=self.accent_var,
+            width=10,
+            state="readonly",
+        ).pack(side="left")
+        self.accent_var.trace_add("write", lambda *_: self._on_accent_changed())
+
+        note = ttk.LabelFrame(box, text=" 说明 ")
+        note.pack(fill="x")
+        tk.Label(
+            note,
+            text="跟随系统只在启动时读取 Windows 设置；运行中切换系统主题，重启后生效。",
+            bg="#eef1f5",
+            fg="#8a94a6",
+            font=("Microsoft YaHei UI", 8),
+            wraplength=740,
+            justify="left",
+        ).pack(anchor="w", padx=8, pady=6)
+
+    def _on_theme_changed(self) -> None:
+        mode = {"浅色": "light", "深色": "dark", "跟随系统": "system"}.get(
+            self.theme_mode_var.get(), "light"
+        )
+        self.settings["theme_mode"] = mode
+        save_settings(self.settings)
+        self._apply_theme()
+
+    def _on_accent_changed(self) -> None:
+        accent = {"蓝": "blue", "绿": "green", "紫": "purple"}.get(self.accent_var.get(), "blue")
+        self.settings["accent"] = accent
+        save_settings(self.settings)
+        self._apply_theme()
+
+    def _theme_widget_tree(self, widget) -> None:
+        palette = self.palette
+        for option in (
+            "bg",
+            "fg",
+            "activebackground",
+            "activeforeground",
+            "selectbackground",
+            "selectforeground",
+            "highlightbackground",
+            "insertbackground",
+            "disabledforeground",
+        ):
+            try:
+                current = widget.cget(option)
+            except tk.TclError:
+                continue
+            value = str(current)
+            new = map_color(option, value, palette)
+            klass = widget.winfo_class()
+            if value.startswith("System"):
+                if option in ("bg", "background"):
+                    new = palette["surface"] if klass in ("Text", "Entry", "Listbox") else palette["window_bg"]
+                elif option in ("fg", "foreground"):
+                    new = palette["text"]
+                elif option == "insertbackground":
+                    new = palette["text"]
+            if new != current:
+                try:
+                    widget.configure(**{option: new})
+                except tk.TclError:
+                    pass
+        try:
+            if widget.winfo_class() in ("Text", "Entry", "Listbox"):
+                widget.configure(
+                    bg=palette["surface"],
+                    fg=palette["text"],
+                    insertbackground=palette["text"],
+                    selectbackground=palette["selection_bg"],
+                    selectforeground=palette["selection_text"],
+                )
+        except tk.TclError:
+            pass
+        for child in widget.winfo_children():
+            self._theme_widget_tree(child)
+
+    def _apply_theme(self) -> None:
+        palette = resolve_palette(
+            str(self.settings.get("theme_mode", "light")),
+            str(self.settings.get("accent", "blue")),
+        )
+        self.palette = palette
+        self.root.configure(bg=palette["window_bg"])
+        style = ttk.Style(self.root)
+        dark = palette["window_bg"] == "#15171c"
+        try:
+            style.theme_use("clam" if dark else "vista")
+        except tk.TclError:
+            pass
+        style.configure(
+            "TFrame",
+            background=palette["window_bg"],
+        )
+        style.configure("TLabel", background=palette["window_bg"], foreground=palette["text"])
+        style.configure(
+            "TLabelframe",
+            background=palette["window_bg"],
+            bordercolor=palette["border"],
+            lightcolor=palette["border"],
+            darkcolor=palette["border"],
+        )
+        style.configure(
+            "TLabelframe.Label",
+            background=palette["window_bg"],
+            foreground=palette["text"],
+        )
+        style.configure(
+            "TCheckbutton",
+            background=palette["window_bg"],
+            foreground=palette["text"],
+            indicatorbackground=palette["surface"],
+            indicatorforeground=palette["surface"],
+            upperbordercolor=palette["border"],
+            lowerbordercolor=palette["border"],
+        )
+        style.map(
+            "TCheckbutton",
+            indicatorbackground=[("selected", palette["accent"]), ("!selected", palette["surface"])],
+            indicatorforeground=[("selected", palette["accent_text"]), ("!selected", palette["surface"])],
+        )
+        style.configure(
+            "TRadiobutton",
+            background=palette["window_bg"],
+            foreground=palette["text"],
+            indicatorbackground=palette["surface"],
+            indicatorforeground=palette["surface"],
+            upperbordercolor=palette["border"],
+            lowerbordercolor=palette["border"],
+        )
+        style.map(
+            "TRadiobutton",
+            indicatorbackground=[("selected", palette["accent"]), ("!selected", palette["surface"])],
+            indicatorforeground=[("selected", palette["accent_text"]), ("!selected", palette["surface"])],
+        )
+        style.configure(
+            "TButton",
+            background=palette["button_bg"],
+            foreground=palette["button_text"],
+            bordercolor=palette["border"],
+            lightcolor=palette["button_bg"],
+            darkcolor=palette["button_bg"],
+        )
+        style.map(
+            "TButton",
+            background=[("active", palette["button_hover"]), ("disabled", palette["disabled_bg"])],
+            foreground=[("disabled", palette["disabled_text"])],
+        )
+        style.configure(
+            "TEntry",
+            fieldbackground=palette["surface"],
+            foreground=palette["text"],
+            insertcolor=palette["text"],
+            bordercolor=palette["border"],
+        )
+        style.configure(
+            "TCombobox",
+            fieldbackground=palette["surface"],
+            foreground=palette["text"],
+            background=palette["button_bg"],
+            arrowcolor=palette["text"],
+            bordercolor=palette["border"],
+        )
+        style.map(
+            "TCombobox",
+            fieldbackground=[("readonly", palette["surface"]), ("!disabled", palette["surface"])],
+            foreground=[("readonly", palette["text"])],
+            selectbackground=[("readonly", palette["selection_bg"])],
+            selectforeground=[("readonly", palette["selection_text"])],
+        )
+        style.configure(
+            "TSpinbox",
+            fieldbackground=palette["surface"],
+            foreground=palette["text"],
+            background=palette["button_bg"],
+            arrowcolor=palette["text"],
+            bordercolor=palette["border"],
+        )
+        style.map(
+            "TSpinbox",
+            fieldbackground=[("!disabled", palette["surface"])],
+            foreground=[("!disabled", palette["text"])],
+        )
+        style.configure(
+            "Treeview",
+            background=palette["table_bg"],
+            fieldbackground=palette["table_bg"],
+            foreground=palette["text"],
+            bordercolor=palette["border"],
+        )
+        style.configure(
+            "Treeview.Heading",
+            background=palette["table_header_bg"],
+            foreground=palette["table_header_text"],
+            bordercolor=palette["border"],
+        )
+        style.map(
+            "Treeview",
+            background=[("selected", palette["selection_bg"])],
+            foreground=[("selected", palette["selection_text"])],
+        )
+        style.configure("TNotebook", background=palette["window_bg"], bordercolor=palette["border"])
+        style.configure(
+            "TNotebook.Tab",
+            background=palette["button_bg"],
+            foreground=palette["text_secondary"],
+            padding=(9, 3),
+        )
+        style.configure(
+            "TNotebook.Tab",
+            background=palette["button_bg"],
+            foreground=palette["text_secondary"],
+        )
+        style.map(
+            "TNotebook.Tab",
+            background=[("selected", palette["surface"])],
+            foreground=[("selected", palette["accent"])],
+        )
+        style.configure("Main.TNotebook", background=palette["window_bg"])
+        style.configure(
+            "Main.TNotebook.Tab",
+            background=palette["button_bg"],
+            foreground=palette["text_secondary"],
+            padding=(16, 7),
+            font=("Microsoft YaHei UI", 10, "bold"),
+        )
+        style.map(
+            "Main.TNotebook.Tab",
+            background=[("selected", palette["surface"])],
+            foreground=[("selected", palette["accent"])],
+        )
+        style.configure("Sub.TNotebook", background=palette["window_bg"])
+        style.configure(
+            "Sub.TNotebook.Tab",
+            background=palette["button_bg"],
+            foreground=palette["text_secondary"],
+            padding=(9, 3),
+            font=("Microsoft YaHei UI", 9),
+        )
+        style.map(
+            "Sub.TNotebook.Tab",
+            background=[("selected", palette["surface"])],
+            foreground=[("selected", palette["accent"])],
+        )
+        style.configure(
+            "TScrollbar",
+            background=palette["button_bg"],
+            troughcolor=palette["surface_alt"],
+            bordercolor=palette["border"],
+            lightcolor=palette["button_bg"],
+            darkcolor=palette["button_bg"],
+            arrowcolor=palette["text_secondary"],
+        )
+        style.map("TScrollbar", background=[("active", palette["button_hover"])])
+        for element in ("Vertical.Scrollbar.trough", "Vertical.Scrollbar.thumb"):
+            style.configure(
+                element,
+                background=palette["button_bg"],
+                troughcolor=palette["surface_alt"],
+                bordercolor=palette["border"],
+                lightcolor=palette["button_bg"],
+                darkcolor=palette["button_bg"],
+                arrowcolor=palette["text_secondary"],
+            )
+        for element in ("Horizontal.Scrollbar.trough", "Horizontal.Scrollbar.thumb"):
+            style.configure(
+                element,
+                background=palette["button_bg"],
+                troughcolor=palette["surface_alt"],
+                bordercolor=palette["border"],
+                lightcolor=palette["button_bg"],
+                darkcolor=palette["button_bg"],
+                arrowcolor=palette["text_secondary"],
+            )
+        style.configure(
+            "Vertical.TScrollbar",
+            background=palette["button_bg"],
+            troughcolor=palette["surface_alt"],
+            arrowcolor=palette["text_secondary"],
+            bordercolor=palette["border"],
+            lightcolor=palette["button_bg"],
+            darkcolor=palette["button_bg"],
+        )
+        style.configure(
+            "Horizontal.TScrollbar",
+            background=palette["button_bg"],
+            troughcolor=palette["surface_alt"],
+            arrowcolor=palette["text_secondary"],
+            bordercolor=palette["border"],
+            lightcolor=palette["button_bg"],
+            darkcolor=palette["button_bg"],
+        )
+        style.configure(
+            "TProgressbar",
+            background=palette["accent"],
+            troughcolor=palette["surface_alt"],
+        )
+        self.root.option_add("*TCombobox*Listbox.background", palette["surface"])
+        self.root.option_add("*TCombobox*Listbox.foreground", palette["text"])
+        self.root.option_add("*TCombobox*Listbox.selectBackground", palette["selection_bg"])
+        self.root.option_add("*TCombobox*Listbox.selectForeground", palette["selection_text"])
+
+        self._theme_widget_tree(self.root)
+
+        if hasattr(self, "log_text"):
+            self.log_text.tag_configure("title", foreground=palette["accent"])
+            self.log_text.tag_configure("ok", foreground=palette["safe"])
+            self.log_text.tag_configure("err", foreground=palette["danger"])
+            self.log_text.tag_configure("muted", foreground=palette["text_muted"])
+
+        def all_trees(widget):
+            found = []
+            if isinstance(widget, ttk.Treeview):
+                found.append(widget)
+            for child in widget.winfo_children():
+                found.extend(all_trees(child))
+            return found
+
+        for tree in all_trees(self.root):
+            tree.tag_configure("ban", background=palette["danger_bg"])
+            tree.tag_configure("warn", background=palette["warning_bg"])
+            tree.tag_configure("safe", background=palette["safe_bg"])
+            tree.tag_configure("odd", background=palette["table_alt"])
+        for key, value in (("ban", "danger"), ("warn", "warning"), ("safe", "safe")):
+            entry = getattr(self, "lookup_traffic_labels", {}).get(key)
+            if entry:
+                entry[0].configure(fg=palette[value])
 
     def _build_storage_tab(self) -> None:
         box = tk.Frame(self.tab_storage, bg="#eef1f5", padx=14, pady=10)
@@ -2350,6 +2742,7 @@ class App:
         width, height = win.winfo_reqwidth(), win.winfo_reqheight()
         x = self.root.winfo_rootx() + max(0, (self.root.winfo_width() - width) // 2)
         y = self.root.winfo_rooty() + max(0, (self.root.winfo_height() - height) // 3)
+        self._theme_widget_tree(win)
         win.geometry(f"+{x}+{y}")
         self.root.wait_window(win)
         return result["value"]
@@ -2411,6 +2804,7 @@ class App:
         width, height = win.winfo_reqwidth(), win.winfo_reqheight()
         x = self.root.winfo_rootx() + max(0, (self.root.winfo_width() - width) // 2)
         y = self.root.winfo_rooty() + max(0, (self.root.winfo_height() - height) // 3)
+        self._theme_widget_tree(win)
         win.geometry(f"+{x}+{y}")
         win.focus_set()
 
@@ -2418,8 +2812,8 @@ class App:
         win.destroy()
         self.notebook.select(self.tab_settings)
         self.settings_nav.selection_clear(0, "end")
-        self.settings_nav.selection_set(3)
-        self._show_settings_page(3)
+        self.settings_nav.selection_set(4)
+        self._show_settings_page(4)
 
     def _open_guide_from_banner(self, banner) -> None:
         banner.destroy()
@@ -2447,6 +2841,7 @@ class App:
             width=8,
         ).pack(side="right", padx=(6, 0))
         ttk.Button(banner, text="关闭", command=banner.destroy, width=6).pack(side="right", padx=(6, 0))
+        self._theme_widget_tree(banner)
 
     def _restore_defaults(self) -> None:
         if not messagebox.askyesno(
@@ -3403,7 +3798,7 @@ class App:
                 stretch=index == len(headers) - 1,
                 anchor="w" if header in ("内容", "昵称", "帖子", "回复者") else "center",
             )
-        tree.tag_configure("odd", background="#f7f9fc")
+        tree.tag_configure("odd", background=self.palette["table_alt"])
         tree.links = {}  # type: ignore[attr-defined]
         yscroll = ttk.Scrollbar(frame, orient="vertical", command=tree.yview)
         xscroll = ttk.Scrollbar(frame, orient="horizontal", command=tree.xview)
@@ -4068,9 +4463,9 @@ class App:
             webbrowser.open(url)
 
     def _configure_colors(self, tree) -> None:
-        tree.tag_configure("ban", background="#ffdede")
-        tree.tag_configure("warn", background="#fff4cc")
-        tree.tag_configure("safe", background="#dcfce7")
+        tree.tag_configure("ban", background=self.palette["danger_bg"])
+        tree.tag_configure("warn", background=self.palette["warning_bg"])
+        tree.tag_configure("safe", background=self.palette["safe_bg"])
 
     def _row_tags(self, bar, kind: str):
         if not self._risk_enabled():
