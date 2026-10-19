@@ -3,6 +3,14 @@
 状态：`[ ]` 未开始　`[~]` 进行中　`[x]` 已完成  
 最后更新：2026-10-19
 
+## 研究
+
+- [ ] aiotieba 能力清单（匿名 / BDUSS / STOKEN，只读 / 写）
+- [ ] 删除内容只读规范（吧务权限 + STOKEN）
+- [ ] STOKEN 安全存储规范
+
+详见 [aiotieba-capabilities.md](aiotieba-capabilities.md)。
+
 ## 已确认规范（待实现）
 
 - 多帖参与者对比（FR-010）
