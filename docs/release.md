@@ -55,7 +55,9 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build_desktop.ps1 -V
 - 重新生成 `贴吧回复统计_绿色版.zip`；
 - 旧版本目录保留一个，其余清理。
 
-## 4. Android 版
+## 4. Android 版（暂停）
+
+当前暂停 Android 发布；以下流程仅作历史参考，不作为本次发布要求。
 
 前置：JDK 17、Android SDK 34、Gradle 8.7（路径见 `scripts/build_android.ps1` 参数）。
 
@@ -88,7 +90,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build_desktop.ps1 -V
 - [ ] exe `--selftest` 返回 0
 - [ ] 快捷方式图标正常
 - [ ] zip 已重新生成
-- [ ] APK 已更新（如涉及）
+- [ ] APK 已更新（仅当恢复 Android 时）
 - [ ] 旧版本目录清理
 
 ## 6. 回滚

@@ -37,10 +37,10 @@ python tieba_stats.py <url1> <url2> --no-comments
 python tieba_stats.py <url> --cookie "BDUSS=xxx"  # 仅关注增强需要
 ```
 
-### Android
+### Android（暂停）
 
-安装 `android/贴吧统计_debug.apk`（debug 签名，仅自测）。  
-界面是 WebView + 本地 Python 服务，功能与桌面版大体一致。
+Android 旧 APK 保留，但已暂停更新，不再承诺与桌面版功能同步。  
+当前只维护 Windows 桌面版和命令行。
 
 ---
 
@@ -62,7 +62,7 @@ python tieba_stats.py <url> --cookie "BDUSS=xxx"  # 仅关注增强需要
 - **导出 Excel**：多 sheet、超链接、冻结、筛选、合计行；
 - **多帖切换**：表格/参与者可切换单帖或全部帖子；再次抓取只补新帖；
 - **Emoji 昵称**：支持 `[U+XXXX]` 代码查询；
-- **Android**：同一套核心，WebView 界面。
+- **Android（暂停）**：旧 APK 保留，不再跟进新功能。
 
 ---
 
