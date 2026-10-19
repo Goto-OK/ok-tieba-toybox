@@ -229,6 +229,28 @@ class App:
             pass
         style.configure("Card.TLabelframe", padding=10)
         style.configure("Card.TLabelframe.Label", font=("Microsoft YaHei UI", 10, "bold"))
+        style.configure("Main.TNotebook", background="#e2e8f0")
+        style.configure("Sub.TNotebook", background="#eef1f5")
+        style.configure(
+            "Main.TNotebook.Tab",
+            padding=(16, 7),
+            font=("Microsoft YaHei UI", 10, "bold"),
+        )
+        style.map(
+            "Main.TNotebook.Tab",
+            background=[("selected", "#ffffff")],
+            foreground=[("selected", "#1F4E79")],
+        )
+        style.configure(
+            "Sub.TNotebook.Tab",
+            padding=(9, 3),
+            font=("Microsoft YaHei UI", 9),
+        )
+        style.map(
+            "Sub.TNotebook.Tab",
+            background=[("selected", "#ffffff")],
+            foreground=[("selected", "#1F4E79")],
+        )
 
         header = tk.Frame(self.root, bg="#ffffff", padx=18, pady=12)
         header.pack(fill="x")
@@ -260,7 +282,7 @@ class App:
         ).pack(side="left")
         self.progress = ttk.Progressbar(status, mode="indeterminate", length=180)
 
-        self.notebook = ttk.Notebook(self.root)
+        self.notebook = ttk.Notebook(self.root, style="Main.TNotebook")
         self.notebook.pack(fill="both", expand=True)
 
         self.tab_posts = tk.Frame(self.notebook, bg="#eef1f5")
@@ -270,7 +292,7 @@ class App:
         self.notebook.add(self.tab_lookup, text="  查用户  ")
         self.notebook.add(self.tab_settings, text="  设置  ")
 
-        self.post_nb = ttk.Notebook(self.tab_posts)
+        self.post_nb = ttk.Notebook(self.tab_posts, style="Sub.TNotebook")
         self.post_nb.pack(fill="both", expand=True, padx=4, pady=4)
         self.tab_fetch = tk.Frame(self.post_nb, bg="#eef1f5")
         self.tab_grid = tk.Frame(self.post_nb, bg="#eef1f5")
@@ -2907,7 +2929,7 @@ class App:
         )
         self.grid_hint.pack(side="left")
 
-        self.grid_nb = ttk.Notebook(self.tab_grid)
+        self.grid_nb = ttk.Notebook(self.tab_grid, style="Sub.TNotebook")
         self.grid_nb.pack(fill="both", expand=True, padx=8, pady=8)
 
     def _apply_table_density(self) -> None:
