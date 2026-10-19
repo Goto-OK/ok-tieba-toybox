@@ -2291,6 +2291,21 @@ class App:
         ttk.Entry(proxy_row, textvariable=self.proxy_url_var, width=32).pack(side="left", padx=(6, 0))
         self.proxy_mode_var.trace_add("write", lambda *_: self._on_proxy_changed())
         self.proxy_url_var.trace_add("write", lambda *_: self._on_proxy_changed())
+        batch_row = tk.Frame(fetch_box, bg="#eef1f5")
+        batch_row.pack(anchor="w", pady=(4, 0))
+        tk.Label(batch_row, text="一键红绿灯并发：", bg="#eef1f5", fg="#475569").pack(side="left")
+        self.batch_concurrency_var = tk.StringVar(value=str(self.settings.get("batch_concurrency", 1)))
+        ttk.Combobox(
+            batch_row,
+            values=("1", "2", "3"),
+            textvariable=self.batch_concurrency_var,
+            width=4,
+            state="readonly",
+        ).pack(side="left")
+        self.batch_concurrency_var.trace_add("write", lambda *_: self._on_batch_concurrency_changed())
+        tk.Label(batch_row, text="（含关注时强制 1）", bg="#eef1f5", fg="#8a94a6", font=("Microsoft YaHei UI", 8)).pack(
+            side="left", padx=(6, 0)
+        )
 
         backup_box = ttk.LabelFrame(box, text=" 配置备份 / 恢复 ")
         backup_box.pack(fill="x", pady=(0, 10))
@@ -2347,6 +2362,14 @@ class App:
         self.settings["proxy_url"] = self.proxy_url_var.get().strip()
         save_settings(self.settings)
         self._apply_proxy()
+
+    def _on_batch_concurrency_changed(self) -> None:
+        try:
+            value = int(self.batch_concurrency_var.get())
+        except ValueError:
+            value = 1
+        self.settings["batch_concurrency"] = max(1, min(3, value))
+        save_settings(self.settings)
 
     def _on_fetch_settings_changed(self) -> None:
         self.settings["auto_refresh_old"] = bool(self.auto_refresh_var.get())
@@ -3347,34 +3370,50 @@ class App:
 
         include_follows = bool(self.include_follows_var.get() and self.settings.get("follow_enhance"))
         guest = self.mode_var.get() == "guest" or not include_follows
+        concurrency = 1 if include_follows else max(1, min(3, int(self.settings.get("batch_concurrency", 1) or 1)))
+
+        def resolve(user, fetcher):
+            if guest:
+                return {"ok": True, "guest_only": True}
+            if not (user.get("uid") or user.get("username")):
+                return {"ok": False, "error": "缺少用户ID"}
+            try:
+                return fetch_user_profile(
+                    fetcher,
+                    user.get("uid") or "",
+                    user.get("username") or "",
+                    user.get("portrait") or "",
+                    self._user_bar(user),
+                    count,
+                    start_date,
+                    end_date,
+                    prefer,
+                )
+            except Exception as error:  # noqa: BLE001
+                return {"ok": False, "error": str(error)}
 
         def worker():
             fetcher = Fetcher(
                 cookie={} if guest else parse_cookie_input(self.cookie_var.get()), delay=0.3, verbose=False
             )
-            for index, user in enumerate(users):
-                if self._batch_cancel:
-                    break
-                if guest:
-                    profile = {"ok": True, "guest_only": True}
-                elif user.get("uid") or user.get("username"):
-                    try:
-                        profile = fetch_user_profile(
-                            fetcher,
-                            user.get("uid") or "",
-                            user.get("username") or "",
-                            user.get("portrait") or "",
-                            self._user_bar(user),
-                            count,
-                            start_date,
-                            end_date,
-                            prefer,
-                        )
-                    except Exception as error:  # noqa: BLE001
-                        profile = {"ok": False, "error": str(error)}
-                else:
-                    profile = {"ok": False, "error": "缺少用户ID"}
-                self._post(("batch_profile", index, user, profile))
+            if concurrency <= 1:
+                for index, user in enumerate(users):
+                    if self._batch_cancel:
+                        break
+                    self._post(("batch_profile", index, user, resolve(user, fetcher)))
+            else:
+                from concurrent.futures import ThreadPoolExecutor
+
+                with ThreadPoolExecutor(max_workers=concurrency) as pool:
+                    futures = [pool.submit(resolve, user, fetcher) for user in users]
+                    for index, (user, future) in enumerate(zip(users, futures)):
+                        if self._batch_cancel:
+                            break
+                        try:
+                            profile = future.result()
+                        except Exception as error:  # noqa: BLE001
+                            profile = {"ok": False, "error": str(error)}
+                        self._post(("batch_profile", index, user, profile))
             self._post(("batch_done",))
 
         threading.Thread(target=worker, daemon=True).start()
