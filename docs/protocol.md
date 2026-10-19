@@ -89,6 +89,9 @@ x_bd_data_type: protobuf
 实测：无 BDUSS 也能翻页；某层 32 条回复时，`pn=1` 返回 29 条、`pn=2` 返回 2 条，`has_more=false`。
 因此免登录可以抓完整楼中楼，不必受 `page` 接口每层 10 条预览的限制。
 
+证据：`aiotieba 4.8.1` 的 `get_comments` 源码 + 2026-10-19 匿名实测
+（tid=1234567890，floor 13，reply_num=32，pn=1 返回 29，pn=2 返回 2）。
+
 ## 3. 用户资料 protobuf
 
 ```text
