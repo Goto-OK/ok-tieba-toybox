@@ -658,7 +658,7 @@ class App:
             fg="#6b7280",
             font=("Microsoft YaHei UI", 9),
         ).pack(side="left")
-        tk.Label(bar, text="   条数：", bg="#ffffff", fg="#475569", font=("Microsoft YaHei UI", 9)).pack(
+        tk.Label(bar, text="   抓取条数：", bg="#ffffff", fg="#475569", font=("Microsoft YaHei UI", 9)).pack(
             side="left"
         )
         self.post_count_var = tk.StringVar(value="50")
@@ -690,35 +690,44 @@ class App:
         self.post_date_mode_var.trace_add("write", lambda *_: self._on_post_date_changed())
         self.post_start_var.set(self._group_date(self.post_start_parts))
         self.post_end_var.set(self._group_date(self.post_end_parts))
+        tk.Label(bar, text="   范围：", bg="#ffffff", fg="#475569", font=("Microsoft YaHei UI", 9)).pack(
+            side="left"
+        )
         self.people_range_var = tk.StringVar(value="全部帖子")
         self.people_range_box = ttk.Combobox(
             bar, textvariable=self.people_range_var, width=24, state="readonly"
         )
-        self.people_range_box.pack(side="left", padx=(6, 0))
+        self.people_range_box.pack(side="left")
         self.people_range_box.bind("<<ComboboxSelected>>", lambda _event: self._on_people_range_changed())
-        self.batch_btn = ttk.Button(bar, text="一键红绿灯", command=self._batch_refresh_marks, width=10)
-        self.batch_btn.pack(side="left", padx=(8, 0))
+
+        bar2 = tk.Frame(self.tab_people, bg="#ffffff", padx=12, pady=4)
+        bar2.pack(fill="x")
+        tk.Label(bar2, text="操作：", bg="#ffffff", fg="#475569", font=("Microsoft YaHei UI", 9)).pack(
+            side="left"
+        )
+        self.batch_btn = ttk.Button(bar2, text="一键红绿灯", command=self._batch_refresh_marks, width=10)
+        self.batch_btn.pack(side="left")
         self.include_follows_var = tk.BooleanVar(value=False)
         self.include_follows_check = ttk.Checkbutton(
-            bar,
+            bar2,
             text="包含关注（慢）",
             variable=self.include_follows_var,
             command=self._on_include_follows_changed,
         )
         self.include_follows_check.pack(side="left", padx=(6, 0))
         self.resume_batch_btn = ttk.Button(
-            bar, text="继续未完成", command=self._resume_batch, width=12, state="disabled"
+            bar2, text="继续未完成", command=self._resume_batch, width=12, state="disabled"
         )
         self.resume_batch_btn.pack(side="left", padx=(6, 0))
         self._batch_running = False
         self._batch_plan: List[Dict[str, Any]] = []
         self._batch_pending: List[Dict[str, Any]] = []
         self._batch_cancel = False
-        ttk.Button(bar, text="刷新", command=self._refresh_people, width=6).pack(side="left", padx=(8, 0))
-        ttk.Button(bar, text="在浏览器打开主页", command=self._open_current_profile, width=16).pack(
-            side="left", padx=(8, 0)
+        ttk.Button(bar2, text="刷新", command=self._refresh_people, width=6).pack(side="left", padx=(6, 0))
+        ttk.Button(bar2, text="打开主页", command=self._open_current_profile, width=10).pack(
+            side="left", padx=(6, 0)
         )
-        self.people_hint = tk.Label(bar, text="", bg="#ffffff", fg="#8a94a6", font=("Microsoft YaHei UI", 9))
+        self.people_hint = tk.Label(bar2, text="", bg="#ffffff", fg="#8a94a6", font=("Microsoft YaHei UI", 9))
         self.people_hint.pack(side="right")
 
         filter_bar = tk.Frame(self.tab_people, bg="#ffffff", padx=10, pady=6)
@@ -767,10 +776,12 @@ class App:
         paned = ttk.PanedWindow(self.tab_people, orient="horizontal")
         paned.pack(fill="both", expand=True, padx=10, pady=(0, 6))
         self.people_paned = paned
+        self._people_sash_set = False
+        paned.bind("<Configure>", self._on_people_paned_configure)
         left = tk.Frame(paned)
         right = tk.Frame(paned)
-        paned.add(left, weight=2)
-        paned.add(right, weight=3)
+        paned.add(left, weight=3)
+        paned.add(right, weight=2)
 
         columns = ("mark", "name", "username", "uid", "level", "floor", "comment", "total")
         self.people_columns = columns
@@ -785,14 +796,14 @@ class App:
             "total": "合计",
         }
         widths = {
-            "mark": 70,
-            "name": 120,
-            "username": 100,
-            "uid": 110,
-            "level": 55,
-            "floor": 48,
-            "comment": 58,
-            "total": 48,
+            "mark": 50,
+            "name": 135,
+            "username": 80,
+            "uid": 80,
+            "level": 50,
+            "floor": 45,
+            "comment": 50,
+            "total": 45,
         }
         self.people_pager = tk.Frame(left, bg="#ffffff")
         self.people_pager.pack(side="bottom", fill="x", pady=(4, 0))
@@ -811,17 +822,23 @@ class App:
                 width=5 if text in ("首页", "末页") else 6,
                 command=page_command(delta),
             ).pack(side="left", padx=(4, 0))
-        self.people_tree = ttk.Treeview(left, columns=columns, show="headings")
+        tree_wrap = tk.Frame(left, bg="#ffffff")
+        tree_wrap.pack(fill="both", expand=True)
+        self.people_tree = ttk.Treeview(tree_wrap, columns=columns, show="headings")
         for col in columns:
             self.people_tree.heading(col, text=headings[col])
             self.people_tree.column(col, width=widths[col], anchor="center" if col != "name" else "w")
         self.people_tree.tag_configure("ban", background="#ffdede")
         self.people_tree.tag_configure("warn", background="#fff4cc")
         self.people_tree.tag_configure("safe", background="#e3f6e3")
-        scroll = ttk.Scrollbar(left, orient="vertical", command=self.people_tree.yview)
-        self.people_tree.configure(yscrollcommand=scroll.set)
-        self.people_tree.pack(side="left", fill="both", expand=True)
-        scroll.pack(side="right", fill="y")
+        scroll = ttk.Scrollbar(tree_wrap, orient="vertical", command=self.people_tree.yview)
+        xscroll = ttk.Scrollbar(tree_wrap, orient="horizontal", command=self.people_tree.xview)
+        self.people_tree.configure(yscrollcommand=scroll.set, xscrollcommand=xscroll.set)
+        self.people_tree.grid(row=0, column=0, sticky="nsew")
+        scroll.grid(row=0, column=1, sticky="ns")
+        xscroll.grid(row=1, column=0, sticky="ew")
+        tree_wrap.rowconfigure(0, weight=1)
+        tree_wrap.columnconfigure(0, weight=1)
         self.people_tree.bind("<<TreeviewSelect>>", self._on_person_select)
         self.people_tree.bind("<Control-c>", lambda _event: self._copy_person_row())
         self.people_tree.bind("<Button-3>", self._person_menu)
@@ -1712,6 +1729,21 @@ class App:
         else:
             self._people_page = min(max(0, self._people_page + int(value)), pages - 1)
         self._refresh_people()
+
+    def _on_people_paned_configure(self, event=None) -> None:
+        if getattr(self, "_people_sash_set", False):
+            return
+        if event is not None and event.width < 500:
+            return
+        self._people_sash_set = True
+        self.root.after_idle(self._set_people_sash)
+
+    def _set_people_sash(self) -> None:
+        try:
+            width = max(520, int(self.root.winfo_width() * 0.58))
+            self.people_paned.sashpos(0, width)
+        except tk.TclError:
+            pass
 
     def _on_people_range_changed(self) -> None:
         self._people_page = 0
