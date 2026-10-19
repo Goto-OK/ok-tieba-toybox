@@ -40,3 +40,15 @@ def test_mark_filter():
 def test_combined():
     result = filter_users(USERS, keyword="小", level="Lv.10+", mark="红")
     assert [u["uid"] for u in result] == ["1"]
+
+
+def test_merge_blacklists_priority():
+    from tieba_reply_stats.blacklist import merge_blacklists
+
+    merged = merge_blacklists(
+        {"safe": ["北京吧"], "warn": [], "ban": []},
+        {"safe": ["上海吧"], "warn": ["北京吧"], "ban": ["上海吧"]},
+    )
+    assert "北京" in merged["warn"]
+    assert "上海" in merged["ban"]
+    assert "北京" not in merged["safe"]

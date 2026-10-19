@@ -25,6 +25,7 @@ from tieba_reply_stats.blacklist import (
     classify,
     load_blacklist,
     marker,
+    merge_blacklists,
     save_blacklist,
 )
 from tieba_reply_stats.blacklist import (
@@ -2412,13 +2413,18 @@ class App:
                 parent=self.root,
             )
             return
-        if not messagebox.askyesno(
-            "确认导入",
+        choice = messagebox.askyesnocancel(
+            "导入方式",
             f"读到：安全 {len(data['safe'])} 个、警告 {len(data['warn'])} 个、"
-            f"禁止 {len(data['ban'])} 个。\n\n会覆盖当前本地标记，继续吗？",
+            f"禁止 {len(data['ban'])} 个。" + chr(10) + chr(10) +
+            "是：合并（保留现有）" + chr(10) + "否：覆盖（默认）" + chr(10) + "取消：不导入",
             parent=self.root,
-        ):
+            default=messagebox.NO,
+        )
+        if choice is None:
             return
+        if choice:
+            data = merge_blacklists(self.blacklist, data)
         if save_blacklist(data):
             self.blacklist = data
             for key, editor in self.blacklist_editors.items():
@@ -2876,7 +2882,12 @@ class App:
         last_btn = ttk.Button(pager, text="末页", width=5, command=lambda: go(10**9))
         for button in (first_btn, prev_btn, next_btn, last_btn):
             button.pack(side="left", padx=(4, 0))
-        page_size_var.trace_add("write", lambda *_: go(0))
+        def on_page_size_changed(*_args) -> None:
+            self.settings["page_size"] = page_size()
+            save_settings(self.settings)
+            go(0)
+
+        page_size_var.trace_add("write", on_page_size_changed)
 
         def open_row(_event=None) -> None:
             selection = tree.selection()
@@ -4178,6 +4189,40 @@ def _selftest() -> int:
         return 1
 
 
+_INSTANCE_SOCKET = None
+
+
+def _focus_existing_window() -> None:
+    if os.name != "nt":
+        return
+    try:
+        import ctypes
+
+        user32 = ctypes.windll.user32
+        title = f"{APP_TITLE} v{VERSION}"
+        handle = user32.FindWindowW(None, title)
+        if handle:
+            user32.ShowWindow(handle, 9)
+            user32.SetForegroundWindow(handle)
+    except Exception:  # noqa: BLE001
+        pass
+
+
+def _acquire_instance():
+    global _INSTANCE_SOCKET
+    import socket
+
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    try:
+        sock.bind(("127.0.0.1", 47831))
+        sock.listen(1)
+    except OSError:
+        sock.close()
+        return None
+    _INSTANCE_SOCKET = sock
+    return sock
+
+
 def main() -> int:
     if "--selftest" in sys.argv:
         return _selftest()
@@ -4186,6 +4231,10 @@ def main() -> int:
             sys.stdout.reconfigure(encoding="utf-8", errors="replace")
         except Exception:  # noqa: BLE001
             pass
+    if _acquire_instance() is None:
+        _focus_existing_window()
+        messagebox.showinfo("软件已在运行", "已有一个窗口在运行，请使用已有窗口。")
+        return 0
     root = tk.Tk()
     App(root)
     root.mainloop()

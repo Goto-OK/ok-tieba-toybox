@@ -73,6 +73,26 @@ def classify(bars: List[str], data: Dict[str, List[str]]) -> Tuple[str, str]:
     return "", ""
 
 
+def merge_blacklists(old: Dict[str, List[str]], new: Dict[str, List[str]]) -> Dict[str, List[str]]:
+    """合并两份名单；同吧按 禁止 > 警告 > 安全 保留最高级。"""
+    rank = {"safe": 0, "warn": 1, "ban": 2}
+    chosen: Dict[str, str] = {}
+    for data in (old, new):
+        for level in ("safe", "warn", "ban"):
+            for name in data.get(level) or []:
+                key = _norm(name)
+                if not key:
+                    continue
+                if key not in chosen or rank[level] > rank[chosen[key]]:
+                    chosen[key] = level
+    result: Dict[str, List[str]] = {"safe": [], "warn": [], "ban": []}
+    for key, level in chosen.items():
+        result[level].append(key)
+    for level in result:
+        result[level].sort()
+    return result
+
+
 def marker(level: str) -> str:
     return {"ban": "🔴", "warn": "🟡", "safe": "🟢"}.get(level, "⚪")
 
