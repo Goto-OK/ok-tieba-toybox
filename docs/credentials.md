@@ -94,7 +94,7 @@ Cookie: BAIDUID=...; BDUSS=...; STOKEN=...; PSTM=...
 ## 7. 安全
 
 - Cookie 本机 DPAPI 保存；
-- 不写日志、不导出、不进配置备份；
+- 不写日志、不导出、不进设置备份；
 - 换电脑或换 Windows 用户后需要重新填写；
 - 不要把 Cookie 发聊天、截图或提交仓库。
 

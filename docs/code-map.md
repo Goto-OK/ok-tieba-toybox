@@ -29,7 +29,7 @@
 | `filters.py` | 参与者关键词/等级/标记筛选 |
 | `compare.py` | 多帖对比 |
 | `report.py` | 单用户报告 Excel + Markdown |
-| `config_backup.py` | 配置备份/恢复 |
+| `config_backup.py` | 设置备份/恢复 |
 | `blacklist.py` | 本地标记、优先级、导入导出、合并 |
 | `settings.py` | 设置默认值、类型校验、持久化 |
 | `theme.py` | 浅色/深色/系统、强调色、颜色映射 |
@@ -68,7 +68,7 @@
 | `tests/test_filters.py` | 筛选、身份、曾用昵称 |
 | `tests/test_compare.py` | 多帖对比 |
 | `tests/test_report.py` | 用户报告 |
-| `tests/test_config_backup.py` | 配置备份 |
+| `tests/test_config_backup.py` | 设置备份 |
 | `tests/test_follow_probe.py` | 候选探测 |
 | `tests/test_floor_depth.py` | 楼中楼深度/去重 |
 | `tests/test_storage.py` | SQLite/DPAPI/清理 |

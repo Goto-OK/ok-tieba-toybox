@@ -31,14 +31,14 @@ def test_custom_level_range():
 
 
 def test_mark_filter():
-    assert [u["uid"] for u in filter_users(USERS, mark="红")] == ["1"]
-    assert [u["uid"] for u in filter_users(USERS, mark="黄")] == ["4"]
-    assert [u["uid"] for u in filter_users(USERS, mark="绿")] == ["2"]
+    assert [u["uid"] for u in filter_users(USERS, mark="警告")] == ["1"]
+    assert [u["uid"] for u in filter_users(USERS, mark="可疑")] == ["4"]
+    assert [u["uid"] for u in filter_users(USERS, mark="安全")] == ["2"]
     assert [u["uid"] for u in filter_users(USERS, mark="白")] == ["3"]
 
 
 def test_combined():
-    result = filter_users(USERS, keyword="小", level="Lv.10+", mark="红")
+    result = filter_users(USERS, keyword="小", level="Lv.10+", mark="警告")
     assert [u["uid"] for u in result] == ["1"]
 
 

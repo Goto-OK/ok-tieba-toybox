@@ -8,7 +8,7 @@ from typing import Dict, List, Optional
 EMOJI_CODE_RE = re.compile(r"\[U\+([0-9A-Fa-f]{4,6})\]")
 LEVEL_OPTIONS = ("全部", "Lv.1-3", "Lv.4-6", "Lv.7-9", "Lv.10+", "无等级", "自定义")
 FIELD_OPTIONS = ("全部字段", "昵称", "用户名", "用户ID")
-MARK_OPTIONS = ("全部", "红", "黄", "绿", "白")
+MARK_OPTIONS = ("全部", "警告", "可疑", "安全", "白")
 
 
 def decode_display(text: str) -> str:
@@ -55,7 +55,7 @@ def _mark_match(user: Dict, mark: str) -> bool:
     if mark == "全部":
         return True
     hit = str(user.get("hit") or "")
-    mapping = {"红": "ban", "黄": "warn", "绿": "safe", "白": ""}
+    mapping = {"警告": "ban", "可疑": "warn", "安全": "safe", "白": "", "红": "ban", "黄": "warn", "绿": "safe"}
     return hit == mapping.get(mark, "")
 
 

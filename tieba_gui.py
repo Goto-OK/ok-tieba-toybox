@@ -24,6 +24,7 @@ from typing import Any, Callable, Dict, List, Optional
 from urllib.parse import quote
 
 from tieba_reply_stats.blacklist import (
+    LEVEL_LABEL,
     classify,
     load_blacklist,
     marker,
@@ -1475,7 +1476,14 @@ class App:
         options = tk.Frame(page, bg="#ffffff", padx=12, pady=4)
         options.pack(fill="x")
         self.lookup_options = options
-        tk.Label(options, text="日期：", bg="#ffffff", fg="#475569", font=("Microsoft YaHei UI", 8)).pack(
+        tk.Label(options, text="条数：", bg="#ffffff", fg="#475569", font=("Microsoft YaHei UI", 8)).pack(
+            side="left"
+        )
+        self.lookup_count_var = tk.StringVar(value="50")
+        ttk.Spinbox(options, from_=5, to=1000, increment=10, width=6, textvariable=self.lookup_count_var).pack(
+            side="left"
+        )
+        tk.Label(options, text="  日期：", bg="#ffffff", fg="#475569", font=("Microsoft YaHei UI", 8)).pack(
             side="left"
         )
         self.lookup_date_mode_var = tk.StringVar(value="近期")
@@ -1484,24 +1492,6 @@ class App:
             values=("近期", "指定日期"),
             textvariable=self.lookup_date_mode_var,
             width=9,
-            state="readonly",
-        ).pack(side="left")
-        tk.Label(options, text="  条数：", bg="#ffffff", fg="#475569", font=("Microsoft YaHei UI", 8)).pack(
-            side="left"
-        )
-        self.lookup_count_var = tk.StringVar(value="50")
-        ttk.Spinbox(options, from_=5, to=1000, increment=10, width=6, textvariable=self.lookup_count_var).pack(
-            side="left"
-        )
-        tk.Label(options, text="  排序：", bg="#ffffff", fg="#475569", font=("Microsoft YaHei UI", 8)).pack(
-            side="left"
-        )
-        self.lookup_prefer_var = tk.StringVar(value="贴近结束日期")
-        ttk.Combobox(
-            options,
-            values=("贴近结束日期", "贴近开始日期"),
-            textvariable=self.lookup_prefer_var,
-            width=12,
             state="readonly",
         ).pack(side="left")
         self.lookup_status = tk.Label(
@@ -1515,6 +1505,17 @@ class App:
         self.lookup_end_var = tk.StringVar()
         self.lookup_start_parts = self._date_group(date_row, "开始", 3)
         self.lookup_end_parts = self._date_group(date_row, "结束")
+        tk.Label(
+            date_row, text="  时间偏向：", bg="#ffffff", fg="#475569", font=("Microsoft YaHei UI", 8)
+        ).pack(side="left")
+        self.lookup_prefer_var = tk.StringVar(value="优先最近")
+        ttk.Combobox(
+            date_row,
+            values=("优先最近", "优先最早"),
+            textvariable=self.lookup_prefer_var,
+            width=10,
+            state="readonly",
+        ).pack(side="left")
         for _var in (*self.lookup_start_parts, *self.lookup_end_parts):
             _var.trace_add("write", lambda *_: self._on_lookup_parts_changed())
         self.lookup_start_var.set(self._group_date(self.lookup_start_parts))
@@ -1534,10 +1535,11 @@ class App:
             justify="left",
         )
         self.lookup_info.pack(side="left", fill="x", expand=True)
-        self.lookup_traffic_text = tk.Label(
-            summary, text="", bg="#eef1f5", fg="#6b7280", font=("Microsoft YaHei UI", 8)
-        )
-        self.lookup_traffic_text.pack(side="right", padx=(0, 6))
+        traffic = tk.Frame(summary, bg="#eef1f5")
+        traffic.pack(side="right", padx=(8, 0))
+        tk.Label(
+            traffic, text="红绿灯：", bg="#eef1f5", fg="#6b7280", font=("Microsoft YaHei UI", 8)
+        ).pack(side="left")
         self.lookup_traffic_labels = {}
         for key, color in (
             ("ban", self.palette["danger"]),
@@ -1545,17 +1547,18 @@ class App:
             ("safe", self.palette["safe"]),
         ):
             label = tk.Label(
-                summary,
+                traffic,
                 text="●",
                 fg=self.palette["disabled_text"],
                 bg="#eef1f5",
                 font=("Microsoft YaHei UI", 12),
             )
-            label.pack(side="right", padx=(0, 2))
+            label.pack(side="left", padx=(2, 0))
             self.lookup_traffic_labels[key] = (label, color)
-        tk.Label(summary, text="标记：", bg="#eef1f5", fg="#6b7280", font=("Microsoft YaHei UI", 8)).pack(
-            side="right"
+        self.lookup_traffic_text = tk.Label(
+            traffic, text="", bg="#eef1f5", fg="#6b7280", font=("Microsoft YaHei UI", 8)
         )
+        self.lookup_traffic_text.pack(side="left", padx=(8, 0))
 
         bottom = tk.Frame(page, bg="#eef1f5", padx=10, pady=6)
         bottom.pack(side="bottom", fill="x")
@@ -1645,6 +1648,8 @@ class App:
         self._lookup_cache: Dict[str, tuple[float, Dict[str, Any]]] = {}
         self._lookup_generation = 0
         self.lookup_date_mode_var.trace_add("write", lambda *_: self._on_lookup_date_changed())
+        for _var in (self.lookup_count_var, self.lookup_prefer_var):
+            _var.trace_add("write", lambda *_: self._on_lookup_date_changed())
         self._toggle_lookup_dates()
 
     def _open_lookup_forum(self) -> None:
@@ -1753,7 +1758,7 @@ class App:
                     count,
                     start_date,
                     end_date,
-                    "start" if "开始" in self.lookup_prefer_var.get() else "end",
+                    "start" if "最早" in self.lookup_prefer_var.get() else "end",
                 )
                 if generation != self._lookup_generation:
                     return
@@ -1844,6 +1849,12 @@ class App:
         self._lookup_post_urls = {}
         if not profile:
             self.lookup_info.configure(text="没有查到这个人。")
+            try:
+                self.lookup_traffic_text.configure(text="")
+                for _key, (traffic_label, _color) in self.lookup_traffic_labels.items():
+                    traffic_label.configure(fg=self.palette["disabled_text"])
+            except tk.TclError:
+                pass
             return
         self._last_lookup_profile = profile
 
@@ -1899,30 +1910,29 @@ class App:
             info += f" | 发帖 {profile['post_num']}"
         if self.mode_var.get() == "guest":
             info += " | 免登录：关注列表可能不完整"
-        # 查用户页只做资料查看，不参与本地标记
-        hit_level, hit_bar = "", ""
-        hidden_follows = False
-        label = {"ban": "禁止", "warn": "警告", "safe": "安全"}.get(hit_level, "")
+        hit_level, hit_bar = self._profile_hit(profile) if posts else ("", "")
+        hidden_follows = self._hidden_follows(profile) if self._risk_enabled() else False
+        label = LEVEL_LABEL.get(hit_level, "")
         for key, (traffic_label, traffic_color) in getattr(self, "lookup_traffic_labels", {}).items():
             traffic_label.configure(
                 fg=traffic_color if key == hit_level else self.palette["disabled_text"]
             )
-        risk = " · 关注列表隐藏，未命中禁止时标黄" if hidden_follows else ""
+        if hit_level:
+            traffic_note = f"{label}：{hit_bar}" if hit_bar and hit_bar != "关注列表隐藏" else label
+        elif not self._risk_enabled():
+            traffic_note = "本地标记已关闭"
+        else:
+            traffic_note = "未命中"
+        if hidden_follows and self._risk_enabled():
+            traffic_note += " · ⚠ 关注列表隐藏，未命中警告时标黄"
         try:
-            self.lookup_traffic_text.configure(
-                text=(
-                    (f"{label}：{hit_bar}" if hit_bar and hit_bar != "关注列表隐藏" else label)
-                    if hit_level
-                    else "查用户页不参与本地标记"
-                )
-                + risk
-            )
+            self.lookup_traffic_text.configure(text=traffic_note)
         except tk.TclError:
             pass
         if hit_level:
             info += f" | 命中{label}：{hit_bar}"
-        if hidden_follows:
-            info += " | ⚠ 关注列表隐藏，未命中禁止时标黄"
+        if hidden_follows and self._risk_enabled():
+            info += " | ⚠ 关注列表隐藏，未命中警告时标黄"
         note = self._post_source_note(profile)
         if note:
             info += " | " + note
@@ -2257,7 +2267,7 @@ class App:
             font=("Microsoft YaHei UI", 9),
         ).pack(anchor="w", pady=(0, 8))
         self.blacklist_editors = {}
-        for key, title in (("safe", "安全（绿色）"), ("warn", "警告（黄色）"), ("ban", "禁止（红色）")):
+        for key, title in (("safe", "安全（绿色）"), ("warn", "可疑（黄色）"), ("ban", "警告（红色）")):
             frame = ttk.LabelFrame(box, text=f" {title} ")
             frame.pack(fill="both", expand=True, pady=4)
             editor = tk.Text(frame, height=6, wrap="word", font=("Microsoft YaHei UI", 9))
@@ -2315,11 +2325,11 @@ class App:
             justify="left",
         ).pack(anchor="w", pady=(0, 8))
 
-        theme_box = ttk.LabelFrame(box, text=" 主题 ")
+        theme_box = ttk.LabelFrame(box, text=" 配色 ")
         theme_box.pack(fill="x", pady=(0, 6))
         row = tk.Frame(theme_box, bg="#eef1f5")
         row.pack(anchor="w", fill="x", padx=8, pady=(6, 3))
-        tk.Label(row, text="主题：", width=14, anchor="w", bg="#eef1f5", fg="#475569").pack(side="left")
+        tk.Label(row, text="模式：", width=14, anchor="w", bg="#eef1f5", fg="#475569").pack(side="left")
         self.theme_mode_var = tk.StringVar(
             value={"light": "浅色", "dark": "深色", "system": "跟随系统"}.get(
                 self.settings.get("theme_mode", "light"), "浅色"
@@ -2780,12 +2790,12 @@ class App:
         ).pack(side="right")
         buttons = tk.Frame(maint_box, bg="#eef1f5")
         buttons.pack(fill="x", padx=8, pady=(4, 2))
-        ttk.Button(buttons, text="清空最近结果", command=self._clear_result, width=14).pack(side="left")
+        ttk.Button(buttons, text="删除当前结果", command=self._clear_result, width=14).pack(side="left")
         self.old_files_label = tk.Label(
             buttons, text="", bg="#eef1f5", fg="#8a94a6", font=("Microsoft YaHei UI", 8)
         )
         self.old_files_label.pack(side="left", padx=(10, 0))
-        ttk.Button(buttons, text="清理旧结果", command=self._cleanup_old_results, width=10).pack(side="right")
+        ttk.Button(buttons, text="清理旧版本残留", command=self._cleanup_old_results, width=14).pack(side="right")
         self._refresh_old_files_label()
         danger = tk.Frame(maint_box, bg="#eef1f5")
         danger.pack(fill="x", padx=8, pady=(6, 4))
@@ -2872,7 +2882,10 @@ class App:
 
     def _clear_result(self) -> None:
         if not messagebox.askyesno(
-            "清空最近结果", "删除本机保存的最近结果？", parent=self.root, default=messagebox.NO
+            "删除当前结果",
+            "删除本机保存的当前结果？不会删除已导出的 Excel、Markdown 或本地标记；删除后不可撤销。",
+            parent=self.root,
+            default=messagebox.NO,
         ):
             return
         clear_stored_result()
@@ -2881,15 +2894,18 @@ class App:
         self.open_btn.configure(state="disabled")
         self._refresh_people()
         self._refresh_grid()
-        self._append_log("最近结果已清空。", "muted")
+        self._append_log("当前结果已删除。", "muted")
 
     def _cleanup_old_results(self) -> None:
         files = stored_old_files()
         if not files:
-            self.status_var.set("没有需要清理的旧结果文件")
+            self.status_var.set("没有需要清理的旧版本残留")
             return
         if not messagebox.askyesno(
-            "清理旧结果", f"删除 {len(files)} 个旧结果文件？", parent=self.root, default=messagebox.NO
+            "清理旧版本残留",
+            f"删除 {len(files)} 个旧版本残留文件？不会影响当前结果。",
+            parent=self.root,
+            default=messagebox.NO,
         ):
             return
         for path in files:
@@ -2898,7 +2914,7 @@ class App:
             except (OSError, ValueError):
                 pass
         self._refresh_old_files_label()
-        self._append_log(f"已清理旧结果文件：{len(files)} 个", "muted")
+        self._append_log(f"已清理旧版本残留：{len(files)} 个", "muted")
 
     def _refresh_old_files_label(self) -> None:
         if not hasattr(self, "old_files_label"):
@@ -2911,7 +2927,7 @@ class App:
             except OSError:
                 pass
         self.old_files_label.configure(
-            text=f"旧不兼容结果：{len(files)} 个，{size / 1024 / 1024:.1f} MB"
+            text=f"旧版本残留：{len(files)} 个，{size / 1024 / 1024:.1f} MB"
         )
 
     def _open_notice(self) -> None:
@@ -3172,13 +3188,6 @@ class App:
     def _build_general_tab(self) -> None:
         box = tk.Frame(self.tab_general, bg="#eef1f5", padx=14, pady=10)
         box.pack(fill="both", expand=True)
-        tk.Label(
-            box,
-            text="表格标色：命中本地标记时，给对应表格的行加背景色（红 / 黄 / 绿）。",
-            bg="#eef1f5",
-            fg="#475569",
-            font=("Microsoft YaHei UI", 9),
-        ).pack(anchor="w", pady=(0, 6))
         risk_box = ttk.LabelFrame(box, text=" 本地标记（红绿灯） ")
         risk_box.pack(fill="x", pady=(0, 6))
         self.risk_var = tk.BooleanVar(value=bool(self.settings.get("risk_enabled", False)))
@@ -3196,7 +3205,7 @@ class App:
             font=("Microsoft YaHei UI", 8),
         ).pack(anchor="w", padx=20, pady=(2, 0))
 
-        enhance_box = ttk.LabelFrame(box, text=" 关注增强（可选） ")
+        enhance_box = ttk.LabelFrame(box, text=" 抓取增强（可选） ")
         enhance_box.pack(fill="x", pady=(0, 6))
         self.follow_enhance_var = tk.BooleanVar(value=bool(self.settings.get("follow_enhance", False)))
         ttk.Checkbutton(
@@ -3321,12 +3330,12 @@ class App:
             font=("Microsoft YaHei UI", 8),
         ).pack(anchor="w", padx=8, pady=(0, 4))
 
-        backup_box = ttk.LabelFrame(box, text=" 配置备份 / 恢复 ")
+        backup_box = ttk.LabelFrame(box, text=" 设置备份 / 恢复 ")
         backup_box.pack(fill="x", pady=(0, 6))
-        ttk.Button(backup_box, text="备份配置", command=self._backup_config, width=12).pack(
+        ttk.Button(backup_box, text="备份设置", command=self._backup_config, width=12).pack(
             side="left", padx=(8, 8), pady=4
         )
-        ttk.Button(backup_box, text="恢复配置", command=self._restore_config, width=12).pack(
+        ttk.Button(backup_box, text="恢复设置", command=self._restore_config, width=12).pack(
             side="left", pady=4
         )
         tk.Label(
@@ -3337,7 +3346,7 @@ class App:
             font=("Microsoft YaHei UI", 8),
         ).pack(side="left", padx=(10, 0))
 
-        color_box = ttk.LabelFrame(box, text=" 表格标色 ")
+        color_box = ttk.LabelFrame(box, text=" 表格颜色 ")
         color_box.pack(fill="x", pady=(0, 6))
         self.setting_vars = {}
         for key, text in (
@@ -3358,6 +3367,10 @@ class App:
             font=("Microsoft YaHei UI", 9),
         )
         self.general_hint.pack(anchor="w", pady=(10, 0))
+        for block in (risk_box, color_box, fetch_box, enhance_box, ui_box, default_box, backup_box):
+            block.pack_forget()
+        for block in (risk_box, color_box, fetch_box, enhance_box, ui_box, default_box, backup_box):
+            block.pack(fill="x", pady=(0, 6), before=self.general_hint)
 
     def _apply_proxy(self) -> None:
         var = getattr(self, "proxy_mode_var", None)
@@ -3417,10 +3430,10 @@ class App:
 
     def _backup_config(self) -> None:
         path = filedialog.asksaveasfilename(
-            title="备份配置",
+            title="备份设置",
             defaultextension=".json",
             filetypes=[("JSON 配置", "*.json"), ("ZIP 压缩包", "*.zip")],
-            initialfile="贴吧统计配置.json",
+            initialfile="贴吧统计设置.json",
             parent=self.root,
         )
         if not path:
@@ -3430,7 +3443,7 @@ class App:
         except Exception as error:  # noqa: BLE001
             messagebox.showerror("备份失败", friendly_error(error), parent=self.root)
             return
-        self._append_log(f"配置已备份：{saved}", "ok")
+        self._append_log(f"设置已备份：{saved}", "ok")
         messagebox.showinfo(
             "备份完成",
             "已保存到：" + chr(10) + saved,
@@ -3439,8 +3452,8 @@ class App:
 
     def _restore_config(self) -> None:
         path = filedialog.askopenfilename(
-            title="恢复配置",
-            filetypes=[("配置备份", "*.json *.zip"), ("所有文件", "*.*")],
+            title="恢复设置",
+            filetypes=[("设置备份", "*.json *.zip"), ("所有文件", "*.*")],
             parent=self.root,
         )
         if not path:
@@ -3451,7 +3464,7 @@ class App:
             messagebox.showerror("无法恢复", friendly_error(error), parent=self.root)
             return
         if not messagebox.askyesno(
-            "恢复配置",
+            "恢复设置",
             backup_preview(data) + chr(10) + chr(10) + "会覆盖当前设置和本地标记，继续吗？",
             parent=self.root,
         ):
@@ -3538,7 +3551,7 @@ class App:
         if not total:
             messagebox.showwarning(
                 "没有读到数据",
-                "格式应为两列：\n第一列 类别（安全 / 警告 / 禁止）\n第二列 贴吧名\n\n"
+                "格式应为两列：\n第一列 类别（安全 / 可疑 / 警告）\n第二列 贴吧名\n\n"
                 "可以用「导出 Excel」生成模板后再填。",
                 parent=self.root,
             )
@@ -3567,6 +3580,129 @@ class App:
             self._append_log(f"本地标记已导入：{path}", "ok")
         else:
             messagebox.showerror("导入失败", "保存失败，请检查配置目录权限。", parent=self.root)
+
+    def _open_manage_results(self) -> None:
+        if not self.last_threads:
+            messagebox.showinfo("还没有数据", "先抓取帖子，再管理帖子结果。", parent=self.root)
+            return
+        win = tk.Toplevel(self.root)
+        win.title("管理帖子结果")
+        win.geometry("620x420")
+        win.transient(self.root)
+        win.grab_set()
+        win.configure(bg="#eef1f5")
+        tk.Label(
+            win,
+            text="勾选要删除的帖子结果；只删结果，不删原帖、Excel 或本地标记。",
+            bg="#eef1f5",
+            fg="#475569",
+            font=("Microsoft YaHei UI", 9),
+            anchor="w",
+        ).pack(fill="x", padx=12, pady=(10, 4))
+        body = tk.Frame(win, bg="#ffffff")
+        body.pack(fill="both", expand=True, padx=12)
+        canvas = tk.Canvas(body, bg="#ffffff", highlightthickness=0)
+        scrollbar = ttk.Scrollbar(body, orient="vertical", command=canvas.yview)
+        canvas.configure(yscrollcommand=scrollbar.set)
+        scrollbar.pack(side="right", fill="y")
+        canvas.pack(side="left", fill="both", expand=True)
+        inner = tk.Frame(canvas, bg="#ffffff")
+        canvas.create_window((0, 0), window=inner, anchor="nw")
+        inner.bind("<Configure>", lambda _event: canvas.configure(scrollregion=canvas.bbox("all")))
+        canvas.bind("<Configure>", lambda event: canvas.itemconfigure(1, width=event.width))
+        variables = []
+        for index, thread in enumerate(self.last_threads, start=1):
+            var = tk.BooleanVar(value=False)
+            variables.append(var)
+            title = display_text(thread.meta.title or thread.meta.tid)
+            count = len(thread.user_stats())
+            ttk.Checkbutton(
+                inner,
+                text=f"{index}. {title}    {count} 人",
+                variable=var,
+            ).pack(anchor="w", padx=6, pady=3)
+        footer = tk.Frame(win, bg="#eef1f5")
+        footer.pack(fill="x", padx=12, pady=10)
+        cancel_btn = ttk.Button(footer, text="取消", command=win.destroy, width=8)
+        cancel_btn.pack(side="right")
+        def select_all(value: bool) -> None:
+            for var in variables:
+                var.set(value)
+
+        ttk.Button(
+            footer,
+            text="全选",
+            command=lambda: select_all(True),
+            width=8,
+        ).pack(side="left")
+        ttk.Button(
+            footer,
+            text="取消全选",
+            command=lambda: select_all(False),
+            width=10,
+        ).pack(side="left", padx=(6, 0))
+
+        def delete_selected() -> None:
+            selected = [index for index, var in enumerate(variables) if var.get()]
+            if not selected:
+                messagebox.showinfo("没有选择", "先勾选要删除的帖子结果。", parent=win)
+                return
+            if not messagebox.askyesno(
+                "删除帖子结果",
+                f"删除 {len(selected)} 个帖子结果？删除后不可撤销，不影响原帖、Excel 或本地标记。",
+                parent=win,
+                default=messagebox.NO,
+            ):
+                return
+            remaining = [thread for index, thread in enumerate(self.last_threads) if index not in selected]
+            try:
+                if self.settings.get("save_result", True):
+                    if remaining:
+                        save_threads(
+                            remaining,
+                            VERSION,
+                            encrypted=bool(self.settings.get("encrypt_result", False)),
+                        )
+                    else:
+                        if not clear_stored_result():
+                            raise OSError("无法删除当前结果文件")
+            except Exception as error:  # noqa: BLE001
+                messagebox.showerror("保存失败", f"删除未执行：{error}", parent=win)
+                return
+            active = self.grid_thread_var.get()
+            active_tid = None
+            if not active.startswith("全部"):
+                for old_thread in self.last_threads:
+                    if active.endswith(display_text(old_thread.meta.title or old_thread.meta.tid)):
+                        active_tid = old_thread.meta.tid
+                        break
+            self.last_threads = remaining
+            if not remaining:
+                self.last_output = None
+                self.open_btn.configure(state="disabled")
+            elif active.startswith("全部"):
+                self._update_grid_selector()
+            elif active_tid in {thread.meta.tid for thread in remaining}:
+                self._update_grid_selector()
+                for index, thread in enumerate(remaining, start=1):
+                    if thread.meta.tid == active_tid:
+                        self.grid_thread_var.set(
+                            f"{index}. {display_text(thread.meta.title or thread.meta.tid)}"
+                        )
+                        break
+            else:
+                self.grid_thread_var.set("")
+                self._update_grid_selector()
+            self._refresh_people()
+            self._refresh_grid()
+            self._append_log(f"已删除 {len(selected)} 个帖子结果。", "muted")
+            win.destroy()
+
+        ttk.Button(footer, text="删除选中", command=delete_selected, width=10).pack(
+            side="right", padx=(0, 6)
+        )
+        win.protocol("WM_DELETE_WINDOW", win.destroy)
+        cancel_btn.focus_set()
 
     def _build_grid_tab(self) -> None:
         bar = tk.Frame(self.tab_grid, bg="#ffffff", padx=12, pady=7)
@@ -3598,6 +3734,10 @@ class App:
             state="disabled",
         )
         self.open_btn.pack(side="right")
+        self.manage_results_btn = ttk.Button(
+            right, text="管理帖子结果", command=self._open_manage_results, width=12
+        )
+        self.manage_results_btn.pack(side="right", padx=(0, 8))
         self.export_btn = tk.Button(
             right,
             text="导出 Excel",
@@ -4614,7 +4754,7 @@ class App:
         hit_level = ""
         if profile.get("ok"):
             hit_level, _ = self._profile_hit(profile, user.get("bars") or [self._user_bar(user)])
-        label = {"ban": "禁止", "warn": "警告", "safe": "安全"}.get(hit_level, "")
+        label = LEVEL_LABEL.get(hit_level, "")
         hidden = self._hidden_follows(profile) if profile.get("ok") else False
         try:
             values = list(self.people_tree.item(iid, "values"))
@@ -4792,10 +4932,10 @@ class App:
             if probed:
                 note += f"；候选确认 {probed} 个"
             if self._hidden_follows(profile):
-                note += "（风险提示：关注列表隐藏，未命中禁止时标黄）"
+                note += "（风险提示：关注列表隐藏，未命中警告时标黄）"
             return note
         if profile.get("followed_private"):
-            return "对方设置了隐私，关注列表不可见（风险提示：关注列表隐藏，未命中禁止时标黄）"
+            return "对方设置了隐私，关注列表不可见（风险提示：关注列表隐藏，未命中警告时标黄）"
         return "没有查到关注列表"
 
     def _export_profile_report(self) -> None:
@@ -4960,10 +5100,10 @@ class App:
                 if hit_level != "warn":
                     hit_bar = "关注列表隐藏"
                 hit_level = "warn"
-        label = {"ban": "禁止", "warn": "警告", "safe": "安全"}.get(hit_level, "")
+        label = LEVEL_LABEL.get(hit_level, "")
         for traffic_key, (traffic_label, traffic_color) in getattr(self, "traffic_labels", {}).items():
             traffic_label.configure(fg=traffic_color if traffic_key == hit_level else "#d1d5db")
-        risk = " · 关注列表隐藏，未命中禁止时标黄" if hidden_follows else ""
+        risk = " · 关注列表隐藏，未命中警告时标黄" if hidden_follows else ""
         try:
             self.traffic_text.configure(
                 text=(
@@ -5004,7 +5144,7 @@ class App:
         if hit_level:
             status += f" · 命中{label}：{hit_bar}"
         if hidden_follows:
-            status += " · ⚠ 关注列表隐藏，未命中禁止时标黄"
+            status += " · ⚠ 关注列表隐藏，未命中警告时标黄"
         note = self._post_source_note(profile)
         if note:
             status += " · " + note

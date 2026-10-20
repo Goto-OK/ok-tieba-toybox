@@ -1,4 +1,4 @@
-"""配置备份 / 恢复（FR-012）：设置 + 本地标记，JSON / ZIP。"""
+"""设置备份 / 恢复（FR-012）：设置 + 本地标记，JSON / ZIP。"""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ from typing import Any, Dict
 
 KIND = "tieba-reply-stats/backup"
 SCHEMA_VERSION = 1
-README = "贴吧统计配置备份\n\n包含：通用设置、模式、本地标记。\n不包含 Cookie、快照、抓取历史。\n"
+README = "贴吧统计设置备份\n\n包含：通用设置、模式、本地标记。\n不包含 Cookie、快照、抓取历史。\n"
 
 
 def build_payload(settings: Dict[str, Any], blacklist: Dict[str, Any]) -> Dict[str, Any]:

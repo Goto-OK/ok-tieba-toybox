@@ -1,4 +1,4 @@
-"""贴吧黑白名单：把贴吧分成「安全 / 警告 / 禁止」，用来给用户打标记。
+"""贴吧黑白名单：把贴吧分成「安全 / 可疑 / 警告」，用来给用户打标记。
 
 配置保存在 %APPDATA%\\TiebaReplyStats\\blacklist.json，格式：
 {"safe": ["贴吧名", ...], "warn": [...], "ban": [...]}
@@ -15,8 +15,8 @@ APP_DIR = os.path.join(os.environ.get("APPDATA") or os.path.expanduser("~"), "Ti
 CONFIG_PATH = os.path.join(APP_DIR, "blacklist.json")
 
 LEVEL_LABEL = {
-    "ban": "禁止",
-    "warn": "警告",
+    "ban": "警告",
+    "warn": "可疑",
     "safe": "安全",
 }
 
@@ -60,7 +60,7 @@ def _norm(name: str) -> str:
 def classify(bars: List[str], data: Dict[str, List[str]]) -> Tuple[str, str]:
     """根据用户发过言的贴吧列表，返回 (级别, 命中的吧名)。
 
-    优先级：禁止(红) > 警告(黄) > 安全(绿)；都没命中返回 ("", "")。
+    优先级：警告(红) > 可疑(黄) > 安全(绿)；都没命中返回 ("", "")。
     """
     normalized = [(bar, _norm(bar)) for bar in bars if bar]
     for level in ("ban", "warn", "safe"):
@@ -74,7 +74,7 @@ def classify(bars: List[str], data: Dict[str, List[str]]) -> Tuple[str, str]:
 
 
 def merge_blacklists(old: Dict[str, List[str]], new: Dict[str, List[str]]) -> Dict[str, List[str]]:
-    """合并两份名单；同吧按 禁止 > 警告 > 安全 保留最高级。"""
+    """合并两份名单；同吧按 警告 > 可疑 > 安全 保留最高级。"""
     rank = {"safe": 0, "warn": 1, "ban": 2}
     chosen: Dict[str, str] = {}
     for data in (old, new):
@@ -97,11 +97,11 @@ def marker(level: str) -> str:
     return {"ban": "🔴", "warn": "🟡", "safe": "🟢"}.get(level, "⚪")
 
 
-CATEGORY_LABELS = {"safe": "安全", "warn": "警告", "ban": "禁止"}
+CATEGORY_LABELS = {"safe": "安全", "warn": "可疑", "ban": "警告"}
 LABEL_TO_KEY = {
     "安全": "safe",
-    "警告": "warn",
-    "禁止": "ban",
+    "可疑": "warn",
+    "警告": "ban",
     "safe": "safe",
     "warn": "warn",
     "ban": "ban",
@@ -145,7 +145,7 @@ def export_xlsx(path: str, data: Dict[str, List[str]]) -> bool:
     sheet.column_dimensions["B"].width = 34
     sheet.freeze_panes = "A2"
     last_row = max(2, sheet.max_row)
-    validation = DataValidation(type="list", formula1='"安全,警告,禁止"', allow_blank=False)
+    validation = DataValidation(type="list", formula1='"安全,可疑,警告"', allow_blank=False)
     sheet.add_data_validation(validation)
     validation.add(f"A2:A{last_row}")
     try:
