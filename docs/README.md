@@ -11,7 +11,7 @@
 | [code-map.md](code-map.md) | 代码地图 |
 | [release.md](release.md) | 构建与发布步骤 |
 | [standards.md](standards.md) | 代码风格、测试、Git |
-| [test-cases.md](test-cases.md) | 1.6.0 手工验收 / 回归清单 |
+| [test-cases.md](test-cases.md) | 1.7.0 手工验收 / 回归清单 |
 | [credentials.md](credentials.md) | BDUSS / Cookie / 公开关注 |
 | [protocol.md](protocol.md) | 贴吧接口与字段 |
 
