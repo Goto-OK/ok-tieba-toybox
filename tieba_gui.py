@@ -4316,19 +4316,10 @@ class App:
     def _profile_hit(self, profile, extra_bars=None):
         if not self._risk_enabled():
             return "", ""
-        if self.mode_var.get() == "guest":
-            bars = [bar for bar in (extra_bars or []) if bar]
-            return classify(bars, getattr(self, "blacklist", {}))
+        # 只按发言所在吧判定；关注列表不能单独给用户上色。
         bars = [post.get("bar") for post in profile.get("recent_posts") or [] if post.get("bar")]
-        bars += [forum["name"] for forum in self._merge_forum_lists(profile)]
-        if extra_bars:
-            bars += [bar for bar in extra_bars if bar]
-        hit_level, hit_bar = classify(bars, getattr(self, "blacklist", {}))
-        if self._hidden_follows(profile) and hit_level != "ban":
-            if hit_level != "warn":
-                hit_bar = "关注列表隐藏"
-            hit_level = "warn"
-        return hit_level, hit_bar
+        bars += [bar for bar in (extra_bars or []) if bar]
+        return classify(bars, getattr(self, "blacklist", {}))
 
     def _apply_batch_mark(self, user, profile) -> None:
         if not self._risk_enabled():
