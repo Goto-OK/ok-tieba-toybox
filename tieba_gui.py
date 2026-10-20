@@ -896,15 +896,20 @@ class App:
         )
         self.traffic_text.pack(side="left", padx=(8, 0))
 
+        profile_bar = tk.Frame(right, bg="#fbfcfe")
+        profile_bar.pack(fill="x", padx=6, pady=(4, 4))
         self.profile_status = tk.Label(
-            right,
+            profile_bar,
             text="选择左边一个人查看详情",
             anchor="w",
             bg="#fbfcfe",
             fg="#6b7280",
             font=("Microsoft YaHei UI", 9),
         )
-        self.profile_status.pack(fill="x", padx=6, pady=(4, 4))
+        self.profile_status.pack(side="left", fill="x", expand=True)
+        ttk.Button(profile_bar, text="刷新资料", command=self._reload_profile, width=8).pack(
+            side="right"
+        )
 
         body_paned = ttk.PanedWindow(right, orient="horizontal")
         body_paned.pack(fill="both", expand=True, padx=6)
@@ -1070,9 +1075,7 @@ class App:
 
     def _on_post_date_changed(self) -> None:
         self._toggle_date_entries()
-        user = self._selected_person() if hasattr(self, "people_tree") else None
-        if user and self.last_threads:
-            self._load_profile(user, force=True)
+        self.profile_status.configure(text="条件已变更，点「刷新资料」生效")
 
     def _on_lookup_parts_changed(self, *_args) -> None:
         self.lookup_start_var.set(self._group_date(self.lookup_start_parts))
@@ -1083,7 +1086,7 @@ class App:
     def _on_lookup_date_changed(self) -> None:
         self._toggle_lookup_dates()
         if self.lookup_query_var.get().strip():
-            self._on_lookup()
+            self.lookup_status.configure(text="条件已变更，点「查询」生效")
 
     def _toggle_lookup_dates(self) -> None:
         enabled = self.lookup_date_mode_var.get() == "指定日期"
@@ -1201,28 +1204,24 @@ class App:
 
         threading.Thread(target=worker, daemon=True).start()
 
-    def _insert_emoji_code(self) -> None:
-        value = simpledialog.askstring(
-            "插入 Emoji 代码",
-            "输入十六进制码点，例如 1F600 或 2764：",
-            parent=self.root,
-        )
-        if not value:
+    def _on_lookup_query_changed(self, *_args) -> None:
+        if getattr(self, "_normalizing_query", False):
             return
-        text = value.strip().upper().replace("U+", "").replace("[", "").replace("]", "")
+        raw = self.lookup_query_var.get()
+        encoded = encode_display(raw)
+        if encoded == raw:
+            return
         try:
-            code = int(text, 16)
-            if not (0 <= code <= 0x10FFFF):
-                raise ValueError
-        except ValueError:
-            messagebox.showerror("Emoji 代码无效", "请输入 0~10FFFF 的十六进制码点。", parent=self.root)
-            return
-        code_text = f"[U+{code:04X}]"
-        widget = self.root.focus_get()
-        if isinstance(widget, ttk.Entry) or isinstance(widget, tk.Entry):
-            widget.insert("insert", code_text)
-        else:
-            self.lookup_query_var.set(self.lookup_query_var.get() + code_text)
+            pos = self.lookup_entry.index("insert")
+            new_pos = len(encode_display(raw[:pos]))
+        except (tk.TclError, AttributeError):
+            new_pos = len(encoded)
+        self._normalizing_query = True
+        try:
+            self.lookup_query_var.set(encoded)
+            self.lookup_entry.icursor(new_pos)
+        finally:
+            self._normalizing_query = False
 
     def _build_lookup_tab(self) -> None:
         bar = tk.Frame(self.tab_lookup, bg="#ffffff", padx=12, pady=8)
@@ -1243,11 +1242,10 @@ class App:
         )
         self.lookup_query_var = tk.StringVar()
         entry = ttk.Entry(bar, textvariable=self.lookup_query_var, width=24, font=("Microsoft YaHei UI", 10))
+        self.lookup_entry = entry
         entry.pack(side="left", padx=(4, 0))
         entry.bind("<Return>", lambda _event: self._on_lookup())
-        ttk.Button(bar, text="Emoji 代码", command=self._insert_emoji_code, width=10).pack(
-            side="left", padx=(6, 0)
-        )
+        self.lookup_query_var.trace_add("write", self._on_lookup_query_changed)
         self.lookup_start_var = tk.StringVar()
         self.lookup_end_var = tk.StringVar()
         self.lookup_date_row = tk.Frame(self.tab_lookup, bg="#ffffff", padx=12, pady=4)
@@ -1581,6 +1579,14 @@ class App:
 
         threading.Thread(target=worker, daemon=True).start()
 
+    def _post_source_note(self, profile) -> str:
+        src = profile.get("post_sources") or {}
+        if src.get("replies_ok") is False:
+            return "回复流查询失败，当前只显示主题帖"
+        if src.get("replies_empty") and src.get("threads_ok"):
+            return "回复流为空，当前只显示主题帖"
+        return ""
+
     def _render_lookup(self, profile) -> None:
         forum_tree = self.lookup_forum_tree
         post_tree = self.lookup_post_tree
@@ -1670,8 +1676,13 @@ class App:
             info += f" | 命中{label}：{hit_bar}"
         if hidden_follows:
             info += " | ⚠ 关注列表隐藏，未命中禁止时标黄"
+        note = self._post_source_note(profile)
+        if note:
+            info += " | " + note
         self.lookup_info.configure(text=info)
-        self.lookup_status.configure(text=f"{profile.get('username') or ''} · {len(posts)} 条发言")
+        self.lookup_status.configure(
+            text=(f"{profile.get('username') or ''} · {len(posts)} 条发言" + (f" · {note}" if note else ""))
+        )
         self.lookup_report_btn.pack(anchor="w", pady=(4, 0))
         if self._hidden_follows(profile):
             self.lookup_probe_btn.pack(anchor="w", pady=(4, 0))
@@ -4341,6 +4352,11 @@ class App:
         except tk.TclError:
             pass
 
+    def _reload_profile(self) -> None:
+        user = self._selected_person() if hasattr(self, "people_tree") else None
+        if user and self.last_threads:
+            self._load_profile(user, force=True)
+
     def _load_profile(self, user, force: bool = False, force_follow: bool = False) -> None:
         key = user["uid"] or f"name:{user['name']}"
         cached = None if (force or force_follow) else getattr(self, "_profile_cache", {}).get(key)
@@ -4709,6 +4725,9 @@ class App:
             status += f" · 命中{label}：{hit_bar}"
         if hidden_follows:
             status += " · ⚠ 关注列表隐藏，未命中禁止时标黄"
+        note = self._post_source_note(profile)
+        if note:
+            status += " · " + note
         self.profile_status.configure(text=status)
 
     def _comment_depth_value(self) -> int:

@@ -15,7 +15,7 @@ from __future__ import annotations
 import hashlib
 import re
 from datetime import datetime
-from typing import Dict, List
+from typing import Dict, List, Optional
 from urllib.parse import quote, urlencode
 
 from . import profile_pb, userpost_pb
@@ -272,6 +272,7 @@ def fetch_user_posts(
     end_date: str = "",
     prefer: str = "end",
     uid: str = "",
+    status: Optional[Dict[str, object]] = None,
 ) -> List[Dict]:
     """PC 接口：取用户发言（主题帖 + 回复），按时间倒序，最多 count 条。
 
@@ -279,6 +280,10 @@ def fetch_user_posts(
     可选 start_date / end_date（YYYY-MM-DD）限定日期范围。
     """
     posts: List[Dict] = []
+    if status is not None:
+        status.clear()
+        status.update({"replies_ok": None, "replies_error": "", "replies_empty": False,
+                       "threads_ok": None, "threads_error": ""})
     if not portrait and not uid:
         return posts
     start = _parse_date(start_date)
@@ -315,7 +320,7 @@ def fetch_user_posts(
 
     # 1) replies: old PC feed (type=2)
     page = 1
-    while page <= 80 and len(posts) < max(count * 4, 200):
+    while page <= 80 and len(posts) < count:
         params = _sign(
             {
                 "pn": page,
@@ -331,11 +336,18 @@ def fetch_user_posts(
             payload = fetcher.get_json(
                 POSTS_URL + "?" + urlencode(params), name=f"posts_{portrait[:12]}_2_{page}"
             )
-        except Exception:  # noqa: BLE001
+            if status is not None:
+                status["replies_ok"] = True
+        except Exception as error:  # noqa: BLE001
+            if status is not None:
+                status["replies_ok"] = False
+                status["replies_error"] = str(error)
             break
         data = payload.get("data") or {}
         items = data.get("list") or []
         if not items:
+            if status is not None:
+                status["replies_empty"] = True
             break
         reached_start = False
         for item in items:
@@ -363,7 +375,16 @@ def fetch_user_posts(
         page += 1
 
     # 2) threads: new protobuf feed (deep pages, carries content)
-    thread_items = userpost_pb.fetch_user_threads(fetcher, uid, 3) if uid else []
+    thread_items = []
+    if uid:
+        try:
+            thread_items = userpost_pb.fetch_user_threads(fetcher, uid, 3)
+            if status is not None:
+                status["threads_ok"] = True
+        except Exception as error:  # noqa: BLE001
+            if status is not None:
+                status["threads_ok"] = False
+                status["threads_error"] = str(error)
     if thread_items:
         for item in thread_items:
             add_post(
@@ -378,7 +399,7 @@ def fetch_user_posts(
     elif portrait:
         # fallback: old PC feed type=1
         page = 1
-        while page <= 8 and len(posts) < max(count * 4, 200):
+        while page <= 8 and len(posts) < count:
             params = _sign(
                 {
                     "pn": page,
@@ -394,7 +415,10 @@ def fetch_user_posts(
                 payload = fetcher.get_json(
                     POSTS_URL + "?" + urlencode(params), name=f"posts_{portrait[:12]}_1_{page}"
                 )
-            except Exception:  # noqa: BLE001
+            except Exception as error:  # noqa: BLE001
+                if status is not None:
+                    status["threads_ok"] = False
+                    status["threads_error"] = str(error)
                 break
             data = payload.get("data") or {}
             items = data.get("list") or []
@@ -443,8 +467,12 @@ def fetch_user_profile(
         follow = fetch_follow_forums(fetcher, user_id)
     else:
         follow = {"forums": [], "private": False, "error": ""}
+    post_sources: Dict[str, object] = {}
     posts = (
-        fetch_user_posts(fetcher, portrait, post_count, start_date, end_date, prefer, uid=user_id)
+        fetch_user_posts(
+            fetcher, portrait, post_count, start_date, end_date, prefer, uid=user_id,
+            status=post_sources,
+        )
         if portrait or user_id
         else []
     )
@@ -487,6 +515,7 @@ def fetch_user_profile(
         "bar_level": level_in_bar,
         "bar_level_name": level_name,
         "recent_posts": posts,
+        "post_sources": post_sources,
         "followed_forums": follow.get("forums") or [],
         "followed_private": follow.get("private", False),
         "follow_error": follow.get("error", ""),

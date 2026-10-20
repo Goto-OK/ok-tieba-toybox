@@ -74,7 +74,7 @@
 | `tests/test_errors.py` | 错误文案 |
 | `tests/test_version.py` | 版本一致性 |
 
-当前：64 个 pytest 通过，selftest 通过。
+当前：66 个 pytest 通过，selftest 通过。
 
 ## 5. 脚本
 
