@@ -1093,7 +1093,7 @@ class App:
         try:
             if enabled:
                 if not self.lookup_date_row.winfo_ismapped():
-                    self.lookup_date_row.pack(fill="x", before=self.lookup_paned)
+                    self.lookup_date_row.pack(fill="x", after=self.lookup_options)
             else:
                 self.lookup_date_row.pack_forget()
         except tk.TclError:
@@ -1224,50 +1224,31 @@ class App:
             self._normalizing_query = False
 
     def _build_lookup_tab(self) -> None:
-        bar = tk.Frame(self.tab_lookup, bg="#ffffff", padx=12, pady=8)
-        bar.pack(fill="x")
-        tk.Label(bar, text="查询方式：", bg="#ffffff", fg="#475569", font=("Microsoft YaHei UI", 9)).pack(
+        page = self.tab_lookup
+        query = tk.Frame(page, bg="#ffffff", padx=12, pady=8)
+        query.pack(fill="x")
+        tk.Label(query, text="查询方式：", bg="#ffffff", fg="#475569", font=("Microsoft YaHei UI", 9)).pack(
             side="left"
         )
         self.lookup_mode_var = tk.StringVar(value="用户名")
         ttk.Combobox(
-            bar,
+            query,
             values=("用户名", "用户ID", "昵称"),
             textvariable=self.lookup_mode_var,
             width=8,
             state="readonly",
         ).pack(side="left")
-        tk.Label(bar, text="  内容：", bg="#ffffff", fg="#475569", font=("Microsoft YaHei UI", 9)).pack(
+        tk.Label(query, text="  内容：", bg="#ffffff", fg="#475569", font=("Microsoft YaHei UI", 9)).pack(
             side="left"
         )
         self.lookup_query_var = tk.StringVar()
-        entry = ttk.Entry(bar, textvariable=self.lookup_query_var, width=24, font=("Microsoft YaHei UI", 10))
+        entry = ttk.Entry(query, textvariable=self.lookup_query_var, width=34, font=("Microsoft YaHei UI", 10))
         self.lookup_entry = entry
         entry.pack(side="left", padx=(4, 0))
         entry.bind("<Return>", lambda _event: self._on_lookup())
         self.lookup_query_var.trace_add("write", self._on_lookup_query_changed)
-        self.lookup_start_var = tk.StringVar()
-        self.lookup_end_var = tk.StringVar()
-        self.lookup_date_row = tk.Frame(self.tab_lookup, bg="#ffffff", padx=12, pady=4)
-        self.lookup_start_parts = self._date_group(self.lookup_date_row, "开始", 3)
-        self.lookup_end_parts = self._date_group(self.lookup_date_row, "结束")
-        tk.Label(
-            self.lookup_date_row, text="  贴近：", bg="#ffffff", fg="#475569", font=("Microsoft YaHei UI", 9)
-        ).pack(side="left")
-        self.lookup_prefer_var = tk.StringVar(value="贴近结束日期")
-        ttk.Combobox(
-            self.lookup_date_row,
-            values=("贴近结束日期", "贴近开始日期"),
-            textvariable=self.lookup_prefer_var,
-            width=12,
-            state="readonly",
-        ).pack(side="left")
-        for _var in (*self.lookup_start_parts, *self.lookup_end_parts):
-            _var.trace_add("write", lambda *_: self._on_lookup_parts_changed())
-        self.lookup_start_var.set(self._group_date(self.lookup_start_parts))
-        self.lookup_end_var.set(self._group_date(self.lookup_end_parts))
         tk.Button(
-            bar,
+            query,
             text="查询",
             command=self._on_lookup,
             bg="#1F4E79",
@@ -1280,67 +1261,114 @@ class App:
             cursor="hand2",
             font=("Microsoft YaHei UI", 9, "bold"),
         ).pack(side="left", padx=(8, 0))
-        ttk.Button(bar, text="复制全部", command=self._copy_lookup, width=8).pack(side="left", padx=(6, 0))
 
-        bar2 = tk.Frame(self.tab_lookup, bg="#ffffff", padx=12, pady=3)
-        bar2.pack(fill="x")
-        tk.Label(bar2, text="最近发言抓取条数：", bg="#ffffff", fg="#475569", font=("Microsoft YaHei UI", 8)).pack(
-            side="left"
-        )
-        self.lookup_count_var = tk.StringVar(value="50")
-        ttk.Spinbox(bar2, from_=5, to=1000, increment=10, width=6, textvariable=self.lookup_count_var).pack(
-            side="left"
-        )
-        tk.Label(bar2, text="  日期：", bg="#ffffff", fg="#475569", font=("Microsoft YaHei UI", 8)).pack(
+        options = tk.Frame(page, bg="#ffffff", padx=12, pady=4)
+        options.pack(fill="x")
+        self.lookup_options = options
+        tk.Label(options, text="日期：", bg="#ffffff", fg="#475569", font=("Microsoft YaHei UI", 8)).pack(
             side="left"
         )
         self.lookup_date_mode_var = tk.StringVar(value="近期")
         ttk.Combobox(
-            bar2,
+            options,
             values=("近期", "指定日期"),
             textvariable=self.lookup_date_mode_var,
             width=9,
             state="readonly",
         ).pack(side="left")
+        tk.Label(options, text="  条数：", bg="#ffffff", fg="#475569", font=("Microsoft YaHei UI", 8)).pack(
+            side="left"
+        )
+        self.lookup_count_var = tk.StringVar(value="50")
+        ttk.Spinbox(options, from_=5, to=1000, increment=10, width=6, textvariable=self.lookup_count_var).pack(
+            side="left"
+        )
+        tk.Label(options, text="  排序：", bg="#ffffff", fg="#475569", font=("Microsoft YaHei UI", 8)).pack(
+            side="left"
+        )
+        self.lookup_prefer_var = tk.StringVar(value="贴近结束日期")
+        ttk.Combobox(
+            options,
+            values=("贴近结束日期", "贴近开始日期"),
+            textvariable=self.lookup_prefer_var,
+            width=12,
+            state="readonly",
+        ).pack(side="left")
         self.lookup_status = tk.Label(
-            bar2, text="", bg="#ffffff", fg="#8a94a6", font=("Microsoft YaHei UI", 8)
+            options, text="", bg="#ffffff", fg="#8a94a6", font=("Microsoft YaHei UI", 8)
         )
         self.lookup_status.pack(side="right")
-        self.lookup_traffic_labels = {}
+
+        date_row = tk.Frame(page, bg="#ffffff", padx=12, pady=2)
+        self.lookup_date_row = date_row
+        self.lookup_start_var = tk.StringVar()
+        self.lookup_end_var = tk.StringVar()
+        self.lookup_start_parts = self._date_group(date_row, "开始", 3)
+        self.lookup_end_parts = self._date_group(date_row, "结束")
+        for _var in (*self.lookup_start_parts, *self.lookup_end_parts):
+            _var.trace_add("write", lambda *_: self._on_lookup_parts_changed())
+        self.lookup_start_var.set(self._group_date(self.lookup_start_parts))
+        self.lookup_end_var.set(self._group_date(self.lookup_end_parts))
+
+        summary = tk.Frame(page, bg="#eef1f5", padx=12, pady=4)
+        summary.pack(fill="x")
+        self.lookup_summary = summary
+        self.lookup_info = tk.Label(
+            summary,
+            text="输入用户名 / 用户ID / 昵称，点「查询」查看资料、关注和最近发言。",
+            anchor="w",
+            bg="#eef1f5",
+            fg="#64748b",
+            font=("Microsoft YaHei UI", 9),
+            wraplength=590,
+            justify="left",
+        )
+        self.lookup_info.pack(side="left", fill="x", expand=True)
         self.lookup_traffic_text = tk.Label(
-            bar2, text="", bg="#ffffff", fg="#6b7280", font=("Microsoft YaHei UI", 8)
+            summary, text="", bg="#eef1f5", fg="#6b7280", font=("Microsoft YaHei UI", 8)
         )
         self.lookup_traffic_text.pack(side="right", padx=(0, 6))
+        self.lookup_traffic_labels = {}
         for key, color in (
             ("ban", self.palette["danger"]),
             ("warn", self.palette["warning"]),
             ("safe", self.palette["safe"]),
         ):
             label = tk.Label(
-                bar2,
+                summary,
                 text="●",
                 fg=self.palette["disabled_text"],
-                bg="#ffffff",
+                bg="#eef1f5",
                 font=("Microsoft YaHei UI", 12),
             )
             label.pack(side="right", padx=(0, 2))
             self.lookup_traffic_labels[key] = (label, color)
-        tk.Label(bar2, text="标记：", bg="#ffffff", fg="#6b7280", font=("Microsoft YaHei UI", 8)).pack(
+        tk.Label(summary, text="标记：", bg="#eef1f5", fg="#6b7280", font=("Microsoft YaHei UI", 8)).pack(
             side="right"
         )
 
-        self.lookup_date_mode_var.trace_add("write", lambda *_: self._on_lookup_date_changed())
-        self.lookup_info = tk.Label(
-            self.tab_lookup,
-            text="输入用户名 / 用户ID / 昵称，点「查询」查看资料、关注和最近发言。",
-            anchor="w",
-            bg="#eef1f5",
-            fg="#64748b",
-            font=("Microsoft YaHei UI", 9),
+        bottom = tk.Frame(page, bg="#eef1f5", padx=10, pady=6)
+        bottom.pack(side="bottom", fill="x")
+        self.lookup_bottom = bottom
+        self.lookup_report_btn = ttk.Button(
+            bottom, text="导出此人报告", command=self._export_lookup_report, width=14
         )
-        self.lookup_info.pack(fill="x", padx=12, pady=(0, 4))
+        self.lookup_probe_btn = ttk.Button(
+            bottom, text="探测候选关注", command=self._probe_lookup_forums, width=14
+        )
+        ttk.Button(bottom, text="复制全部", command=self._copy_lookup, width=10).pack(side="right")
+        self.lookup_forum_note = tk.Label(
+            bottom,
+            text="",
+            bg="#eef1f5",
+            fg="#b45309",
+            wraplength=620,
+            justify="left",
+            font=("Microsoft YaHei UI", 8),
+        )
+        self.lookup_forum_note.pack(side="left", fill="x", expand=True)
 
-        paned = ttk.PanedWindow(self.tab_lookup, orient="horizontal")
+        paned = ttk.PanedWindow(page, orient="horizontal")
         paned.pack(fill="both", expand=True, padx=10, pady=(0, 6))
         self.lookup_paned = paned
         left = tk.Frame(paned)
@@ -1367,23 +1395,6 @@ class App:
         self.lookup_forum_tree.bind("<Double-1>", lambda _event: self._open_lookup_forum())
         self._configure_colors(self.lookup_forum_tree)
         self._make_sortable(self.lookup_forum_tree, {"bar": "贴吧", "level": "等级", "source": "来源"})
-        self.lookup_forum_note = tk.Label(
-            left,
-            text="",
-            bg="#eef1f5",
-            fg="#b45309",
-            wraplength=280,
-            justify="left",
-            font=("Microsoft YaHei UI", 8),
-        )
-        self.lookup_forum_note.pack(fill="x", pady=(2, 0))
-        self.lookup_probe_btn = ttk.Button(
-            left, text="探测候选关注", command=self._probe_lookup_forums, width=16
-        )
-        self.lookup_report_btn = ttk.Button(
-            left, text="导出报告", command=self._export_lookup_report, width=16
-        )
-        self._lookup_forum_names: Dict[str, str] = {}
 
         tk.Label(
             right,
@@ -1420,6 +1431,9 @@ class App:
             {"time": "日期", "type": "类型", "bar": "贴吧", "title": "标题", "content": "内容"},
         )
         self._lookup_post_urls: Dict[str, str] = {}
+        self._lookup_forum_names: Dict[str, str] = {}
+        self.lookup_date_mode_var.trace_add("write", lambda *_: self._on_lookup_date_changed())
+        self._toggle_lookup_dates()
 
     def _open_lookup_forum(self) -> None:
         selection = self.lookup_forum_tree.selection()
@@ -1683,9 +1697,9 @@ class App:
         self.lookup_status.configure(
             text=(f"{profile.get('username') or ''} · {len(posts)} 条发言" + (f" · {note}" if note else ""))
         )
-        self.lookup_report_btn.pack(anchor="w", pady=(4, 0))
+        self.lookup_report_btn.pack(side="left", padx=(0, 6))
         if self._hidden_follows(profile):
-            self.lookup_probe_btn.pack(anchor="w", pady=(4, 0))
+            self.lookup_probe_btn.pack(side="left", padx=(6, 0))
             self.lookup_probe_btn.configure(state="normal", text="探测候选关注")
         else:
             self.lookup_probe_btn.pack_forget()
