@@ -2614,32 +2614,26 @@ class App:
             except tk.TclError:
                 continue
             value = str(current)
-            old_accent = str((old_palette or {}).get("accent") or "").lower()
-            current_accent = str(palette.get("accent") or "").lower()
-            is_fg = option in (
-                "fg",
-                "foreground",
-                "activeforeground",
-                "selectforeground",
-                "insertbackground",
-                "disabledforeground",
-            )
-            if is_fg and value.lower() in {old_accent, current_accent} - {""}:
-                try:
-                    bg = str(widget.cget("bg")).lower()
-                except tk.TclError:
-                    bg = ""
-                try:
-                    text = str(widget.cget("text")) if "text" in widget.keys() else ""
-                except tk.TclError:
-                    text = ""
-                danger_bg = str((old_palette or palette).get("danger_bg") or "").lower()
-                if bg == danger_bg:
-                    new = palette["danger"]
-                elif widget.winfo_class() == "Label" and text in ("红", "黄", "绿", "白"):
-                    new = value
-                else:
-                    new = palette["accent"]
+            token_order = ("accent", "accent_hover", "selection_bg", "selection_text")
+            old_token = ""
+            current_token = ""
+            for token in token_order:
+                if old_palette and value.lower() == str(old_palette.get(token) or "").lower():
+                    old_token = token
+                    break
+                if value.lower() == str(palette.get(token) or "").lower():
+                    current_token = token
+                    break
+            try:
+                text = str(widget.cget("text")) if "text" in widget.keys() else ""
+            except tk.TclError:
+                text = ""
+            if widget.winfo_class() == "Label" and text in ("红", "黄", "绿", "白"):
+                new = value
+            elif old_token:
+                new = palette[old_token]
+            elif current_token:
+                new = palette[current_token]
             else:
                 new = map_color(option, value, palette)
             klass = widget.winfo_class()
