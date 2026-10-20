@@ -79,26 +79,19 @@ APP_TITLE = "贴吧楼层回复统计"
 
 
 
-_EMOJI_CODE_RE = re.compile(r"\[U\+([0-9A-Fa-f]{4,6})\]")
+_EMOJI_CODE_RE = re.compile(r"\[U\+([0-9A-Fa-f]{4,6})\]", re.I)
+
+EMOJI_PICKER = (
+    "😀", "😁", "😂", "🤣", "😊", "😍", "🤔", "😅",
+    "😭", "😡", "👍", "👎", "❤", "🔥", "🎉", "💩",
+    "🤡", "👀", "😴", "🤮", "🤤", "🙄", "😳", "😱",
+    "🤯", "🥰", "😎", "🤓", "😐", "😑", "🙃", "🙏",
+)
 
 
-def _is_emoji_char(ch: str) -> bool:
-    code = ord(ch)
-    return (
-        0x1F000 <= code <= 0x1FAFF
-        or 0x2600 <= code <= 0x27BF
-        or 0x2B00 <= code <= 0x2BFF
-        or 0xFE00 <= code <= 0xFE0F
-        or code == 0x200D
-    )
-
-
-def encode_display(value) -> str:
-    """把 emoji 换成 [U+XXXX] 代码，Tk 8.6 才能正常显示。"""
-    out = []
-    for ch in str(value or ""):
-        out.append(f"[U+{ord(ch):04X}]" if _is_emoji_char(ch) else ch)
-    return "".join(out)
+def display_text(value) -> str:
+    """界面直接显示 emoji；Tk 8.6 以单色字形渲染。"""
+    return str(value or "")
 
 
 def decode_display(value) -> str:
@@ -1088,6 +1081,48 @@ class App:
             self._profile_cache.clear()
         self.profile_status.configure(text="条件已变更，点「刷新资料」生效")
 
+    def _open_emoji_panel(self) -> None:
+        existing = getattr(self, "_emoji_window", None)
+        try:
+            if existing is not None and existing.winfo_exists():
+                existing.lift()
+                return
+        except tk.TclError:
+            pass
+        win = tk.Toplevel(self.root)
+        self._emoji_window = win
+        win.title("选择 Emoji")
+        win.configure(bg="#eef1f5")
+        win.resizable(False, False)
+        win.transient(self.root)
+        frame = tk.Frame(win, bg="#eef1f5", padx=8, pady=8)
+        frame.pack()
+        for index, char in enumerate(EMOJI_PICKER):
+            def choose(value: str = char) -> None:
+                self._insert_emoji(value, win)
+
+            button = tk.Button(
+                frame,
+                text=char,
+                font=("Segoe UI Emoji", 14),
+                width=2,
+                relief="flat",
+                bg="#ffffff",
+                activebackground="#dbeafe",
+                cursor="hand2",
+                command=choose,
+            )
+            button.grid(row=index // 8, column=index % 8, padx=2, pady=2)
+        self._theme_widget_tree(win)
+        win.bind("<Escape>", lambda _event: win.destroy())
+        win.focus_set()
+
+    def _insert_emoji(self, char: str, win=None) -> None:
+        self.lookup_entry.insert("insert", char)
+        self.lookup_entry.focus_set()
+        if win is not None:
+            win.destroy()
+
     def _on_lookup_parts_changed(self, *_args) -> None:
         self.lookup_start_var.set(self._group_date(self.lookup_start_parts))
         self.lookup_end_var.set(self._group_date(self.lookup_end_parts))
@@ -1231,17 +1266,17 @@ class App:
         if getattr(self, "_normalizing_query", False):
             return
         raw = self.lookup_query_var.get()
-        encoded = encode_display(raw)
-        if encoded == raw:
+        decoded = decode_display(raw)
+        if decoded == raw:
             return
         try:
             pos = self.lookup_entry.index("insert")
-            new_pos = len(encode_display(raw[:pos]))
+            new_pos = len(decode_display(raw[:pos]))
         except (tk.TclError, AttributeError):
-            new_pos = len(encoded)
+            new_pos = len(decoded)
         self._normalizing_query = True
         try:
-            self.lookup_query_var.set(encoded)
+            self.lookup_query_var.set(decoded)
             self.lookup_entry.icursor(new_pos)
         finally:
             self._normalizing_query = False
@@ -1270,6 +1305,17 @@ class App:
         entry.pack(side="left", padx=(4, 0))
         entry.bind("<Return>", lambda _event: self._on_lookup())
         self.lookup_query_var.trace_add("write", self._on_lookup_query_changed)
+        tk.Button(
+            query,
+            text="😀",
+            command=self._open_emoji_panel,
+            font=("Segoe UI Emoji", 12),
+            width=3,
+            relief="flat",
+            bg="#eef1f5",
+            activebackground="#dbeafe",
+            cursor="hand2",
+        ).pack(side="left", padx=(6, 0))
         tk.Button(
             query,
             text="查询",
@@ -1501,7 +1547,7 @@ class App:
             return
         raw_query = query
         query = decode_display(query).strip() or query
-        encoded_query = encode_display(raw_query).lower()
+        encoded_query = display_text(raw_query).lower()
         self._lookup_generation = getattr(self, "_lookup_generation", 0) + 1
         generation = self._lookup_generation
         mode = self.lookup_mode_var.get()
@@ -1535,7 +1581,7 @@ class App:
                         real_name = (user.get("name") or "").strip()
                         if (
                             real_name.lower() == query.lower()
-                            or encode_display(real_name).lower() == encoded_query
+                            or display_text(real_name).lower() == encoded_query
                         ):
                             info = {
                                 "uid": user.get("uid") or "",
@@ -1699,7 +1745,7 @@ class App:
         self.lookup_forum_note.configure(text=forum_note)
 
         info = (
-            f"昵称 {encode_display(profile.get('nickname')) or '未知'} | 用户名 {profile.get('username') or '未知'} | "
+            f"昵称 {display_text(profile.get('nickname')) or '未知'} | 用户名 {profile.get('username') or '未知'} | "
             f"ID {profile.get('user_id') or '未知'} | 发言 {len(posts)} 条 | 关注 {len(combined)} 个"
         )
         if profile.get("followed_count"):
@@ -1782,8 +1828,8 @@ class App:
         self._refresh_people()
 
     def _display_name(self, item) -> str:
-        name = encode_display(item.get("name") or "")
-        aliases = [encode_display(value) for value in item.get("aliases") or []]
+        name = display_text(item.get("name") or "")
+        aliases = [display_text(value) for value in item.get("aliases") or []]
         if not aliases:
             return name
         shown = "、".join(aliases[:2])
@@ -1803,7 +1849,7 @@ class App:
     def _refresh_people(self) -> None:
         values = ["全部帖子"]
         for index, thread in enumerate(self.last_threads, start=1):
-            values.append(f"{index}. {encode_display(thread.meta.title or thread.meta.tid)}")
+            values.append(f"{index}. {display_text(thread.meta.title or thread.meta.tid)}")
         if hasattr(self, "people_range_box"):
             self.people_range_box.configure(values=values)
             if self.people_range_var.get() not in values:
@@ -3443,7 +3489,7 @@ class App:
         hint_bar.pack(fill="x")
         self.grid_hint = tk.Label(
             hint_bar,
-            text="表格可排序、双击打开链接、Ctrl+C 复制 · 界面用 [U+XXXX] 显示 emoji，导出保留原样",
+            text="表格可排序、双击打开链接、Ctrl+C 复制 · 界面直接显示单色 emoji，导出保留原样",
             bg="#ffffff",
             fg="#8a94a6",
             font=("Microsoft YaHei UI", 8),
@@ -3468,7 +3514,7 @@ class App:
             return
         values = ["全部帖子（汇总）"]
         for index, thread in enumerate(self.last_threads, start=1):
-            title = encode_display(thread.meta.title or thread.meta.tid)
+            title = display_text(thread.meta.title or thread.meta.tid)
             values.append(f"{index}. {title}")
         self.grid_thread_box.configure(values=values)
         current = self.grid_thread_var.get()
@@ -3563,10 +3609,10 @@ class App:
                 [
                     index,
                     self._display_name(item),
-                    encode_display(item["username"]),
+                    display_text(item["username"]),
                     item["uid"],
                     item["level"],
-                    encode_display(item["badge"]),
+                    display_text(item["badge"]),
                     item["threads"],
                     item["floor"],
                     item["comment"],
@@ -3580,10 +3626,10 @@ class App:
                 [
                     index,
                     self._display_name(item),
-                    encode_display(item["username"]),
+                    display_text(item["username"]),
                     item["uid"],
                     item["level"],
-                    encode_display(item["badge"]),
+                    display_text(item["badge"]),
                     item["floor"],
                     item["comment"],
                     item["total"],
@@ -3604,16 +3650,16 @@ class App:
             per_rows = []
             per_urls = []
             for thread_index, thread in enumerate(threads, start=1):
-                title = encode_display(thread.meta.title or thread.meta.tid)
+                title = display_text(thread.meta.title or thread.meta.tid)
                 for item in thread.user_stats(include_op):
                     per_rows.append(
                         [
                             f"{thread_index}. {title}",
                             self._display_name(item),
-                            encode_display(item["username"]),
+                            display_text(item["username"]),
                             item["uid"],
                             item["level"],
-                            encode_display(item["badge"]),
+                            display_text(item["badge"]),
                             item["floor_count"],
                             item["comment_count"],
                             item["total"],
@@ -3635,19 +3681,19 @@ class App:
         comment_rows = []
         comment_urls = []
         for thread_index, thread in enumerate(threads, start=1):
-            title = encode_display(thread.meta.title or thread.meta.tid)
+            title = display_text(thread.meta.title or thread.meta.tid)
             for floor in thread.floors:
                 prefix = [f"{thread_index}. {title}"] if all_mode else []
                 floor_rows.append(
                     prefix
                     + [
                         floor.post_no,
-                        encode_display(floor.author),
-                        encode_display(floor.author_name),
+                        display_text(floor.author),
+                        display_text(floor.author_name),
                         floor.author_id,
                         floor.level,
-                        encode_display(floor.badge),
-                        encode_display(floor.content),
+                        display_text(floor.badge),
+                        display_text(floor.content),
                     ]
                 )
                 floor_urls.append(f"https://tieba.baidu.com/p/{thread.meta.tid}?pid={floor.pid}")
@@ -3657,11 +3703,11 @@ class App:
                     prefix
                     + [
                         comment.floor_no,
-                        encode_display(comment.author),
-                        encode_display(comment.author_name),
+                        display_text(comment.author),
+                        display_text(comment.author_name),
                         comment.author_id,
                         comment.level,
-                        encode_display(comment.content),
+                        display_text(comment.content),
                     ]
                 )
                 comment_urls.append(f"https://tieba.baidu.com/p/{thread.meta.tid}?pid={comment.pid}")
@@ -3703,7 +3749,7 @@ class App:
             self.grid_hint.configure(text=f"⚠ 数据可能不完整：{warn_count} 条警告；导出说明里也会记录")
         else:
             self.grid_hint.configure(
-                text="表格可排序、双击打开链接、Ctrl+C 复制 · 界面用 [U+XXXX] 显示 emoji，导出保留原样"
+                text="表格可排序、双击打开链接、Ctrl+C 复制 · 界面直接显示单色 emoji，导出保留原样"
             )
         self._add_compare_tab()
 
@@ -3718,7 +3764,7 @@ class App:
         self.compare_vars = []
         for index, thread in enumerate(self.last_threads):
             var = tk.BooleanVar(value=index < 2)
-            label = encode_display(thread.meta.title or thread.meta.tid)[:16]
+            label = display_text(thread.meta.title or thread.meta.tid)[:16]
             tk.Checkbutton(
                 top, text=label, variable=var, bg="#ffffff", anchor="w", font=("Microsoft YaHei UI", 8)
             ).pack(side="left", padx=(2, 0))
@@ -3762,7 +3808,7 @@ class App:
         rows = []
         for row in result["rows"]:
             values = [
-                encode_display(row["name"]),
+                display_text(row["name"]),
                 row["username"],
                 row["uid"],
             ] + row["counts"] + [row["total"], row["type"]]
@@ -3774,7 +3820,7 @@ class App:
         selected = [i for i, var in enumerate(getattr(self, "compare_vars", [])) if var.get()]
         if index < len(selected):
             thread = self.last_threads[selected[index]]
-            return encode_display(thread.meta.title or thread.meta.tid)
+            return display_text(thread.meta.title or thread.meta.tid)
         return ""
 
     def _export_compare(self) -> None:
@@ -4452,7 +4498,7 @@ class App:
         if cached and (cached.get("follow_loaded") or not force_follow):
             self._render_profile(user, cached)
             return
-        self.profile_status.configure(text=f"正在查询 {encode_display(user['name'])} …")
+        self.profile_status.configure(text=f"正在查询 {display_text(user['name'])} …")
         for tree in (self.profile_forum_tree, self.profile_post_tree):
             for item in tree.get_children():
                 tree.delete(item)
@@ -4801,7 +4847,7 @@ class App:
                 pass
 
         status = (
-            f"{encode_display(user['name'])} | {user['username'] or '-'} | ID {user['uid'] or '-'} | "
+            f"{display_text(user['name'])} | {user['username'] or '-'} | ID {user['uid'] or '-'} | "
             f"Lv.{level or '-'} | 发言 {len(posts)} | 关注 {len(combined)}"
         )
         if profile.get("fans") is not None:
