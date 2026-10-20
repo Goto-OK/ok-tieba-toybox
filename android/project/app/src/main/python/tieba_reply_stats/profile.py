@@ -325,13 +325,15 @@ def fetch_user_posts(
     # 1) replies: old PC feed (type=2)
     # 指定日期 + 优先最早时要翻到开始日期，不能只按 count 截断，
     # 否则后面的主题流会把这批回复挤出结果。
+    # 旧接口支持 rn=100，用大页减少翻页数；80*20 只能到最近几个月。
+    reply_page_size = 300
     collect_start = prefer == "start" and bool(start)
     page = 1
-    while page <= 80 and (len(posts) < count or collect_start):
+    while page <= 150 and (len(posts) < count or collect_start):
         params = _sign(
             {
                 "pn": page,
-                "rn": 20,
+                "rn": reply_page_size,
                 "portrait": portrait,
                 "type": 2,
                 "subapp_type": "pc",
@@ -410,7 +412,7 @@ def fetch_user_posts(
             params = _sign(
                 {
                     "pn": page,
-                    "rn": 20,
+                    "rn": reply_page_size,
                     "portrait": portrait,
                     "type": 1,
                     "subapp_type": "pc",
