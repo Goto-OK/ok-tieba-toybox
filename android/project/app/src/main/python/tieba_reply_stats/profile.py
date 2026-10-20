@@ -452,7 +452,19 @@ def fetch_user_posts(
     known = [item for item in posts if item.get("ts")]
     unknown = [item for item in posts if not item.get("ts")]
     known.sort(key=lambda item: item.get("ts") or 0, reverse=(prefer != "start"))
-    posts = known + unknown
+    selected = known[:count]
+    # 回复流和主题流时间跨度不同：优先最早可能选出清一色主题帖。
+    # 两种类型都存在时，至少保留一部分少数类型，避免“回复全部消失”。
+    kinds = {item.get("type") for item in known}
+    if len(kinds) > 1 and count >= 2:
+        selected_kinds = {item.get("type") for item in selected}
+        missing = kinds - selected_kinds
+        if missing:
+            missing_items = [item for item in known if item.get("type") in missing]
+            keep = min(len(missing_items), max(1, count // 2))
+            selected = selected[: max(0, count - keep)] + missing_items[:keep]
+            selected.sort(key=lambda item: item.get("ts") or 0, reverse=(prefer != "start"))
+    posts = selected + unknown
     return posts[:count]
 
 
