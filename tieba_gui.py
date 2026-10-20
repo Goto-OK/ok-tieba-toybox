@@ -1085,58 +1085,59 @@ class App:
     def _open_emoji_panel(self) -> None:
         if os.name == "nt":
             try:
-                if self._open_native_emoji():
-                    return
+                self._toggle_emoji_inline()
+                return
             except Exception:  # noqa: BLE001
                 pass
         self._open_emoji_picker()
 
-    def _position_emoji_popup(self, win, width: int, height: int) -> None:
-        button = getattr(self, "emoji_btn", None)
-        self.root.update_idletasks()
-        if button is not None and button.winfo_ismapped():
-            bx = button.winfo_rootx()
-            by = button.winfo_rooty() + button.winfo_height() + 4
-        else:
-            bx = self.root.winfo_rootx() + 40
-            by = self.root.winfo_rooty() + 100
-        screen_w = win.winfo_screenwidth()
-        screen_h = win.winfo_screenheight()
-        x = max(8, min(bx, screen_w - width - 8))
-        if by + height > screen_h - 8:
-            by = max(8, by - height - 8)
-        y = max(8, by)
-        win.geometry(f"{width}x{height}+{x}+{y}")
+    def _build_emoji_inline(self) -> tk.Frame:
+        frame = tk.Frame(self.tab_lookup, bg="#eef1f5", padx=10, pady=6)
+        self._emoji_inline_frame = frame
+        tk.Label(
+            frame,
+            text="输入 Emoji（支持微软输入法 / Win+. / Ctrl+V）",
+            bg="#eef1f5",
+            fg="#475569",
+            font=("Microsoft YaHei UI", 8),
+            anchor="w",
+        ).pack(fill="x")
+        host = tk.Frame(frame, bg="#ffffff", height=34)
+        host.pack(fill="x", pady=(2, 4))
+        host.pack_propagate(False)
+        self._emoji_host = host
+        row = tk.Frame(frame, bg="#eef1f5")
+        row.pack(fill="x")
+        ttk.Button(row, text="取消", command=self._hide_emoji_inline, width=8).pack(side="right")
+        ttk.Button(row, text="插入", command=self._commit_emoji_inline, width=8).pack(
+            side="right", padx=(0, 6)
+        )
+        self._theme_widget_tree(frame)
+        return frame
 
-    def _open_native_emoji(self) -> bool:
+    def _toggle_emoji_inline(self) -> None:
+        frame = getattr(self, "_emoji_inline_frame", None)
+        if frame is not None and frame.winfo_manager():
+            self._hide_emoji_inline()
+            return
+        if frame is None:
+            frame = self._build_emoji_inline()
+        frame.pack(fill="x", after=self.lookup_query_bar)
+        self.root.update_idletasks()
+        if not self._create_inline_edit():
+            self._hide_emoji_inline()
+            self._open_emoji_picker()
+            return
+        import ctypes
+
+        ctypes.windll.user32.SetFocus(self._emoji_edit)
+
+    def _create_inline_edit(self) -> bool:
+        if getattr(self, "_emoji_edit", None):
+            return True
         import ctypes
         from ctypes import wintypes
 
-        existing = getattr(self, "_emoji_window", None)
-        try:
-            if existing is not None and existing.winfo_exists():
-                existing.lift()
-                return True
-        except tk.TclError:
-            pass
-        win = tk.Toplevel(self.root)
-        self._emoji_window = win
-        win.title("输入 Emoji")
-        win.configure(bg="#eef1f5")
-        win.resizable(True, False)
-        win.transient(self.root)
-        tk.Label(
-            win,
-            text="可直接用 Windows 输入法 / Win+. 输入 Emoji；确认后插入查询框。",
-            bg="#eef1f5",
-            fg="#475569",
-            font=("Microsoft YaHei UI", 9),
-            anchor="w",
-        ).pack(fill="x", padx=10, pady=(8, 4))
-        host = tk.Frame(win, bg="#ffffff", height=38)
-        host.pack(fill="x", padx=10)
-        host.pack_propagate(False)
-        win.update_idletasks()
         user32 = ctypes.WinDLL("user32", use_last_error=True)
         gdi32 = ctypes.WinDLL("gdi32", use_last_error=True)
         kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
@@ -1155,21 +1156,14 @@ class App:
             wintypes.DWORD, wintypes.DWORD, wintypes.DWORD, wintypes.DWORD,
             wintypes.DWORD, wintypes.DWORD, wintypes.DWORD, wintypes.DWORD, wintypes.LPCWSTR,
         ]
-        gdi32.DeleteObject.argtypes = [wintypes.HGDIOBJ]
         kernel32.GetModuleHandleW.restype = wintypes.HMODULE
         hinst = kernel32.GetModuleHandleW(None)
-        WS_CHILD = 0x40000000
-        WS_VISIBLE = 0x10000000
-        WS_BORDER = 0x00800000
-        ES_AUTOHSCROLL = 0x00000080
-        style = WS_CHILD | WS_VISIBLE | WS_BORDER | ES_AUTOHSCROLL
+        style = 0x40000000 | 0x10000000 | 0x00800000 | 0x00000080
         edit = user32.CreateWindowExW(
-            0, "EDIT", "", style, 0, 0, 100, 34,
-            wintypes.HWND(host.winfo_id()), None, hinst, None,
+            0, "EDIT", "", style, 0, 0, 100, 32,
+            wintypes.HWND(self._emoji_host.winfo_id()), None, hinst, None,
         )
         if not edit:
-            win.destroy()
-            self._emoji_window = None
             return False
         self._emoji_edit = edit
         font = gdi32.CreateFontW(
@@ -1182,46 +1176,38 @@ class App:
         def resize(event) -> None:
             user32.MoveWindow(edit, 0, 0, max(10, event.width), max(20, event.height), True)
 
-        host.bind("<Configure>", resize)
-        resize(type("E", (), {"width": 460, "height": 34})())
-
-        def close() -> None:
-            try:
-                if font:
-                    gdi32.DeleteObject(font)
-            finally:
-                self._emoji_edit = None
-                self._emoji_edit_font = None
-                win.destroy()
-
-        def commit() -> None:
-            length = user32.GetWindowTextLengthW(edit)
-            buffer = ctypes.create_unicode_buffer(length + 1)
-            user32.GetWindowTextW(edit, buffer, length + 1)
-            text = buffer.value.strip()
-            if text:
-                self.lookup_entry.insert("insert", text)
-                self.lookup_entry.focus_set()
-            close()
-
-        buttons = tk.Frame(win, bg="#eef1f5")
-        buttons.pack(fill="x", padx=10, pady=(8, 6))
-        ttk.Button(buttons, text="插入", command=commit, width=10).pack(side="right")
-        ttk.Button(buttons, text="取消", command=close, width=10).pack(side="right", padx=(0, 6))
-        tk.Label(
-            buttons,
-            text="支持微软输入法、Win+.、Ctrl+V",
-            bg="#eef1f5",
-            fg="#8a94a6",
-            font=("Microsoft YaHei UI", 8),
-        ).pack(side="left")
-        win.protocol("WM_DELETE_WINDOW", close)
-        win.bind("<Escape>", lambda _event: close())
-        self._theme_widget_tree(win)
-        self._position_emoji_popup(win, 480, 170)
-        win.update_idletasks()
-        user32.SetFocus(edit)
+        self._emoji_host.bind("<Configure>", resize)
+        resize(type("E", (), {"width": 600, "height": 32})())
         return True
+
+    def _commit_emoji_inline(self) -> None:
+        edit = getattr(self, "_emoji_edit", None)
+        if not edit:
+            return
+        import ctypes
+
+        user32 = ctypes.windll.user32
+        length = user32.GetWindowTextLengthW(edit)
+        buffer = ctypes.create_unicode_buffer(length + 1)
+        user32.GetWindowTextW(edit, buffer, length + 1)
+        text = buffer.value.strip()
+        if text:
+            self.lookup_entry.insert("insert", text)
+        self._hide_emoji_inline()
+
+    def _hide_emoji_inline(self) -> None:
+        frame = getattr(self, "_emoji_inline_frame", None)
+        if frame is not None:
+            frame.pack_forget()
+        edit = getattr(self, "_emoji_edit", None)
+        if edit:
+            try:
+                import ctypes
+
+                ctypes.windll.user32.SetWindowTextW(edit, "")
+            except Exception:  # noqa: BLE001
+                pass
+        self.lookup_entry.focus_set()
 
     def _open_emoji_picker(self) -> None:
         existing = getattr(self, "_emoji_window", None)
@@ -1256,7 +1242,6 @@ class App:
             )
             button.grid(row=index // 8, column=index % 8, padx=2, pady=2)
         self._theme_widget_tree(win)
-        self._position_emoji_popup(win, 304, 216)
         win.bind("<Escape>", lambda _event: win.destroy())
         win.focus_set()
 
@@ -1428,6 +1413,7 @@ class App:
         page = self.tab_lookup
         query = tk.Frame(page, bg="#ffffff", padx=12, pady=8)
         query.pack(fill="x")
+        self.lookup_query_bar = query
         tk.Label(query, text="查询方式：", bg="#ffffff", fg="#475569", font=("Microsoft YaHei UI", 9)).pack(
             side="left"
         )
