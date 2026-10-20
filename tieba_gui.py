@@ -210,10 +210,11 @@ class App:
             self.cookie_var.set(saved)
             self._sync_login_from_cookie()
             self._append_log("已自动填入上次保存的登录信息（如果失效，请重新粘贴一次）。", "muted")
-        if self.settings.get("follow_enhance") and parse_cookie_input(self.cookie_var.get()).get("BDUSS"):
+        if self.settings.get("follow_enhance"):
             self.mode_var.set("login")
+            if not parse_cookie_input(self.cookie_var.get()).get("BDUSS"):
+                self._append_log("抓取增强已开启，但尚未填写 BDUSS；请先填写后再开始统计。", "muted")
         else:
-            self.settings["follow_enhance"] = False
             self.mode_var.set("guest")
         self._apply_mode_ui()
         self._apply_risk_ui()
