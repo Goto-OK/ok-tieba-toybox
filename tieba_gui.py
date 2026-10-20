@@ -1102,15 +1102,17 @@ class App:
             font=("Microsoft YaHei UI", 8),
             anchor="w",
         ).pack(fill="x")
-        host = tk.Frame(frame, bg="#ffffff", height=34)
-        host.pack(fill="x", pady=(2, 4))
+        row = tk.Frame(frame, bg="#eef1f5")
+        row.pack(fill="x", pady=(2, 4))
+        host = tk.Frame(row, bg="#ffffff", height=34)
+        host.pack(side="left", fill="x", expand=True)
         host.pack_propagate(False)
         self._emoji_host = host
-        row = tk.Frame(frame, bg="#eef1f5")
-        row.pack(fill="x")
-        ttk.Button(row, text="取消", command=self._hide_emoji_inline, width=8).pack(side="right")
+        ttk.Button(row, text="取消", command=self._hide_emoji_inline, width=8).pack(
+            side="right", padx=(6, 0)
+        )
         ttk.Button(row, text="插入", command=self._commit_emoji_inline, width=8).pack(
-            side="right", padx=(0, 6)
+            side="right", padx=(6, 0)
         )
         self._theme_widget_tree(frame)
         return frame
