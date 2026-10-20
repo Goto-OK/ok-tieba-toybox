@@ -19,6 +19,7 @@ import traceback
 import webbrowser
 from dataclasses import replace
 from datetime import datetime
+from functools import partial
 from tkinter import filedialog, messagebox, simpledialog, ttk
 from typing import Any, Callable, Dict, List, Optional
 from urllib.parse import quote
@@ -1813,13 +1814,6 @@ class App:
             bg="#eef1f5",
             fg="#475569",
             font=("Microsoft YaHei UI", 9, "bold"),
-        ).pack(anchor="w")
-        tk.Label(
-            left,
-            text="双击贴吧行可打开主页",
-            bg="#eef1f5",
-            fg="#8a94a6",
-            font=("Microsoft YaHei UI", 8),
         ).pack(anchor="w")
         self.lookup_forum_tree = ttk.Treeview(
             left, columns=("bar", "level", "source"), show="headings", height=14
@@ -4607,8 +4601,23 @@ class App:
         tree.bind("<Double-1>", open_row)
         tree.bind("<Control-c>", copy_row)
         menu = tk.Menu(tree, tearoff=0)
+
+        def copy_value(index: int) -> None:
+            selection = tree.selection()
+            if selection:
+                values = tree.item(selection[0], "values")
+                if index < len(values):
+                    self._copy_text(str(values[index]))
+
         menu.add_command(label="打开链接", command=open_row)
         menu.add_command(label="复制整行", command=copy_row)
+        for title, index in (
+            ("复制昵称", next((i for i, h in enumerate(headers) if h in ("昵称", "回复者")), -1)),
+            ("复制用户名", next((i for i, h in enumerate(headers) if h == "用户名"), -1)),
+            ("复制用户ID", next((i for i, h in enumerate(headers) if h == "用户ID"), -1)),
+        ):
+            if index >= 0:
+                menu.add_command(label=title, command=partial(copy_value, index))
         menu.add_command(
             label="复制当前页",
             command=lambda: self._copy_tree_page(tree),
