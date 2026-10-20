@@ -13,6 +13,7 @@ import queue
 import re
 import sys
 import threading
+import time
 import tkinter as tk
 import traceback
 import webbrowser
@@ -678,6 +679,7 @@ class App:
 
     def _build_people_tab(self) -> None:
         self._profile_cache: Dict[str, Dict[str, Any]] = {}
+        self._batch_cache: Dict[str, tuple[float, Dict[str, Any]]] = {}
         self.people_users: List[Dict[str, Any]] = []
         bar = tk.Frame(self.tab_people, bg="#ffffff", padx=12, pady=8)
         bar.pack(fill="x")
@@ -1081,6 +1083,8 @@ class App:
 
     def _on_post_date_changed(self) -> None:
         self._toggle_date_entries()
+        if hasattr(self, "_profile_cache"):
+            self._profile_cache.clear()
         self.profile_status.configure(text="条件已变更，点「刷新资料」生效")
 
     def _on_lookup_parts_changed(self, *_args) -> None:
@@ -4266,9 +4270,16 @@ class App:
         def resolve(user):
             if not (user.get("uid") or user.get("username")):
                 return {"ok": False, "error": "缺少用户ID"}
+            key = (
+                f"{user.get('uid') or user.get('username')}|{count}|{start_date}|{end_date}|"
+                f"{prefer}|{int(include_follows)}|{int(guest)}"
+            )
+            hit = self._batch_cache.get(key)
+            if hit and time.monotonic() - hit[0] < 60:
+                return hit[1]
             try:
                 fetcher = Fetcher(cookie=cookie, delay=0.3, verbose=False)
-                return fetch_user_profile(
+                profile = fetch_user_profile(
                     fetcher,
                     user.get("uid") or "",
                     user.get("username") or "",
@@ -4282,6 +4293,11 @@ class App:
                 )
             except Exception as error:  # noqa: BLE001
                 return {"ok": False, "error": str(error)}
+            if profile.get("ok"):
+                if len(self._batch_cache) >= 500:
+                    self._batch_cache.clear()
+                self._batch_cache[key] = (time.monotonic(), profile)
+            return profile
 
         def worker():
             if concurrency <= 1:
