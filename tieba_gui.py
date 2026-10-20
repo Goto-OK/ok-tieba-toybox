@@ -2508,56 +2508,22 @@ class App:
             font=("Microsoft YaHei UI", 8),
         ).pack(anchor="w", padx=8, pady=(2, 4))
 
-        maint_box = ttk.LabelFrame(box, text=" 数据维护 ")
+        maint_box = ttk.LabelFrame(box, text=" 数据位置与维护 ")
         maint_box.pack(fill="x")
-        buttons = tk.Frame(maint_box, bg="#eef1f5")
-        buttons.pack(anchor="w", padx=8, pady=(6, 4))
-        ttk.Button(buttons, text="清空最近结果", command=self._clear_result, width=14).pack(side="left")
-        ttk.Button(
-            buttons, text="打开数据目录", command=lambda: self._open_folder(APP_DIR), width=14
-        ).pack(side="left", padx=(8, 0))
+        data_row = tk.Frame(maint_box, bg="#eef1f5")
+        data_row.pack(fill="x", padx=8, pady=(6, 2))
         tk.Label(
-            maint_box,
-            text="数据目录：%APPDATA%\\TiebaReplyStats",
-            bg="#eef1f5",
-            fg="#8a94a6",
-            font=("Microsoft YaHei UI", 8),
-        ).pack(anchor="w", padx=8, pady=(0, 4))
-
-    def _build_about_tab(self) -> None:
-        box = tk.Frame(self.tab_about, bg="#eef1f5", padx=14, pady=10)
-        box.pack(fill="both", expand=True)
-        tk.Label(
-            box,
-            text=f"{APP_TITLE} v{VERSION}",
-            bg="#eef1f5",
-            fg="#1F4E79",
-            font=("Microsoft YaHei UI", 12, "bold"),
-        ).pack(anchor="w")
-        tk.Label(
-            box,
-            text="默认匿名 · 结果只存本机 · 不保存 STOKEN · 浅色主题",
-            bg="#eef1f5",
-            fg="#8a94a6",
-            font=("Microsoft YaHei UI", 8),
-        ).pack(anchor="w", pady=(2, 8))
-
-        path_box = ttk.LabelFrame(box, text=" 数据位置 ")
-        path_box.pack(fill="x", pady=(0, 6))
-        path_row = tk.Frame(path_box, bg="#eef1f5")
-        path_row.pack(fill="x", padx=8, pady=(6, 2))
-        tk.Label(
-            path_row,
+            data_row,
             text=f"数据：{APP_DIR}",
             bg="#eef1f5",
             fg="#475569",
             font=("Microsoft YaHei UI", 8),
             anchor="w",
         ).pack(side="left", fill="x", expand=True)
-        ttk.Button(
-            path_row, text="打开", command=lambda: self._open_folder(APP_DIR), width=8
-        ).pack(side="right")
-        temp_row = tk.Frame(path_box, bg="#eef1f5")
+        ttk.Button(data_row, text="打开", command=lambda: self._open_folder(APP_DIR), width=8).pack(
+            side="right"
+        )
+        temp_row = tk.Frame(maint_box, bg="#eef1f5")
         temp_row.pack(fill="x", padx=8, pady=(2, 2))
         tk.Label(
             temp_row,
@@ -2573,20 +2539,42 @@ class App:
             command=lambda: self._open_folder(os.path.join(os.environ.get("TEMP", ""), "TiebaReplyStats")),
             width=8,
         ).pack(side="right")
-        old_row = tk.Frame(path_box, bg="#eef1f5")
-        old_row.pack(fill="x", padx=8, pady=(2, 6))
+        buttons = tk.Frame(maint_box, bg="#eef1f5")
+        buttons.pack(fill="x", padx=8, pady=(4, 2))
+        ttk.Button(buttons, text="清空最近结果", command=self._clear_result, width=14).pack(side="left")
         self.old_files_label = tk.Label(
-            old_row, text="", bg="#eef1f5", fg="#8a94a6", font=("Microsoft YaHei UI", 8)
+            buttons, text="", bg="#eef1f5", fg="#8a94a6", font=("Microsoft YaHei UI", 8)
         )
-        self.old_files_label.pack(side="left")
-        ttk.Button(old_row, text="清理旧结果", command=self._cleanup_old_results, width=10).pack(side="right")
+        self.old_files_label.pack(side="left", padx=(10, 0))
+        ttk.Button(buttons, text="清理旧结果", command=self._cleanup_old_results, width=10).pack(side="right")
         self._refresh_old_files_label()
+
+    def _build_about_tab(self) -> None:
+        box = tk.Frame(self.tab_about, bg="#eef1f5", padx=14, pady=10)
+        box.pack(fill="both", expand=True)
+        tk.Label(
+            box,
+            text=f"{APP_TITLE} v{VERSION}",
+            bg="#eef1f5",
+            fg="#1F4E79",
+            font=("Microsoft YaHei UI", 12, "bold"),
+        ).pack(anchor="w")
+        tk.Label(
+            box,
+            text="默认匿名 · 结果只存本机 · 不保存 STOKEN · 支持浅色/深色",
+            bg="#eef1f5",
+            fg="#8a94a6",
+            font=("Microsoft YaHei UI", 8),
+        ).pack(anchor="w", pady=(2, 8))
 
         help_box = ttk.LabelFrame(box, text=" 帮助与诊断 ")
         help_box.pack(fill="x", pady=(0, 6))
         help_row = tk.Frame(help_box, bg="#eef1f5")
         help_row.pack(anchor="w", padx=8, pady=(6, 2))
         ttk.Button(help_row, text="打开使用说明", command=self._open_usage_window, width=14).pack(side="left")
+        ttk.Button(help_row, text="第三方许可", command=self._open_notice, width=12).pack(
+            side="left", padx=(8, 0)
+        )
         ttk.Button(help_row, text="复制诊断信息", command=self._copy_diagnostics, width=14).pack(
             side="left", padx=(8, 0)
         )
@@ -2692,6 +2680,16 @@ class App:
         self.old_files_label.configure(
             text=f"旧不兼容结果：{len(files)} 个，{size / 1024 / 1024:.1f} MB"
         )
+
+    def _open_notice(self) -> None:
+        path = os.path.join(resource_dir(), "THIRD_PARTY_NOTICES.md")
+        if not os.path.isfile(path):
+            messagebox.showinfo("第三方许可", "许可文件未找到。", parent=self.root)
+            return
+        try:
+            os.startfile(path)  # type: ignore[attr-defined]
+        except OSError as error:
+            messagebox.showerror("打不开许可文件", friendly_error(error), parent=self.root)
 
     def _open_folder(self, path: str) -> None:
         try:
