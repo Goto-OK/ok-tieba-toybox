@@ -195,7 +195,8 @@ class App:
         saved = load_cookie()
         if saved:
             self.cookie_var.set(saved)
-            self._append_log("已自动填入上次保存的 Cookie（如果失效，请重新粘贴一次）。", "muted")
+            self._sync_login_from_cookie()
+            self._append_log("已自动填入上次保存的登录信息（如果失效，请重新粘贴一次）。", "muted")
         if self.settings.get("follow_enhance") and parse_cookie_input(self.cookie_var.get()).get("BDUSS"):
             self.mode_var.set("login")
         else:
@@ -405,40 +406,116 @@ class App:
             row=0, column=1, padx=(8, 0)
         )
 
-        # 4. Cookie
-        cookie_box = ttk.LabelFrame(
-            body, text=" Cookie（被安全验证拦截时填写，粘贴一次后会自动记住） ", style="Card.TLabelframe"
-        )
+        # 4. 登录 / 关注增强
+        cookie_box = ttk.LabelFrame(body, text=" 登录 / 关注增强 ", style="Card.TLabelframe")
         cookie_box.grid(row=3, column=0, sticky="ew", pady=(10, 0))
         self.cookie_box = cookie_box
         cookie_box.columnconfigure(0, weight=1)
         self.cookie_var = tk.StringVar()
-        self.cookie_entry = ttk.Entry(cookie_box, textvariable=self.cookie_var, show="•", font=text_font)
+        self.login_method_var = tk.StringVar(value="bduss")
+
+        method_row = tk.Frame(cookie_box, bg="#eef1f5")
+        method_row.grid(row=0, column=0, columnspan=4, sticky="w", pady=(2, 4))
+        tk.Label(method_row, text="登录方式：", bg="#eef1f5", fg="#475569").pack(side="left")
+        self.login_bduss_radio = ttk.Radiobutton(
+            method_row,
+            text="仅 BDUSS（推荐）",
+            value="bduss",
+            variable=self.login_method_var,
+            command=self._on_login_method_changed,
+        )
+        self.login_bduss_radio.pack(side="left", padx=(4, 8))
+        self.login_cookie_radio = ttk.Radiobutton(
+            method_row,
+            text="完整 Cookie（验证码时）",
+            value="cookie",
+            variable=self.login_method_var,
+            command=self._on_login_method_changed,
+        )
+        self.login_cookie_radio.pack(side="left")
+
+        self.bduss_frame = tk.Frame(cookie_box, bg="#eef1f5")
+        self.bduss_frame.grid(row=1, column=0, columnspan=4, sticky="ew")
+        self.bduss_frame.columnconfigure(1, weight=1)
+        tk.Label(self.bduss_frame, text="BDUSS：", bg="#eef1f5", fg="#475569").grid(row=0, column=0, sticky="w")
+        self.bduss_var = tk.StringVar()
+        self.bduss_entry = ttk.Entry(
+            self.bduss_frame, textvariable=self.bduss_var, show="•", font=text_font
+        )
+        self.bduss_entry.grid(row=0, column=1, sticky="ew")
+        ttk.Button(
+            self.bduss_frame, text="从剪贴板粘贴", command=self._paste_bduss, width=14
+        ).grid(row=0, column=2, padx=(8, 0))
+        ttk.Button(self.bduss_frame, text="应用", command=self._apply_bduss, width=7).grid(
+            row=0, column=3, padx=(6, 0)
+        )
+        self.remember_bduss_var = tk.BooleanVar(value=True)
+        ttk.Checkbutton(
+            self.bduss_frame,
+            text="记住 BDUSS",
+            variable=self.remember_bduss_var,
+        ).grid(row=1, column=0, columnspan=2, sticky="w", pady=(5, 0))
+        tk.Label(
+            self.bduss_frame,
+            text="用 Windows 账户加密保存在本机，只自己能用。",
+            bg="#eef1f5",
+            fg="#8a94a6",
+            font=("Microsoft YaHei UI", 8),
+        ).grid(row=2, column=0, columnspan=4, sticky="w")
+        tk.Label(
+            self.bduss_frame,
+            text="只发送 BDUSS，不发送浏览器里的其他 Cookie；需要过验证码时再切换完整 Cookie。",
+            bg="#eef1f5",
+            fg="#8a94a6",
+            font=("Microsoft YaHei UI", 8),
+        ).grid(row=3, column=0, columnspan=4, sticky="w")
+
+        self.cookie_frame = tk.Frame(cookie_box, bg="#eef1f5")
+        self.cookie_frame.grid(row=1, column=0, columnspan=4, sticky="ew")
+        self.cookie_frame.columnconfigure(0, weight=1)
+        self.cookie_entry = ttk.Entry(self.cookie_frame, textvariable=self.cookie_var, show="•", font=text_font)
         self.cookie_entry.grid(row=0, column=0, sticky="ew")
         self.cookie_paste_btn = ttk.Button(
-            cookie_box, text="从剪贴板粘贴", command=self._paste_cookie, width=14
+            self.cookie_frame, text="从剪贴板粘贴", command=self._paste_cookie, width=14
         )
         self.cookie_paste_btn.grid(row=0, column=1, padx=(8, 0))
         self.cookie_help_btn = ttk.Button(
-            cookie_box, text="如何获取？", command=self._show_cookie_help, width=10
+            self.cookie_frame, text="如何获取？", command=self._show_cookie_help, width=10
         )
         self.cookie_help_btn.grid(row=0, column=2, padx=(6, 0))
-        self.cookie_clear_btn = ttk.Button(cookie_box, text="清除", command=self._clear_cookie, width=7)
-        self.cookie_clear_btn.grid(row=0, column=3, padx=(6, 0))
-        self.remember_var = tk.BooleanVar(value=True)
-        self.remember_check = ttk.Checkbutton(
-            cookie_box,
-            text="记住 Cookie（用 Windows 账户加密保存在本机，只自己能用；下次自动填入）",
-            variable=self.remember_var,
+        self.cookie_apply_btn = ttk.Button(
+            self.cookie_frame, text="应用", command=self._apply_cookie, width=7
         )
-        self.remember_check.grid(row=1, column=0, columnspan=4, sticky="w", pady=(6, 0))
+        self.cookie_apply_btn.grid(row=0, column=3, padx=(6, 0))
+        self.cookie_clear_btn = ttk.Button(
+            self.cookie_frame, text="清除", command=self._clear_cookie, width=7
+        )
+        self.cookie_clear_btn.grid(row=0, column=4, padx=(6, 0))
+        self.remember_cookie_var = tk.BooleanVar(value=False)
+        ttk.Checkbutton(
+            self.cookie_frame,
+            text="记住完整 Cookie",
+            variable=self.remember_cookie_var,
+        ).grid(row=1, column=0, columnspan=4, sticky="w", pady=(5, 0))
+        tk.Label(
+            self.cookie_frame,
+            text="用 Windows 账户加密保存在本机，只自己能用；可能包含其他 Cookie。",
+            bg="#eef1f5",
+            fg="#8a94a6",
+            font=("Microsoft YaHei UI", 8),
+        ).grid(row=2, column=0, columnspan=4, sticky="w")
+        self.cookie_frame.grid_remove()
         self.cookie_controls = [
+            self.login_bduss_radio,
+            self.login_cookie_radio,
+            self.bduss_entry,
             self.cookie_entry,
             self.cookie_paste_btn,
             self.cookie_help_btn,
+            self.cookie_apply_btn,
             self.cookie_clear_btn,
-            self.remember_check,
         ]
+        self.login_method_var.trace_add("write", lambda *_: self._on_login_method_changed())
 
         # 5. 按钮
         buttons = tk.Frame(body, bg="#eef1f5")
@@ -541,8 +618,105 @@ class App:
         if path:
             self._set_output(path)
 
+    def _on_login_method_changed(self) -> None:
+        method = self.login_method_var.get()
+        if method == "cookie":
+            self.bduss_frame.grid_remove()
+            self.cookie_frame.grid()
+        else:
+            self.cookie_frame.grid_remove()
+            self.bduss_frame.grid()
+
+    def _extract_bduss(self, raw: str) -> str:
+        text = (raw or "").strip()
+        if not text:
+            return ""
+        cookies = parse_cookie_input(text)
+        if cookies.get("BDUSS"):
+            return str(cookies["BDUSS"]).strip()
+        if text.upper().startswith("BDUSS="):
+            return text.split("=", 1)[1].strip()
+        if ";" not in text and " " not in text:
+            return text
+        return ""
+
+    def _paste_bduss(self) -> None:
+        try:
+            text = self.root.clipboard_get()
+        except tk.TclError:
+            return
+        value = self._extract_bduss(text)
+        if not value:
+            messagebox.showwarning("不是 BDUSS", "剪贴板里没有识别到 BDUSS。", parent=self.root)
+            return
+        self.login_method_var.set("bduss")
+        self.bduss_var.set(value)
+        self._apply_bduss()
+
+    def _apply_bduss(self) -> None:
+        value = self._extract_bduss(self.bduss_var.get())
+        if not value:
+            messagebox.showwarning("需要 BDUSS", "请填写 BDUSS。", parent=self.root)
+            self.bduss_entry.focus_set()
+            return
+        self.bduss_var.set(value)
+        self.cookie_var.set(f"BDUSS={value}")
+        if self.remember_bduss_var.get():
+            if save_cookie(self.cookie_var.get()):
+                self.status_var.set("BDUSS 已加密保存")
+            else:
+                self.status_var.set("BDUSS 保存失败，本次仍可使用")
+        else:
+            clear_cookie()
+            self.status_var.set("BDUSS 仅本次使用")
+        self._append_log("登录方式：仅 BDUSS", "muted")
+
+    def _apply_cookie(self) -> None:
+        raw = self.cookie_var.get().strip()
+        if not raw:
+            messagebox.showwarning("需要 Cookie", "请粘贴完整 Cookie。", parent=self.root)
+            self.cookie_entry.focus_set()
+            return
+        if not parse_cookie_input(raw).get("BDUSS"):
+            messagebox.showwarning("Cookie 不完整", "完整 Cookie 里没有 BDUSS。", parent=self.root)
+            return
+        if self.remember_cookie_var.get():
+            if save_cookie(raw):
+                self.status_var.set("完整 Cookie 已加密保存")
+            else:
+                self.status_var.set("完整 Cookie 保存失败，本次仍可使用")
+        else:
+            clear_cookie()
+            self.status_var.set("完整 Cookie 仅本次使用")
+        self._append_log("登录方式：完整 Cookie", "muted")
+
+    def _remember_current_login(self) -> bool:
+        if self.login_method_var.get() == "bduss":
+            return bool(self.remember_bduss_var.get())
+        return bool(self.remember_cookie_var.get())
+
+    def _current_cookie_text(self) -> str:
+        if self.login_method_var.get() == "bduss":
+            value = self._extract_bduss(self.bduss_var.get())
+            return f"BDUSS={value}" if value else ""
+        return self.cookie_var.get().strip()
+
+    def _sync_login_from_cookie(self) -> None:
+        raw = self.cookie_var.get().strip()
+        if not raw:
+            return
+        cookies = parse_cookie_input(raw)
+        if cookies.get("BDUSS") and set(cookies) == {"BDUSS"}:
+            self.login_method_var.set("bduss")
+            self.bduss_var.set(str(cookies["BDUSS"]))
+            self.remember_bduss_var.set(True)
+        else:
+            self.login_method_var.set("cookie")
+            self.remember_cookie_var.set(True)
+
     def _clear_cookie(self) -> None:
         self.cookie_var.set("")
+        self.bduss_var.set("")
         if clear_cookie():
             self._append_log("已清除本机保存的 Cookie。", "muted")
         else:
@@ -4600,7 +4774,7 @@ class App:
     def _request_cookie(self) -> dict:
         if self.mode_var.get() == "guest":
             return {}
-        return parse_cookie_input(self.cookie_var.get())
+        return parse_cookie_input(self._current_cookie_text())
 
     def _user_bar(self, user) -> str:
         """这个用户参与的是哪个吧（多帖子时取他出现过的第一个帖子的吧）。"""
@@ -5301,29 +5475,26 @@ class App:
         delay = min(5.0, max(0.3, delay))
 
         mode = self.mode_var.get()
-        cookie = {} if mode == "guest" else parse_cookie_input(self.cookie_var.get())
+        cookie_text = "" if mode == "guest" else self._current_cookie_text()
+        cookie = parse_cookie_input(cookie_text)
         if mode == "login" and not cookie.get("BDUSS"):
-            answer = messagebox.askyesnocancel(
-                "登录模式需要 Cookie",
-                """登录模式至少需要 BDUSS。
-
-是：去填写 Cookie
-否：切换为免登录模式
-取消：先不抓取""",
+            messagebox.showwarning(
+                "需要 BDUSS",
+                "登录模式至少需要 BDUSS。请选择「仅 BDUSS」填写，或切换到「完整 Cookie」。",
                 parent=self.root,
             )
-            if answer is True:
+            if self.login_method_var.get() == "bduss":
+                self.bduss_entry.focus_set()
+            else:
                 self.cookie_entry.focus_set()
-            elif answer is False:
-                self._set_mode("guest")
             return
         if mode == "guest":
             self._append_log("本次使用免登录模式：公开帖子，楼中楼按设置补全", "muted")
-        if mode != "guest" and cookie and self.remember_var.get():
-            if save_cookie(self.cookie_var.get().strip()):
-                self._append_log("已记住 Cookie（本机加密保存），下次会自动填入。", "muted")
+        elif self._remember_current_login():
+            if save_cookie(cookie_text):
+                self._append_log("已记住登录信息（本机加密保存），下次会自动填入。", "muted")
             else:
-                self._append_log("Cookie 保存失败，本次仍可正常使用。", "muted")
+                self._append_log("登录信息保存失败，本次仍可正常使用。", "muted")
 
         options = CollectOptions(
             mode=mode,
@@ -5610,22 +5781,33 @@ class App:
             _, detail = message
             self._set_running(False)
             self.status_var.set("被安全验证拦截")
-            self._append_log(f"\n✗ {detail}", "err")
-            self._append_log(
-                "请点「如何获取？」，按说明复制 Cookie，粘贴后点「从剪贴板粘贴」或直接粘贴，再点「开始统计」。",
-                "err",
-            )
-            self.cookie_entry.focus_set()
-            messagebox.showwarning(
-                "被安全验证拦截",
-                "贴吧要求安全验证，直接抓取被拦住了。\n\n"
-                "解决办法：\n"
-                "1. 点「如何获取？」按说明在浏览器里复制 Cookie；\n"
-                "2. 粘贴到 Cookie 输入框（或点「从剪贴板粘贴」）；\n"
-                "3. 再点「开始统计」。\n\n"
-                "粘贴一次后程序会自动记住，以后不用再弄。",
-                parent=self.root,
-            )
+            self._append_log("抓取失败：" + detail, "err")
+            if self.login_method_var.get() == "bduss":
+                self.login_method_var.set("cookie")
+                self._on_login_method_changed()
+                self.cookie_entry.focus_set()
+                self._append_log(
+                    "仅 BDUSS 未能通过验证，已切换到完整 Cookie。请从浏览器复制完整 Cookie 后重试。",
+                    "err",
+                )
+                messagebox.showwarning(
+                    "需要完整 Cookie",
+                    "贴吧要求安全验证，仅 BDUSS 无法通过。已切换到「完整 Cookie」。"
+                    "请点「如何获取？」，在浏览器完成验证并复制完整 Cookie，粘贴后再点「开始统计」。",
+                    parent=self.root,
+                )
+            else:
+                self._append_log(
+                    "完整 Cookie 仍被拦截：请在浏览器完成验证，更新完整 Cookie 后重试。",
+                    "err",
+                )
+                self.cookie_entry.focus_set()
+                messagebox.showwarning(
+                    "被安全验证拦截",
+                    "贴吧要求安全验证，当前完整 Cookie 也未能通过。"
+                    "请在浏览器完成验证，重新复制完整 Cookie 后再试。",
+                    parent=self.root,
+                )
         elif kind == "error":
             _, detail = message
             self._set_running(False)
