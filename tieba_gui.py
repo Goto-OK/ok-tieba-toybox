@@ -1091,6 +1091,23 @@ class App:
                 pass
         self._open_emoji_picker()
 
+    def _position_emoji_popup(self, win, width: int, height: int) -> None:
+        button = getattr(self, "emoji_btn", None)
+        self.root.update_idletasks()
+        if button is not None and button.winfo_ismapped():
+            bx = button.winfo_rootx()
+            by = button.winfo_rooty() + button.winfo_height() + 4
+        else:
+            bx = self.root.winfo_rootx() + 40
+            by = self.root.winfo_rooty() + 100
+        screen_w = win.winfo_screenwidth()
+        screen_h = win.winfo_screenheight()
+        x = max(8, min(bx, screen_w - width - 8))
+        if by + height > screen_h - 8:
+            by = max(8, by - height - 8)
+        y = max(8, by)
+        win.geometry(f"{width}x{height}+{x}+{y}")
+
     def _open_native_emoji(self) -> bool:
         import ctypes
         from ctypes import wintypes
@@ -1106,7 +1123,6 @@ class App:
         self._emoji_window = win
         win.title("输入 Emoji")
         win.configure(bg="#eef1f5")
-        win.geometry("480x170")
         win.resizable(True, False)
         win.transient(self.root)
         tk.Label(
@@ -1202,6 +1218,7 @@ class App:
         win.protocol("WM_DELETE_WINDOW", close)
         win.bind("<Escape>", lambda _event: close())
         self._theme_widget_tree(win)
+        self._position_emoji_popup(win, 480, 170)
         win.update_idletasks()
         user32.SetFocus(edit)
         return True
@@ -1239,6 +1256,7 @@ class App:
             )
             button.grid(row=index // 8, column=index % 8, padx=2, pady=2)
         self._theme_widget_tree(win)
+        self._position_emoji_popup(win, 304, 216)
         win.bind("<Escape>", lambda _event: win.destroy())
         win.focus_set()
 
@@ -1430,7 +1448,7 @@ class App:
         entry.pack(side="left", padx=(4, 0))
         entry.bind("<Return>", lambda _event: self._on_lookup())
         self.lookup_query_var.trace_add("write", self._on_lookup_query_changed)
-        tk.Button(
+        self.emoji_btn = tk.Button(
             query,
             text="😀",
             command=self._open_emoji_panel,
@@ -1440,7 +1458,8 @@ class App:
             bg="#eef1f5",
             activebackground="#dbeafe",
             cursor="hand2",
-        ).pack(side="left", padx=(6, 0))
+        )
+        self.emoji_btn.pack(side="left", padx=(6, 0))
         tk.Button(
             query,
             text="查询",
