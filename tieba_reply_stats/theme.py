@@ -77,16 +77,24 @@ ACCENTS = {
     "blue": {"accent": "#1F4E79", "accent_hover": "#163b5c", "selection_bg": "#dbeafe", "selection_text": "#1F4E79"},
     "green": {"accent": "#166534", "accent_hover": "#14532d", "selection_bg": "#dcfce7", "selection_text": "#166534"},
     "purple": {"accent": "#6D28D9", "accent_hover": "#5B21B6", "selection_bg": "#ede9fe", "selection_text": "#5B21B6"},
+    "orange": {"accent": "#C2410C", "accent_hover": "#9A3412", "selection_bg": "#FFEDD5", "selection_text": "#9A3412"},
+    "pink": {"accent": "#BE185D", "accent_hover": "#9D174D", "selection_bg": "#FCE7F3", "selection_text": "#9D174D"},
+    "cyan": {"accent": "#0E7490", "accent_hover": "#155E75", "selection_bg": "#CFFAFE", "selection_text": "#155E75"},
+    "red": {"accent": "#B91C1C", "accent_hover": "#991B1B", "selection_bg": "#FEE2E2", "selection_text": "#991B1B"},
 }
 
 DARK_ACCENTS = {
     "blue": {"accent": "#3B82F6", "accent_hover": "#2563EB", "selection_bg": "#243652", "selection_text": "#e6e8ee"},
     "green": {"accent": "#22C55E", "accent_hover": "#16A34A", "selection_bg": "#173a26", "selection_text": "#e6e8ee"},
     "purple": {"accent": "#A78BFA", "accent_hover": "#8B5CF6", "selection_bg": "#2e2547", "selection_text": "#e6e8ee"},
+    "orange": {"accent": "#FB923C", "accent_hover": "#F97316", "selection_bg": "#3A2416", "selection_text": "#FFEDD5"},
+    "pink": {"accent": "#F472B6", "accent_hover": "#EC4899", "selection_bg": "#3B1D2E", "selection_text": "#FCE7F3"},
+    "cyan": {"accent": "#22D3EE", "accent_hover": "#06B6D4", "selection_bg": "#123A44", "selection_text": "#CFFAFE"},
+    "red": {"accent": "#F87171", "accent_hover": "#EF4444", "selection_bg": "#3B1D1D", "selection_text": "#FEE2E2"},
 }
 
 THEME_MODES = ("light", "dark", "system")
-ACCENT_KEYS = ("blue", "green", "purple")
+ACCENT_KEYS = ("blue", "green", "purple", "orange", "pink", "cyan", "red")
 
 
 def detect_system_theme() -> str:

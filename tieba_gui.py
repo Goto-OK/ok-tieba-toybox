@@ -2113,13 +2113,19 @@ class App:
         row2.pack(anchor="w", fill="x", padx=8, pady=(2, 4))
         tk.Label(row2, text="强调色：", width=14, anchor="w", bg="#eef1f5", fg="#475569").pack(side="left")
         self.accent_var = tk.StringVar(
-            value={"blue": "蓝", "green": "绿", "purple": "紫"}.get(
-                self.settings.get("accent", "blue"), "蓝"
-            )
+            value={
+                "blue": "蓝",
+                "green": "绿",
+                "purple": "紫",
+                "orange": "橘黄",
+                "pink": "粉色",
+                "cyan": "青色",
+                "red": "红色",
+            }.get(self.settings.get("accent", "blue"), "蓝")
         )
         self.accent_combo = ttk.Combobox(
             row2,
-            values=("蓝", "绿", "紫"),
+            values=("蓝", "绿", "紫", "橘黄", "粉色", "青色", "红色"),
             textvariable=self.accent_var,
             width=10,
             state="readonly",
@@ -2147,7 +2153,15 @@ class App:
         self._apply_theme()
 
     def _on_accent_changed(self) -> None:
-        accent = {"蓝": "blue", "绿": "green", "紫": "purple"}.get(self.accent_var.get(), "blue")
+        accent = {
+            "蓝": "blue",
+            "绿": "green",
+            "紫": "purple",
+            "橘黄": "orange",
+            "粉色": "pink",
+            "青色": "cyan",
+            "红色": "red",
+        }.get(self.accent_var.get(), "blue")
         self.settings["accent"] = accent
         save_settings(self.settings)
         self._apply_theme()

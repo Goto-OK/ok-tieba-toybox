@@ -20,3 +20,11 @@ def test_color_mapping_context():
     assert map_color("fg", "#ffffff", palette) == palette["accent_text"]
     assert map_color("fg", "#1F4E79", palette) == palette["accent"]
     assert map_color("bg", "#ffdede", palette) == palette["danger_bg"]
+
+
+def test_all_accent_keys_resolve():
+    from tieba_reply_stats.theme import ACCENT_KEYS
+
+    for key in ACCENT_KEYS:
+        assert resolve_palette("light", key)["accent"]
+        assert resolve_palette("dark", key)["accent"]
