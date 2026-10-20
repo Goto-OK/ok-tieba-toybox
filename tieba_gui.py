@@ -2566,7 +2566,7 @@ class App:
         ).pack(side="left")
         tk.Label(
             maint_box,
-            text="清空所有本地数据不会删除你导出的 Excel 或 Markdown；恢复默认设置在「关于 / 帮助」。",
+            text="清空所有本地数据不会删除你导出的 Excel 或 Markdown；恢复默认设置在「常规」。",
             bg="#eef1f5",
             fg="#8a94a6",
             font=("Microsoft YaHei UI", 8),
@@ -2610,21 +2610,6 @@ class App:
             wraplength=760,
             justify="left",
         ).pack(anchor="w", padx=8, pady=(2, 4))
-
-        default_box = ttk.LabelFrame(box, text=" 默认设置 ")
-        default_box.pack(fill="x")
-        default_row = tk.Frame(default_box, bg="#eef1f5")
-        default_row.pack(anchor="w", padx=8, pady=(6, 4))
-        ttk.Button(
-            default_row, text="恢复默认设置", command=self._restore_defaults, width=14
-        ).pack(side="left")
-        tk.Label(
-            default_box,
-            text="只重置设置，保留最近结果、本地标记、BDUSS 和导出文件。",
-            bg="#eef1f5",
-            fg="#8a94a6",
-            font=("Microsoft YaHei UI", 8),
-        ).pack(anchor="w", padx=8, pady=(0, 4))
 
     def _on_save_result_toggle(self) -> None:
         self.settings["save_result"] = bool(self.save_result_var.get())
@@ -3078,6 +3063,21 @@ class App:
             state="readonly",
         ).pack(side="left")
         self.settings_start_var.trace_add("write", lambda *_: self._on_settings_start_changed())
+
+        default_box = ttk.LabelFrame(box, text=" 默认设置 ")
+        default_box.pack(fill="x", pady=(0, 6))
+        default_row = tk.Frame(default_box, bg="#eef1f5")
+        default_row.pack(anchor="w", padx=8, pady=(6, 4))
+        ttk.Button(
+            default_row, text="恢复默认设置", command=self._restore_defaults, width=14
+        ).pack(side="left")
+        tk.Label(
+            default_box,
+            text="只重置设置，保留最近结果、本地标记、BDUSS 和导出文件。",
+            bg="#eef1f5",
+            fg="#8a94a6",
+            font=("Microsoft YaHei UI", 8),
+        ).pack(anchor="w", padx=8, pady=(0, 4))
 
         backup_box = ttk.LabelFrame(box, text=" 配置备份 / 恢复 ")
         backup_box.pack(fill="x", pady=(0, 6))
