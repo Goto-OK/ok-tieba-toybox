@@ -11,7 +11,6 @@ import json
 import os
 import queue
 import re
-import shutil
 import sys
 import threading
 import tkinter as tk
@@ -56,6 +55,8 @@ from tieba_reply_stats.follow_probe import candidate_bars, probe_forums
 from tieba_reply_stats.pbapi import fill_thread_levels
 from tieba_reply_stats.profile import fetch_user_profile, resolve_user
 from tieba_reply_stats.report import export_user_report, report_base
+from tieba_reply_stats.safe_delete import remove_file as safe_remove_file
+from tieba_reply_stats.safe_delete import remove_tree as safe_remove_tree
 from tieba_reply_stats.settings import APP_DIR, SETTINGS_PATH, load_settings, save_settings
 from tieba_reply_stats.storage import (
     IncompatibleResult,
@@ -911,6 +912,30 @@ class App:
             side="right"
         )
 
+        profile_footer = tk.Frame(right, bg="#fbfcfe")
+        profile_footer.pack(side="bottom", fill="x", padx=6, pady=(4, 4))
+        profile_actions = tk.Frame(profile_footer, bg="#fbfcfe")
+        profile_actions.pack(fill="x")
+        self.profile_report_btn = ttk.Button(
+            profile_actions, text="导出此人报告", command=self._export_profile_report, width=16
+        )
+        self.profile_follow_btn = ttk.Button(
+            profile_actions, text="加载公开关注", command=self._reload_profile_follow, width=16
+        )
+        self.profile_probe_btn = ttk.Button(
+            profile_actions, text="探测候选关注", command=self._probe_profile_forums, width=16
+        )
+        self.profile_forum_note = tk.Label(
+            profile_footer,
+            text="",
+            bg="#fbfcfe",
+            fg="#b45309",
+            wraplength=700,
+            justify="left",
+            font=("Microsoft YaHei UI", 8),
+        )
+        self.profile_forum_note.pack(fill="x", pady=(2, 0))
+
         body_paned = ttk.PanedWindow(right, orient="horizontal")
         body_paned.pack(fill="both", expand=True, padx=6)
         forum_frame = tk.Frame(body_paned)
@@ -938,25 +963,6 @@ class App:
         self.profile_forum_tree.bind("<Double-1>", lambda _event: self._open_profile_forum())
         self._configure_colors(self.profile_forum_tree)
         self._make_sortable(self.profile_forum_tree, {"bar": "贴吧", "level": "等级", "source": "来源"})
-        self.profile_forum_note = tk.Label(
-            forum_frame,
-            text="",
-            bg="#fbfcfe",
-            fg="#b45309",
-            wraplength=260,
-            justify="left",
-            font=("Microsoft YaHei UI", 8),
-        )
-        self.profile_forum_note.pack(fill="x", pady=(2, 0))
-        self.profile_probe_btn = ttk.Button(
-            forum_frame, text="探测候选关注", command=self._probe_profile_forums, width=16
-        )
-        self.profile_report_btn = ttk.Button(
-            forum_frame, text="导出此人报告", command=self._export_profile_report, width=16
-        )
-        self.profile_follow_btn = ttk.Button(
-            forum_frame, text="加载公开关注", command=self._reload_profile_follow, width=16
-        )
         self._profile_forum_names: Dict[str, str] = {}
 
         tk.Label(
@@ -2663,8 +2669,8 @@ class App:
             return
         for path in files:
             try:
-                os.remove(path)
-            except OSError:
+                safe_remove_file(path)
+            except (OSError, ValueError):
                 pass
         self._refresh_old_files_label()
         self._append_log(f"已清理旧结果文件：{len(files)} 个", "muted")
@@ -2892,17 +2898,15 @@ class App:
         if simpledialog.askstring("确认清空", "输入“清空”后继续：", parent=self.root) != "清空":
             return
         clear_stored_result()
-        for path in stored_old_files():
-            try:
-                os.remove(path)
-            except OSError:
-                pass
-        for path in (os.path.join(APP_DIR, "cookie.bin"), SETTINGS_PATH):
-            try:
-                os.remove(path)
-            except OSError:
-                pass
-        shutil.rmtree(os.path.join(APP_DIR, "logs"), ignore_errors=True)
+        try:
+            for path in stored_old_files():
+                safe_remove_file(path)
+            for path in (os.path.join(APP_DIR, "cookie.bin"), SETTINGS_PATH):
+                safe_remove_file(path)
+            safe_remove_tree(os.path.join(APP_DIR, "logs"))
+        except (OSError, ValueError) as error:
+            messagebox.showerror("清空失败", f"路径校验失败，已停止：{error}", parent=self.root)
+            return
         clear_cookie()
         save_blacklist({"safe": [], "warn": [], "ban": []})
         save_settings({})
@@ -4620,13 +4624,13 @@ class App:
         self._profile_data = profile
         posts = profile.get("recent_posts") or []
         combined = self._merge_forum_lists(profile, self._user_bar(user), level or "")
-        self.profile_report_btn.pack(anchor="w", pady=(4, 0))
+        self.profile_report_btn.pack(side="left", padx=(0, 6))
         if profile.get("follow_loaded") is False:
-            self.profile_follow_btn.pack(anchor="w", pady=(4, 0))
+            self.profile_follow_btn.pack(side="left", padx=(0, 6))
         else:
             self.profile_follow_btn.pack_forget()
         if self._hidden_follows(profile):
-            self.profile_probe_btn.pack(anchor="w", pady=(4, 0))
+            self.profile_probe_btn.pack(side="left", padx=(0, 6))
             self.profile_probe_btn.configure(state="normal", text="探测候选关注")
         else:
             self.profile_probe_btn.pack_forget()
