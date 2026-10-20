@@ -166,6 +166,7 @@ class App:
         self.last_threads: list = []
         self._auto_filled = False
         self._lookup_normalize_job: Optional[str] = None
+        self._emoji_window: Optional[tk.Toplevel] = None
         self.blacklist = load_blacklist()
         self.settings = load_settings()
         self.palette = resolve_palette(
@@ -1082,6 +1083,130 @@ class App:
         self.profile_status.configure(text="条件已变更，点「刷新资料」生效")
 
     def _open_emoji_panel(self) -> None:
+        if os.name == "nt":
+            try:
+                if self._open_native_emoji():
+                    return
+            except Exception:  # noqa: BLE001
+                pass
+        self._open_emoji_picker()
+
+    def _open_native_emoji(self) -> bool:
+        import ctypes
+        from ctypes import wintypes
+
+        existing = getattr(self, "_emoji_window", None)
+        try:
+            if existing is not None and existing.winfo_exists():
+                existing.lift()
+                return True
+        except tk.TclError:
+            pass
+        win = tk.Toplevel(self.root)
+        self._emoji_window = win
+        win.title("输入 Emoji")
+        win.configure(bg="#eef1f5")
+        win.geometry("480x170")
+        win.resizable(True, False)
+        win.transient(self.root)
+        tk.Label(
+            win,
+            text="可直接用 Windows 输入法 / Win+. 输入 Emoji；确认后插入查询框。",
+            bg="#eef1f5",
+            fg="#475569",
+            font=("Microsoft YaHei UI", 9),
+            anchor="w",
+        ).pack(fill="x", padx=10, pady=(8, 4))
+        host = tk.Frame(win, bg="#ffffff", height=38)
+        host.pack(fill="x", padx=10)
+        host.pack_propagate(False)
+        win.update_idletasks()
+        user32 = ctypes.WinDLL("user32", use_last_error=True)
+        gdi32 = ctypes.WinDLL("gdi32", use_last_error=True)
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        user32.CreateWindowExW.restype = wintypes.HWND
+        user32.CreateWindowExW.argtypes = [
+            wintypes.DWORD, wintypes.LPCWSTR, wintypes.LPCWSTR, wintypes.DWORD,
+            ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int,
+            wintypes.HWND, wintypes.HMENU, wintypes.HINSTANCE, wintypes.LPVOID,
+        ]
+        user32.SendMessageW.restype = ctypes.c_ssize_t
+        user32.SendMessageW.argtypes = [wintypes.HWND, wintypes.UINT, wintypes.WPARAM, wintypes.LPARAM]
+        user32.MoveWindow.argtypes = [wintypes.HWND, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int, wintypes.BOOL]
+        gdi32.CreateFontW.restype = wintypes.HFONT
+        gdi32.CreateFontW.argtypes = [
+            ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int,
+            wintypes.DWORD, wintypes.DWORD, wintypes.DWORD, wintypes.DWORD,
+            wintypes.DWORD, wintypes.DWORD, wintypes.DWORD, wintypes.DWORD, wintypes.LPCWSTR,
+        ]
+        gdi32.DeleteObject.argtypes = [wintypes.HGDIOBJ]
+        kernel32.GetModuleHandleW.restype = wintypes.HMODULE
+        hinst = kernel32.GetModuleHandleW(None)
+        WS_CHILD = 0x40000000
+        WS_VISIBLE = 0x10000000
+        WS_BORDER = 0x00800000
+        ES_AUTOHSCROLL = 0x00000080
+        style = WS_CHILD | WS_VISIBLE | WS_BORDER | ES_AUTOHSCROLL
+        edit = user32.CreateWindowExW(
+            0, "EDIT", "", style, 0, 0, 100, 34,
+            wintypes.HWND(host.winfo_id()), None, hinst, None,
+        )
+        if not edit:
+            win.destroy()
+            self._emoji_window = None
+            return False
+        self._emoji_edit = edit
+        font = gdi32.CreateFontW(
+            -16, 0, 0, 0, 400, 0, 0, 0, 1, 0, 0, 0, 0, "Segoe UI Emoji"
+        )
+        self._emoji_edit_font = font
+        if font:
+            user32.SendMessageW(edit, 0x0030, font, 1)
+
+        def resize(event) -> None:
+            user32.MoveWindow(edit, 0, 0, max(10, event.width), max(20, event.height), True)
+
+        host.bind("<Configure>", resize)
+        resize(type("E", (), {"width": 460, "height": 34})())
+
+        def close() -> None:
+            try:
+                if font:
+                    gdi32.DeleteObject(font)
+            finally:
+                self._emoji_edit = None
+                self._emoji_edit_font = None
+                win.destroy()
+
+        def commit() -> None:
+            length = user32.GetWindowTextLengthW(edit)
+            buffer = ctypes.create_unicode_buffer(length + 1)
+            user32.GetWindowTextW(edit, buffer, length + 1)
+            text = buffer.value.strip()
+            if text:
+                self.lookup_entry.insert("insert", text)
+                self.lookup_entry.focus_set()
+            close()
+
+        buttons = tk.Frame(win, bg="#eef1f5")
+        buttons.pack(fill="x", padx=10, pady=(8, 6))
+        ttk.Button(buttons, text="插入", command=commit, width=10).pack(side="right")
+        ttk.Button(buttons, text="取消", command=close, width=10).pack(side="right", padx=(0, 6))
+        tk.Label(
+            buttons,
+            text="支持微软输入法、Win+.、Ctrl+V",
+            bg="#eef1f5",
+            fg="#8a94a6",
+            font=("Microsoft YaHei UI", 8),
+        ).pack(side="left")
+        win.protocol("WM_DELETE_WINDOW", close)
+        win.bind("<Escape>", lambda _event: close())
+        self._theme_widget_tree(win)
+        win.update_idletasks()
+        user32.SetFocus(edit)
+        return True
+
+    def _open_emoji_picker(self) -> None:
         existing = getattr(self, "_emoji_window", None)
         try:
             if existing is not None and existing.winfo_exists():
