@@ -1,9 +1,9 @@
 # 规范索引
 
-> 2026-10-20 收尾规范已生成：[SPEC.md](../SPEC.md)。后续实现只看 SPEC.md；本索引与分类文档转为历史参考。
+> 2026-10-20 收尾规范已生成：[SPEC.md](../../SPEC.md)。后续实现只看 SPEC.md；本索引与分类文档转为历史参考。
 
 本文件是历史索引，不再作为启动入口。  
-新入口：[README.md](README.md)（文档索引）＋ [../SPEC.md](../SPEC.md)（唯一实现依据）。
+新入口：[README.md](../README.md)（文档索引）＋ [../SPEC.md](../../SPEC.md)（唯一实现依据）。
 
 ## 1. 历史启动顺序（已废弃）
 
@@ -31,15 +31,15 @@ SPEC.md
 |---|---|---|
 | 功能需求 | [requirements.md](requirements.md) | 改功能、加功能、验收 |
 | 界面规范 | [ui-spec.md](ui-spec.md) | 改按钮、布局、日志、表格、对话框 |
-| 凭据与能力边界 | [credentials.md](credentials.md) | Cookie / BDUSS / 公开关注增强 |
-| 接口协议 | [protocol.md](protocol.md) | 抓包、字段、签名、接口证据 |
-| 工程规范 | [standards.md](standards.md) | 代码风格、测试、提交 |
-| 实现状态 | [status.md](status.md) | 判断规范/源码/测试/成品 |
-| 发布流程 | [release.md](release.md) | 出 exe / APK |
+| 凭据与能力边界 | [credentials.md](../credentials.md) | Cookie / BDUSS / 公开关注增强 |
+| 接口协议 | [protocol.md](../protocol.md) | 抓包、字段、签名、接口证据 |
+| 工程规范 | [standards.md](../standards.md) | 代码风格、测试、提交 |
+| 实现状态 | [status.md](../status.md) | 判断规范/源码/测试/成品 |
+| 发布流程 | [release.md](../release.md) | 出 exe / APK |
 | 待办/缺口 | [backlog.md](backlog.md) | 下一步做什么 |
 | 研究资料 | [aiotieba-capabilities.md](aiotieba-capabilities.md) | 接口能力调研 |
 | 功能草案 | [proposals.md](proposals.md) | 历史设计过程，不作规范 |
-| 代码地图 | [code-map.md](code-map.md) | 找模块、看代码边界 |
+| 代码地图 | [code-map.md](../code-map.md) | 找模块、看代码边界 |
 | 竞品对比 | [market-comparison.md](market-comparison.md) | 横向对比、借鉴优先级 |
 | 规范冻结/差距 | [spec-gaps.md](spec-gaps.md) | 冻结范围、实现顺序 |
 

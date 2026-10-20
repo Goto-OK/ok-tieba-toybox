@@ -159,16 +159,17 @@ python scripts/sync_android.py
 
 ## 文档
 
-- [需求与边界](docs/requirements.md)
-- [架构与数据流](docs/architecture.md)
+- [历史文档（只读）](docs/history/README.md)
+- [历史架构（只读）](docs/history/architecture.md)
 - [接口与协议](docs/protocol.md)
 - [发布流程](docs/release.md)
 - [开发规范](docs/standards.md)
 - [参与开发](CONTRIBUTING.md)
 - [收尾规范（实现唯一依据）](SPEC.md)
 - [文档索引](docs/README.md)
-- [历史界面规范（只读）](docs/ui-spec.md)
+- [历史界面规范（只读）](docs/history/ui-spec.md)
 - [代码地图](docs/code-map.md)
+- [手工验收用例](docs/test-cases.md)
 - [实现状态](docs/status.md)
 - [更新日志](CHANGELOG.md)
 - [用户使用说明](使用说明.txt)

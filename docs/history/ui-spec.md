@@ -1,10 +1,10 @@
 # 界面规范（UI）
 
-> 历史文档，不再新增规则；实现以 [../SPEC.md](../SPEC.md) 为准。
+> 历史文档，不再新增规则；实现以 [../SPEC.md](../../SPEC.md) 为准。
 
 
 本文件只写“界面怎么呈现、怎么交互”，不重复功能规则。  
-功能行为以 [../SPEC.md](../SPEC.md) 为准；凭据见 [credentials.md](credentials.md)。
+功能行为以 [../SPEC.md](../../SPEC.md) 为准；凭据见 [credentials.md](../credentials.md)。
 
 ## UI-001 一键红绿灯按钮
 
