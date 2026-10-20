@@ -459,12 +459,12 @@ class App:
         ttk.Button(
             self.bduss_frame, text="从剪贴板粘贴", command=self._paste_bduss, width=14
         ).grid(row=0, column=2, padx=(8, 0))
-        ttk.Button(self.bduss_frame, text="应用", command=self._apply_bduss, width=7).grid(
-            row=0, column=3, padx=(6, 0)
-        )
         ttk.Button(
             self.bduss_frame, text="如何获取？", command=self._show_bduss_help, width=10
-        ).grid(row=0, column=4, padx=(6, 0))
+        ).grid(row=0, column=3, padx=(6, 0))
+        ttk.Button(self.bduss_frame, text="应用", command=self._apply_bduss, width=7).grid(
+            row=0, column=4, padx=(6, 0)
+        )
         ttk.Button(self.bduss_frame, text="清除", command=self._clear_bduss, width=7).grid(
             row=0, column=5, padx=(6, 0)
         )
@@ -506,7 +506,7 @@ class App:
             self.cookie_frame, text="清除", command=self._clear_cookie, width=7
         )
         self.cookie_clear_btn.grid(row=0, column=5, padx=(6, 0))
-        self.remember_cookie_var = tk.BooleanVar(value=False)
+        self.remember_cookie_var = tk.BooleanVar(value=True)
         ttk.Checkbutton(
             self.cookie_frame,
             text="记住完整 Cookie（用 Windows 账户加密，仅本机可用；可能包含其他 Cookie）",
@@ -2455,7 +2455,7 @@ class App:
         box.pack(fill="both", expand=True)
         tk.Label(
             box,
-            text="本地标记：每行一个贴吧名（带不带“吧”都行），命中后按 红 > 黄 > 绿 标记。",
+            text="本地标记：每行一个贴吧名（带不带“吧”都行），命中后按 警告 > 可疑 > 安全 标记。",
             bg="#eef1f5",
             fg="#475569",
             font=("Microsoft YaHei UI", 9),
@@ -2595,7 +2595,7 @@ class App:
         save_settings(self.settings)
         self._apply_theme()
 
-    def _theme_widget_tree(self, widget) -> None:
+    def _theme_widget_tree(self, widget, old_palette=None) -> None:
         palette = self.palette
         for option in (
             "bg",
@@ -2613,7 +2613,34 @@ class App:
             except tk.TclError:
                 continue
             value = str(current)
-            new = map_color(option, value, palette)
+            old_accent = str((old_palette or {}).get("accent") or "").lower()
+            current_accent = str(palette.get("accent") or "").lower()
+            is_fg = option in (
+                "fg",
+                "foreground",
+                "activeforeground",
+                "selectforeground",
+                "insertbackground",
+                "disabledforeground",
+            )
+            if is_fg and value.lower() in {old_accent, current_accent} - {""}:
+                try:
+                    bg = str(widget.cget("bg")).lower()
+                except tk.TclError:
+                    bg = ""
+                try:
+                    text = str(widget.cget("text")) if "text" in widget.keys() else ""
+                except tk.TclError:
+                    text = ""
+                danger_bg = str((old_palette or palette).get("danger_bg") or "").lower()
+                if bg == danger_bg:
+                    new = palette["danger"]
+                elif widget.winfo_class() == "Label" and text in ("红", "黄", "绿", "白"):
+                    new = value
+                else:
+                    new = palette["accent"]
+            else:
+                new = map_color(option, value, palette)
             klass = widget.winfo_class()
             if value.startswith("System"):
                 if option in ("bg", "background"):
@@ -2639,9 +2666,10 @@ class App:
         except tk.TclError:
             pass
         for child in widget.winfo_children():
-            self._theme_widget_tree(child)
+            self._theme_widget_tree(child, old_palette)
 
     def _apply_theme(self) -> None:
+        old_palette = dict(self.palette) if hasattr(self, "palette") else None
         palette = resolve_palette(
             str(self.settings.get("theme_mode", "light")),
             str(self.settings.get("accent", "blue")),
@@ -2865,7 +2893,7 @@ class App:
         self.root.option_add("*TCombobox*Listbox.selectBackground", palette["selection_bg"])
         self.root.option_add("*TCombobox*Listbox.selectForeground", palette["selection_text"])
 
-        self._theme_widget_tree(self.root)
+        self._theme_widget_tree(self.root, old_palette)
 
         if hasattr(self, "log_text"):
             self.log_text.tag_configure("title", foreground=palette["accent"])
@@ -2997,10 +3025,10 @@ class App:
             danger,
             text="清空所有本地数据",
             command=self._clear_all_data,
-            bg="#fee2e2",
-            fg="#b91c1c",
+            bg="#ffdede",
+            fg="#dc2626",
             activebackground="#fecaca",
-            activeforeground="#991b1b",
+            activeforeground="#7f1d1d",
             relief="flat",
             padx=14,
             pady=6,
