@@ -3702,6 +3702,12 @@ class App:
             side="right", padx=(0, 6)
         )
         win.protocol("WM_DELETE_WINDOW", win.destroy)
+        win.update_idletasks()
+        width = max(620, win.winfo_width())
+        height = max(420, win.winfo_height())
+        x = self.root.winfo_rootx() + max(0, (self.root.winfo_width() - width) // 2)
+        y = self.root.winfo_rooty() + max(0, (self.root.winfo_height() - height) // 2)
+        win.geometry(f"{width}x{height}+{x}+{y}")
         cancel_btn.focus_set()
 
     def _build_grid_tab(self) -> None:
@@ -3716,6 +3722,10 @@ class App:
         )
         self.grid_thread_box.pack(side="left")
         self.grid_thread_box.bind("<<ComboboxSelected>>", lambda _event: self._refresh_grid())
+        self.manage_results_btn = ttk.Button(
+            bar, text="管理帖子结果", command=self._open_manage_results, width=12
+        )
+        self.manage_results_btn.pack(side="left", padx=(6, 0))
 
         right = tk.Frame(bar, bg="#ffffff")
         right.pack(side="right")
@@ -3734,10 +3744,6 @@ class App:
             state="disabled",
         )
         self.open_btn.pack(side="right")
-        self.manage_results_btn = ttk.Button(
-            right, text="管理帖子结果", command=self._open_manage_results, width=12
-        )
-        self.manage_results_btn.pack(side="right", padx=(0, 8))
         self.export_btn = tk.Button(
             right,
             text="导出 Excel",
