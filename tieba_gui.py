@@ -100,6 +100,19 @@ def decode_display(value) -> str:
     return _EMOJI_CODE_RE.sub(lambda match: chr(int(match.group(1), 16)), str(value or ""))
 
 
+BDUSS_HELP = """只填 BDUSS 时，这样复制：
+
+1. 用 Chrome 或 Edge 打开贴吧页面，确认已登录。
+2. 按 F12，打开开发者工具。
+3. 点「应用 / Application」→「存储 / Storage」→「Cookie / Cookies」→ https://tieba.baidu.com
+4. 在列表里找到名为 BDUSS 的一项，复制它的「值 / Value」。
+5. 粘贴到本窗口的 BDUSS 输入框，点「应用」。
+6. 勾选「记住 BDUSS」后，下次打开自动填入。
+
+只复制 BDUSS 的值，不要复制整行 Cookie。
+BDUSS 等同于登录凭证，只在自己的电脑上使用，不要发给别人。
+"""
+
 COOKIE_HELP = """需要 Cookie 时，这样复制：
 
 1. 用 Chrome 或 Edge 打开目标帖子，确认能正常看到楼层。
@@ -108,9 +121,9 @@ COOKIE_HELP = """需要 Cookie 时，这样复制：
 4. 在左侧列表里点第一个以帖子数字开头的请求（类型是 document）。
 5. 在右侧找到「标头 / Headers」→「请求标头 / Request Headers」，
    里面有一行 Cookie:，把它冒号后面的整段内容复制下来。
-6. 粘贴到本窗口的「Cookie」输入框（也可以复制后点「从剪贴板粘贴」），
+6. 粘贴到本窗口的「完整 Cookie」输入框（也可以复制后点「从剪贴板粘贴」），
    然后点「开始统计」。
-7. 保持「记住 Cookie」勾选，下次打开程序会自动填入，不用再复制。
+7. 需要下次自动填入时，勾选「记住完整 Cookie」再点「应用」。
 
 为什么不能全自动读取？
 浏览器从 2024 年起对 Cookie 做了「应用绑定加密」，只有浏览器自己能解密，
@@ -311,7 +324,7 @@ class App:
         self.post_nb.add(self.tab_grid, text="  表格查看  ")
         self.post_nb.add(self.tab_people, text="  参与者  ")
 
-        body = tk.Frame(self.tab_fetch, bg="#eef1f5", padx=16, pady=12)
+        body = tk.Frame(self.tab_fetch, bg="#eef1f5", padx=16, pady=8)
         body.pack(fill="both", expand=True)
         body.columnconfigure(0, weight=1)
         body.rowconfigure(1, weight=0)
@@ -346,7 +359,7 @@ class App:
 
         # 2. 选项
         options = ttk.LabelFrame(body, text=" 选项 ", style="Card.TLabelframe")
-        options.grid(row=1, column=0, sticky="new", pady=(10, 0))
+        options.grid(row=1, column=0, sticky="new", pady=(6, 0))
         self.comments_var = tk.BooleanVar(value=True)
         self.exclude_op_var = tk.BooleanVar(value=False)
         ttk.Checkbutton(
@@ -398,7 +411,7 @@ class App:
 
         # 3. 保存位置
         out_box = ttk.LabelFrame(body, text=" 保存到 ", style="Card.TLabelframe")
-        out_box.grid(row=2, column=0, sticky="ew", pady=(10, 0))
+        out_box.grid(row=2, column=0, sticky="ew", pady=(6, 0))
         out_box.columnconfigure(0, weight=1)
         self.output_var = tk.StringVar()
         ttk.Entry(out_box, textvariable=self.output_var, font=text_font).grid(row=0, column=0, sticky="ew")
@@ -408,7 +421,7 @@ class App:
 
         # 4. 登录 / 关注增强
         cookie_box = ttk.LabelFrame(body, text=" 登录 / 关注增强 ", style="Card.TLabelframe")
-        cookie_box.grid(row=3, column=0, sticky="ew", pady=(10, 0))
+        cookie_box.grid(row=3, column=0, sticky="ew", pady=(6, 0))
         self.cookie_box = cookie_box
         cookie_box.columnconfigure(0, weight=1)
         self.cookie_var = tk.StringVar()
@@ -449,61 +462,56 @@ class App:
         ttk.Button(self.bduss_frame, text="应用", command=self._apply_bduss, width=7).grid(
             row=0, column=3, padx=(6, 0)
         )
+        ttk.Button(
+            self.bduss_frame, text="如何获取？", command=self._show_bduss_help, width=10
+        ).grid(row=0, column=4, padx=(6, 0))
+        ttk.Button(self.bduss_frame, text="清除", command=self._clear_bduss, width=7).grid(
+            row=0, column=5, padx=(6, 0)
+        )
         self.remember_bduss_var = tk.BooleanVar(value=True)
         ttk.Checkbutton(
             self.bduss_frame,
-            text="记住 BDUSS",
+            text="记住 BDUSS（用 Windows 账户加密，仅本机可用）",
             variable=self.remember_bduss_var,
-        ).grid(row=1, column=0, columnspan=2, sticky="w", pady=(5, 0))
+        ).grid(row=1, column=0, columnspan=4, sticky="w", pady=(3, 0))
         tk.Label(
             self.bduss_frame,
-            text="用 Windows 账户加密保存在本机，只自己能用。",
+            text="只发送 BDUSS，不发送浏览器里的其他 Cookie；验证码时切换完整 Cookie。",
             bg="#eef1f5",
             fg="#8a94a6",
             font=("Microsoft YaHei UI", 8),
-        ).grid(row=2, column=0, columnspan=4, sticky="w")
-        tk.Label(
-            self.bduss_frame,
-            text="只发送 BDUSS，不发送浏览器里的其他 Cookie；需要过验证码时再切换完整 Cookie。",
-            bg="#eef1f5",
-            fg="#8a94a6",
-            font=("Microsoft YaHei UI", 8),
-        ).grid(row=3, column=0, columnspan=4, sticky="w")
+        ).grid(row=2, column=0, columnspan=6, sticky="w")
 
         self.cookie_frame = tk.Frame(cookie_box, bg="#eef1f5")
         self.cookie_frame.grid(row=1, column=0, columnspan=4, sticky="ew")
-        self.cookie_frame.columnconfigure(0, weight=1)
+        self.cookie_frame.columnconfigure(1, weight=1)
+        tk.Label(self.cookie_frame, text="Cookie：", bg="#eef1f5", fg="#475569").grid(
+            row=0, column=0, sticky="w"
+        )
         self.cookie_entry = ttk.Entry(self.cookie_frame, textvariable=self.cookie_var, show="•", font=text_font)
-        self.cookie_entry.grid(row=0, column=0, sticky="ew")
+        self.cookie_entry.grid(row=0, column=1, sticky="ew")
         self.cookie_paste_btn = ttk.Button(
             self.cookie_frame, text="从剪贴板粘贴", command=self._paste_cookie, width=14
         )
-        self.cookie_paste_btn.grid(row=0, column=1, padx=(8, 0))
+        self.cookie_paste_btn.grid(row=0, column=2, padx=(8, 0))
         self.cookie_help_btn = ttk.Button(
             self.cookie_frame, text="如何获取？", command=self._show_cookie_help, width=10
         )
-        self.cookie_help_btn.grid(row=0, column=2, padx=(6, 0))
+        self.cookie_help_btn.grid(row=0, column=3, padx=(6, 0))
         self.cookie_apply_btn = ttk.Button(
             self.cookie_frame, text="应用", command=self._apply_cookie, width=7
         )
-        self.cookie_apply_btn.grid(row=0, column=3, padx=(6, 0))
+        self.cookie_apply_btn.grid(row=0, column=4, padx=(6, 0))
         self.cookie_clear_btn = ttk.Button(
             self.cookie_frame, text="清除", command=self._clear_cookie, width=7
         )
-        self.cookie_clear_btn.grid(row=0, column=4, padx=(6, 0))
+        self.cookie_clear_btn.grid(row=0, column=5, padx=(6, 0))
         self.remember_cookie_var = tk.BooleanVar(value=False)
         ttk.Checkbutton(
             self.cookie_frame,
-            text="记住完整 Cookie",
+            text="记住完整 Cookie（用 Windows 账户加密，仅本机可用；可能包含其他 Cookie）",
             variable=self.remember_cookie_var,
-        ).grid(row=1, column=0, columnspan=4, sticky="w", pady=(5, 0))
-        tk.Label(
-            self.cookie_frame,
-            text="用 Windows 账户加密保存在本机，只自己能用；可能包含其他 Cookie。",
-            bg="#eef1f5",
-            fg="#8a94a6",
-            font=("Microsoft YaHei UI", 8),
-        ).grid(row=2, column=0, columnspan=4, sticky="w")
+        ).grid(row=1, column=0, columnspan=6, sticky="w", pady=(3, 0))
         self.cookie_frame.grid_remove()
         self.cookie_controls = [
             self.login_bduss_radio,
@@ -519,7 +527,7 @@ class App:
 
         # 5. 按钮
         buttons = tk.Frame(body, bg="#eef1f5")
-        buttons.grid(row=4, column=0, sticky="ew", pady=(12, 8))
+        buttons.grid(row=4, column=0, sticky="ew", pady=(6, 4))
         self.start_btn = tk.Button(
             buttons,
             text="开始统计",
@@ -747,8 +755,20 @@ class App:
         self.cookie_var.set("; ".join(keep))
         self._append_log("已从剪贴板粘贴 Cookie。", "ok")
 
+    def _show_bduss_help(self) -> None:
+        messagebox.showinfo("如何获取 BDUSS", BDUSS_HELP, parent=self.root)
+        self.bduss_entry.focus_set()
+
+    def _clear_bduss(self) -> None:
+        self.bduss_var.set("")
+        if self.login_method_var.get() == "bduss":
+            self.cookie_var.set("")
+        clear_cookie()
+        self.status_var.set("已清除 BDUSS")
+        self._append_log("已清除 BDUSS。", "muted")
+
     def _show_cookie_help(self) -> None:
-        messagebox.showinfo("如何获取 Cookie", COOKIE_HELP, parent=self.root)
+        messagebox.showinfo("如何获取完整 Cookie", COOKIE_HELP, parent=self.root)
         self.cookie_entry.focus_set()
 
     def _open_readme(self) -> None:
