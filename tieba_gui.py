@@ -2548,6 +2548,30 @@ class App:
         self.old_files_label.pack(side="left", padx=(10, 0))
         ttk.Button(buttons, text="清理旧结果", command=self._cleanup_old_results, width=10).pack(side="right")
         self._refresh_old_files_label()
+        danger = tk.Frame(maint_box, bg="#eef1f5")
+        danger.pack(fill="x", padx=8, pady=(6, 4))
+        ttk.Button(danger, text="恢复默认设置", command=self._restore_defaults, width=14).pack(side="left")
+        tk.Button(
+            danger,
+            text="清空所有本地数据",
+            command=self._clear_all_data,
+            bg="#fee2e2",
+            fg="#b91c1c",
+            activebackground="#fecaca",
+            activeforeground="#991b1b",
+            relief="flat",
+            padx=14,
+            pady=6,
+            cursor="hand2",
+            font=("Microsoft YaHei UI", 9),
+        ).pack(side="left", padx=(8, 0))
+        tk.Label(
+            maint_box,
+            text="清空所有本地数据不会删除你导出的 Excel 或 Markdown。",
+            bg="#eef1f5",
+            fg="#8a94a6",
+            font=("Microsoft YaHei UI", 8),
+        ).pack(anchor="w", padx=8, pady=(0, 4))
 
     def _build_about_tab(self) -> None:
         box = tk.Frame(self.tab_about, bg="#eef1f5", padx=14, pady=10)
@@ -2587,35 +2611,6 @@ class App:
             wraplength=760,
             justify="left",
         ).pack(anchor="w", padx=8, pady=(2, 4))
-
-        maint_box = ttk.LabelFrame(box, text=" 维护 ")
-        maint_box.pack(fill="x")
-        maint_row = tk.Frame(maint_box, bg="#eef1f5")
-        maint_row.pack(anchor="w", padx=8, pady=(6, 4))
-        ttk.Button(
-            maint_row, text="恢复默认设置", command=self._restore_defaults, width=14
-        ).pack(side="left")
-        tk.Button(
-            maint_row,
-            text="清空所有本地数据",
-            command=self._clear_all_data,
-            bg="#fee2e2",
-            fg="#b91c1c",
-            activebackground="#fecaca",
-            activeforeground="#991b1b",
-            relief="flat",
-            padx=14,
-            pady=6,
-            cursor="hand2",
-            font=("Microsoft YaHei UI", 9),
-        ).pack(side="left", padx=(8, 0))
-        tk.Label(
-            maint_box,
-            text="清空所有本地数据不会删除你导出的 Excel 或 Markdown。",
-            bg="#eef1f5",
-            fg="#8a94a6",
-            font=("Microsoft YaHei UI", 8),
-        ).pack(anchor="w", padx=8, pady=(0, 4))
 
     def _on_save_result_toggle(self) -> None:
         self.settings["save_result"] = bool(self.save_result_var.get())
