@@ -1442,6 +1442,7 @@ class App:
         )
         self._lookup_post_urls: Dict[str, str] = {}
         self._lookup_forum_names: Dict[str, str] = {}
+        self._lookup_cache: Dict[str, tuple[float, Dict[str, Any]]] = {}
         self.lookup_date_mode_var.trace_add("write", lambda *_: self._on_lookup_date_changed())
         self._toggle_lookup_dates()
 
@@ -1495,6 +1496,15 @@ class App:
         date_mode = self.lookup_date_mode_var.get()
         start_date = self.lookup_start_var.get().strip() if date_mode == "指定日期" else ""
         end_date = self.lookup_end_var.get().strip() if date_mode == "指定日期" else ""
+        cache_key = (
+            f"{query}|{mode}|{count}|{start_date}|{end_date}|"
+            f"{self.lookup_prefer_var.get()}|{self.mode_var.get()}"
+        )
+        hit = self._lookup_cache.get(cache_key)
+        if hit and time.monotonic() - hit[0] < 60:
+            self._render_lookup(hit[1])
+            self.lookup_status.configure(text=f"{hit[1].get('username') or ''} · 缓存结果")
+            return
         self.lookup_status.configure(text="查询中…")
         self._set_lookup_text("查询中，请稍候…")
 
@@ -1540,6 +1550,10 @@ class App:
                     "start" if "开始" in self.lookup_prefer_var.get() else "end",
                 )
                 profile["nickname"] = profile.get("nickname") or info.get("nickname") or ""
+                if profile.get("ok"):
+                    if len(self._lookup_cache) >= 200:
+                        self._lookup_cache.clear()
+                    self._lookup_cache[cache_key] = (time.monotonic(), profile)
                 self._post(("lookup_ready", profile, ""))
             except Exception as error:  # noqa: BLE001
                 self._post(("lookup_ready", None, str(error)))
@@ -2914,6 +2928,9 @@ class App:
             for path in (os.path.join(APP_DIR, "cookie.bin"), SETTINGS_PATH):
                 safe_remove_file(path)
             safe_remove_tree(os.path.join(APP_DIR, "logs"))
+            temp_dir = os.path.join(os.environ.get("TEMP", ""), "TiebaReplyStats")
+            if os.path.isdir(temp_dir):
+                safe_remove_tree(temp_dir, [temp_dir])
         except (OSError, ValueError) as error:
             messagebox.showerror("清空失败", f"路径校验失败，已停止：{error}", parent=self.root)
             return

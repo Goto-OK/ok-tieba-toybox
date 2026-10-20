@@ -87,3 +87,25 @@ python scripts/sync_android.py --check
 失败项：
 备注：
 ```
+
+## 1.6.0 中间验证记录
+
+日期：2026-10-21
+范围：源码，不含 1.6.0 打包
+
+| 用例 | 结果 | 说明 |
+|---|---|---|
+| HELP-01 / HELP-02 / HELP-03 | 通过 | 非设置页打开不切标签；窗口单例 |
+| HELP-04 | 通过 | 设置仅 5 类，无独立“使用说明” |
+| HEADER-01 / HEADER-02 | 部分通过 | 9 个 Treeview 统一使用主题表头色；深浅色截图通过，DPI 未逐项 |
+| TRAFFIC-01 / TRAFFIC-02 / TRAFFIC-03 | 通过（单元） | 关注不单独上色；完整关注参与；发言失败不标；真实网络批量未跑 |
+| EMOJI-01 / EMOJI-02 | 通过 | 输入/粘贴自动转码 |
+| EMOJI-03 / EMOJI-04 | 未验证 / 通过 | 输入法真机未跑；按钮已删除 |
+| CLIP-01 / CLIP-02 | 通过 | 查用户底部栏固定；参与者底部栏固定 |
+| LOOKUP-01 / LOOKUP-02 | 通过 | 日期修改不发请求；点查询才查 |
+| LOOKUP-03 / LOOKUP-04 | 未验证 | 需真实网络计时 |
+| DELETE-01 / DELETE-02 / DELETE-04 | 通过（临时 profile） | 外部文件、无关文件、导出保留；设置重建默认 |
+| DELETE-03 | 通过（单元） | junction 拒绝删除 |
+| SKIN-01 / SKIN-02 | 通过（源码） | 无皮肤入口/素材；旧 skin 配置忽略 |
+
+自动测试：ruff / mypy / pytest 75 / selftest 通过。

@@ -29,7 +29,7 @@ DEFAULTS: Dict[str, Any] = {
     "page_size": 1000,
     "table_density": "comfortable",  # comfortable / compact
     "theme_mode": "light",  # light / dark / system
-    "accent": "blue",  # blue / green / purple
+    "accent": "blue",  # blue / green / purple / orange / pink / cyan / red
     "settings_start": "general",  # general / last
     "onboarding_seen": False,
     "window_geometry": "",
@@ -43,7 +43,7 @@ _CHOICES = {
     "settings_start": ("general", "last"),
     "table_density": ("comfortable", "compact"),
     "theme_mode": ("light", "dark", "system"),
-    "accent": ("blue", "green", "purple"),
+    "accent": ("blue", "green", "purple", "orange", "pink", "cyan", "red"),
 }
 
 
