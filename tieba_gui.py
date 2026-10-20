@@ -2353,14 +2353,14 @@ class App:
                 "green": "绿",
                 "purple": "紫",
                 "orange": "橘黄",
-                "pink": "粉色",
-                "cyan": "青色",
-                "red": "红色",
+                "pink": "粉",
+                "cyan": "青",
+                "red": "红",
             }.get(self.settings.get("accent", "blue"), "蓝")
         )
         self.accent_combo = ttk.Combobox(
             row2,
-            values=("蓝", "绿", "紫", "橘黄", "粉色", "青色", "红色"),
+            values=("蓝", "绿", "紫", "橘黄", "粉", "青", "红"),
             textvariable=self.accent_var,
             width=10,
             state="readonly",
@@ -2393,9 +2393,9 @@ class App:
             "绿": "green",
             "紫": "purple",
             "橘黄": "orange",
-            "粉色": "pink",
-            "青色": "cyan",
-            "红色": "red",
+            "粉": "pink",
+            "青": "cyan",
+            "红": "red",
         }.get(self.accent_var.get(), "blue")
         self.settings["accent"] = accent
         save_settings(self.settings)
