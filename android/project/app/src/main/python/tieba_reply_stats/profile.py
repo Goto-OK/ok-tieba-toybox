@@ -302,6 +302,9 @@ def fetch_user_posts(
             return
         ts = int(ts or 0)
         day = datetime.fromtimestamp(ts).date() if ts else None
+        # 指定日期时，没有时间戳的条目无法证明在范围内，不能混进结果。
+        if (start or end) and day is None:
+            return
         if start and day and day < start:
             return
         if end and day and day > end:
@@ -445,7 +448,11 @@ def fetch_user_posts(
                 break
             page += 1
 
-    posts.sort(key=lambda item: item.get("ts") or 0, reverse=(prefer != "start"))
+    # 未知时间的条目统一放末尾，避免“优先最早”时被 0 时间戳顶到最前。
+    known = [item for item in posts if item.get("ts")]
+    unknown = [item for item in posts if not item.get("ts")]
+    known.sort(key=lambda item: item.get("ts") or 0, reverse=(prefer != "start"))
+    posts = known + unknown
     return posts[:count]
 
 

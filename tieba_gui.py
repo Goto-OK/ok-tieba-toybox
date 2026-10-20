@@ -890,9 +890,11 @@ class App:
             side="left"
         )
         self.post_date_mode_var = tk.StringVar(value="近期")
-        ttk.Combobox(
+        self.post_date_mode_box = ttk.Combobox(
             bar, values=("近期", "指定日期"), textvariable=self.post_date_mode_var, width=9, state="readonly"
-        ).pack(side="left", padx=(6, 0))
+        )
+        self.post_date_mode_box.pack(side="left", padx=(6, 0))
+        self.post_date_mode_box.bind("<<ComboboxSelected>>", lambda _event: self._on_post_date_changed())
         self.post_start_var = tk.StringVar()
         self.post_end_var = tk.StringVar()
         self.post_date_row = tk.Frame(self.tab_people, bg="#ffffff", padx=12, pady=4)
@@ -1707,13 +1709,15 @@ class App:
             side="left"
         )
         self.lookup_date_mode_var = tk.StringVar(value="近期")
-        ttk.Combobox(
+        self.lookup_date_mode_box = ttk.Combobox(
             options,
             values=("近期", "指定日期"),
             textvariable=self.lookup_date_mode_var,
             width=9,
             state="readonly",
-        ).pack(side="left")
+        )
+        self.lookup_date_mode_box.pack(side="left")
+        self.lookup_date_mode_box.bind("<<ComboboxSelected>>", lambda _event: self._on_lookup_date_changed())
         self.lookup_status = tk.Label(
             options, text="", bg="#ffffff", fg="#8a94a6", font=("Microsoft YaHei UI", 8)
         )
@@ -1923,6 +1927,9 @@ class App:
             count = 20
         count = max(5, min(1000, count))
         date_mode = self.lookup_date_mode_var.get()
+        if date_mode != "指定日期":
+            self.lookup_start_var.set("")
+            self.lookup_end_var.set("")
         start_date = self.lookup_start_var.get().strip() if date_mode == "指定日期" else ""
         end_date = self.lookup_end_var.get().strip() if date_mode == "指定日期" else ""
         cache_key = (
@@ -4609,8 +4616,11 @@ class App:
                 if index < len(values):
                     self._copy_text(str(values[index]))
 
-        menu.add_command(label="打开链接", command=open_row)
         menu.add_command(label="复制整行", command=copy_row)
+        menu.add_command(
+            label="复制当前页",
+            command=lambda: self._copy_tree_page(tree),
+        )
         for title, index in (
             ("复制昵称", next((i for i, h in enumerate(headers) if h in ("昵称", "回复者")), -1)),
             ("复制用户名", next((i for i, h in enumerate(headers) if h == "用户名"), -1)),
@@ -4618,10 +4628,8 @@ class App:
         ):
             if index >= 0:
                 menu.add_command(label=title, command=partial(copy_value, index))
-        menu.add_command(
-            label="复制当前页",
-            command=lambda: self._copy_tree_page(tree),
-        )
+        menu.add_separator()
+        menu.add_command(label="打开链接", command=open_row)
 
         def show_menu(event) -> None:
             row = tree.identify_row(event.y)
