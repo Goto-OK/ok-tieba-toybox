@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import hashlib
 import re
+import time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from typing import Dict, List, Optional
@@ -22,6 +23,43 @@ from urllib.parse import quote, urlencode
 from . import profile_pb, userpost_pb
 
 PC_SALT = b"36770b1f34c9bbf2e7d1a99d2b82fa9e"
+_POST_CACHE_TTL = 300.0
+_POST_CACHE_MAX_PAGES = 1000
+_POST_CACHE: Dict[tuple[str, str, int], tuple[float, Dict]] = {}
+_THREAD_CACHE: Dict[str, tuple[float, List[Dict]]] = {}
+
+
+def _cache_user_key(uid: str, portrait: str) -> str:
+    return str(uid or portrait or "").strip()
+
+
+def _cached_get_json(fetcher, url: str, name: str, key: tuple[str, str, int]):
+    now = time.monotonic()
+    hit = _POST_CACHE.get(key)
+    if hit and now - hit[0] < _POST_CACHE_TTL:
+        return hit[1]
+    payload = fetcher.get_json(url, name=name)
+    if len(_POST_CACHE) >= _POST_CACHE_MAX_PAGES:
+        _POST_CACHE.pop(next(iter(_POST_CACHE)))
+    _POST_CACHE[key] = (now, payload)
+    return payload
+
+
+def clear_post_cache() -> None:
+    """清空进程内发言缓存；主要供测试和用户切换时使用。"""
+    _POST_CACHE.clear()
+    _THREAD_CACHE.clear()
+
+
+def _cached_threads(fetcher, uid: str, max_pages: int) -> List[Dict]:
+    now = time.monotonic()
+    hit = _THREAD_CACHE.get(uid)
+    if hit and now - hit[0] < _POST_CACHE_TTL:
+        return hit[1]
+    items = userpost_pb.fetch_user_threads(fetcher, uid, max_pages)
+    _THREAD_CACHE[uid] = (now, items)
+    return items
+
 APP_SALT = b"tiebaclient!!!"
 CLIENT_VERSION = "22.12.1.0"
 FOLLOW_URL = "https://tiebac.baidu.com/c/f/forum/like"
@@ -339,8 +377,11 @@ def fetch_user_posts(
             PC_SALT,
         )
         try:
-            payload = fetcher.get_json(
-                POSTS_URL + "?" + urlencode(params), name=f"posts_{portrait[:12]}_2_{page}"
+            payload = _cached_get_json(
+                fetcher,
+                POSTS_URL + "?" + urlencode(params),
+                f"posts_{portrait[:12]}_2_{page}",
+                (_cache_user_key(uid, portrait), "reply", page),
             )
             if status is not None:
                 status["replies_ok"] = True
@@ -384,7 +425,7 @@ def fetch_user_posts(
     thread_items = []
     if uid:
         try:
-            thread_items = userpost_pb.fetch_user_threads(fetcher, uid, 3)
+            thread_items = _cached_threads(fetcher, uid, 3)
             if status is not None:
                 status["threads_ok"] = True
         except Exception as error:  # noqa: BLE001
@@ -418,8 +459,11 @@ def fetch_user_posts(
                 PC_SALT,
             )
             try:
-                payload = fetcher.get_json(
-                    POSTS_URL + "?" + urlencode(params), name=f"posts_{portrait[:12]}_1_{page}"
+                payload = _cached_get_json(
+                    fetcher,
+                    POSTS_URL + "?" + urlencode(params),
+                    f"posts_{portrait[:12]}_1_{page}",
+                    (_cache_user_key(uid, portrait), "thread", page),
                 )
             except Exception as error:  # noqa: BLE001
                 if status is not None:
