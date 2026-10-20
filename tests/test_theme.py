@@ -1,4 +1,4 @@
-from tieba_reply_stats.theme import DARK, LIGHT, WHALEMAID, map_color, resolve_palette
+from tieba_reply_stats.theme import DARK, LIGHT, map_color, resolve_palette
 
 
 def test_palettes_and_accent():
@@ -12,12 +12,6 @@ def test_palettes_and_accent():
 def test_system_falls_back_to_light(monkeypatch):
     monkeypatch.setattr("tieba_reply_stats.theme.detect_system_theme", lambda: "light")
     assert resolve_palette("system", "blue")["window_bg"] == LIGHT["window_bg"]
-
-
-def test_whalemaid_skin_overrides_mode():
-    palette = resolve_palette("light", "green", "whalemaid")
-    assert palette["window_bg"] == WHALEMAID["window_bg"]
-    assert palette["accent"] == WHALEMAID["accent"]
 
 
 def test_color_mapping_context():

@@ -57,7 +57,6 @@ from tieba_reply_stats.pbapi import fill_thread_levels
 from tieba_reply_stats.profile import fetch_user_profile, resolve_user
 from tieba_reply_stats.report import export_user_report, report_base
 from tieba_reply_stats.settings import APP_DIR, SETTINGS_PATH, load_settings, save_settings
-from tieba_reply_stats.skin_store import clear_custom, import_zip, read_custom
 from tieba_reply_stats.storage import (
     IncompatibleResult,
     archive_incompatible,
@@ -76,9 +75,7 @@ from tieba_reply_stats.version import __version__ as VERSION
 APP_TITLE = "贴吧楼层回复统计"
 
 
-def _asset_path(*parts: str) -> str:
-    base = getattr(sys, "_MEIPASS", os.path.dirname(os.path.abspath(__file__)))
-    return os.path.join(base, *parts)
+
 
 _EMOJI_CODE_RE = re.compile(r"\[U\+([0-9A-Fa-f]{4,6})\]")
 
@@ -172,25 +169,12 @@ class App:
         self.last_output: str | None = None
         self.last_outputs: List[str] = []
         self.last_threads: list = []
-        self.side_label: Optional[tk.Label] = None
-        self.side_frames: list = []
-        self.side_frame_index = 0
-        self.skin_anim_job: Optional[str] = None
         self._auto_filled = False
         self.blacklist = load_blacklist()
         self.settings = load_settings()
-        self.custom_skin: Optional[Dict] = read_custom()
-        if self.settings.get("skin") == "bluefish":
-            self.settings["skin"] = "whalemaid"
-        if self.settings.get("skin") == "whalemaid":
-            self.settings["theme_mode"] = "dark"
-        if self.settings.get("skin") == "custom" and not self.custom_skin:
-            self.settings["skin"] = "default"
         self.palette = resolve_palette(
             str(self.settings.get("theme_mode", "light")),
             str(self.settings.get("accent", "blue")),
-            str(self.settings.get("skin", "default")),
-            self.custom_skin,
         )
         self.mode_var = tk.StringVar(value="guest")
 
@@ -207,7 +191,7 @@ class App:
         self._set_output(default_output_path())
         self.root.after(120, self._poll_queue)
         self.root.protocol("WM_DELETE_WINDOW", self._on_close)
-        self.root.bind("<F1>", lambda _event: self._show_quick_guide())
+        self.root.bind("<F1>", lambda _event: self._open_usage_window())
         self.root.bind("<Escape>", self._on_escape)
 
         saved = load_cookie()
@@ -309,7 +293,6 @@ class App:
 
         self.body = tk.Frame(self.root, bg="#eef1f5")
         self.body.pack(fill="both", expand=True)
-        self.side_panel = tk.Frame(self.body, width=238, bg="#eef1f5")
         self.notebook = ttk.Notebook(self.body, style="Main.TNotebook")
         self.notebook.pack(side="left", fill="both", expand=True)
 
@@ -1985,7 +1968,6 @@ class App:
         self.tab_general = tk.Frame(inner, bg="#eef1f5")
         self.tab_appearance = tk.Frame(inner, bg="#eef1f5")
         self.tab_blacklist = tk.Frame(inner, bg="#eef1f5")
-        self.tab_help = tk.Frame(inner, bg="#eef1f5")
         self.tab_storage = tk.Frame(inner, bg="#eef1f5")
         self.tab_about = tk.Frame(inner, bg="#eef1f5")
         self.settings_pages = [
@@ -1993,14 +1975,13 @@ class App:
             self.tab_appearance,
             self.tab_blacklist,
             self.tab_storage,
-            self.tab_help,
             self.tab_about,
         ]
         self._build_general_tab()
         self._build_appearance_tab()
         self._build_storage_tab()
         self._build_about_tab()
-        for label in ("常规", "外观", "本地标记", "结果与存储", "使用说明", "关于 / 帮助"):
+        for label in ("常规", "外观", "本地标记", "结果与存储", "关于 / 帮助"):
             self.settings_nav.insert("end", f"  {label}")
         self.settings_nav.bind("<<ListboxSelect>>", self._on_settings_nav)
         self.settings_nav.selection_set(0)
@@ -2032,7 +2013,6 @@ class App:
             bar, text="", bg="#eef1f5", fg="#15803d", font=("Microsoft YaHei UI", 9)
         )
         self.settings_hint.pack(side="left", padx=(10, 0))
-        self._build_help_tab()
 
     def _show_settings_page(self, index: int) -> None:
         for position, page in enumerate(self.settings_pages):
@@ -2111,44 +2091,6 @@ class App:
         )
         self.accent_combo.pack(side="left")
         self.accent_var.trace_add("write", lambda *_: self._on_accent_changed())
-        row3 = tk.Frame(theme_box, bg="#eef1f5")
-        row3.pack(anchor="w", fill="x", padx=8, pady=(2, 4))
-        tk.Label(row3, text="皮肤：", width=14, anchor="w", bg="#eef1f5", fg="#475569").pack(side="left")
-        skin_value = {
-            "default": "默认",
-            "whalemaid": "鲸鱼女仆（内置）",
-            "bluefish": "鲸鱼女仆（内置）",
-            "custom": self.custom_skin.get("name", "自定义") if self.custom_skin else "默认",
-        }.get(str(self.settings.get("skin", "default")), "默认")
-        self.skin_var = tk.StringVar(value=skin_value)
-        self.skin_values = ["默认", "鲸鱼女仆（内置）"]
-        if self.custom_skin:
-            self.skin_values.append(self.custom_skin.get("name", "自定义"))
-        self.skin_combo = ttk.Combobox(
-            row3,
-            values=self.skin_values,
-            textvariable=self.skin_var,
-            width=16,
-            state="readonly",
-        )
-        self.skin_combo.pack(side="left")
-        ttk.Button(row3, text="导入皮肤 ZIP", command=self._import_skin, width=12).pack(
-            side="left", padx=(8, 0)
-        )
-        ttk.Button(row3, text="清除自定义", command=self._clear_custom_skin, width=12).pack(
-            side="left", padx=(6, 0)
-        )
-        self.skin_var.trace_add("write", lambda *_: self._on_skin_changed())
-        row4 = tk.Frame(theme_box, bg="#eef1f5")
-        row4.pack(anchor="w", fill="x", padx=8, pady=(2, 4))
-        self.skin_animate_var = tk.BooleanVar(value=bool(self.settings.get("skin_animate", True)))
-        ttk.Checkbutton(
-            row4,
-            text="角色动画（3 fps）",
-            variable=self.skin_animate_var,
-            command=self._on_skin_animate_changed,
-        ).pack(side="left")
-
         note = ttk.LabelFrame(box, text=" 说明 ")
         note.pack(fill="x")
         tk.Label(
@@ -2160,95 +2102,6 @@ class App:
             wraplength=740,
             justify="left",
         ).pack(anchor="w", padx=8, pady=6)
-
-    def _on_skin_changed(self) -> None:
-        value = self.skin_var.get()
-        if value.startswith("鲸鱼") or value.startswith("蓝鱼"):
-            skin = "whalemaid"
-        elif self.custom_skin and value == self.custom_skin.get("name", "自定义"):
-            skin = "custom"
-        else:
-            skin = "default"
-        self.settings["skin"] = skin
-        if skin == "whalemaid":
-            self.settings["theme_mode"] = "dark"
-            self.theme_mode_var.set("深色")
-        save_settings(self.settings)
-        self._apply_theme()
-
-    def _on_skin_animate_changed(self) -> None:
-        self.settings["skin_animate"] = bool(self.skin_animate_var.get())
-        save_settings(self.settings)
-        self._update_side_skin()
-
-    def _import_skin(self) -> None:
-        path = filedialog.askopenfilename(
-            title="导入皮肤 ZIP",
-            filetypes=[("皮肤包", "*.zip"), ("所有文件", "*.*")],
-            parent=self.root,
-        )
-        if not path:
-            return
-        try:
-            custom = import_zip(path)
-        except Exception as error:  # noqa: BLE001
-            messagebox.showerror("导入皮肤失败", friendly_error(error), parent=self.root)
-            return
-        self.custom_skin = custom
-        name = custom.get("name", "自定义")
-        self.skin_values = ["默认", "鲸鱼女仆（内置）", name]
-        self.skin_combo.configure(values=self.skin_values)
-        self.settings["skin"] = "custom"
-        self.skin_var.set(name)
-        save_settings(self.settings)
-        self._apply_theme()
-        self.status_var.set(f"已导入皮肤：{name}")
-
-    def _clear_custom_skin(self) -> None:
-        if not self.custom_skin:
-            self.status_var.set("没有自定义皮肤")
-            return
-        if not messagebox.askyesno(
-            "清除自定义皮肤", "删除已导入的自定义皮肤？", parent=self.root, default=messagebox.NO
-        ):
-            return
-        clear_custom()
-        self.custom_skin = None
-        self.skin_values = ["默认", "鲸鱼女仆（内置）"]
-        self.skin_combo.configure(values=self.skin_values)
-        if self.settings.get("skin") == "custom":
-            self.settings["skin"] = "default"
-            self.skin_var.set("默认")
-        save_settings(self.settings)
-        self._apply_theme()
-        self.status_var.set("自定义皮肤已清除")
-
-    def _apply_skin_banner(self) -> None:
-        banner = getattr(self, "skin_banner", None)
-        if banner is not None:
-            try:
-                banner.destroy()
-            except tk.TclError:
-                pass
-            self.skin_banner = None
-        skin = self.settings.get("skin", "default")
-        if skin in ("whalemaid", "bluefish"):
-            path = _asset_path("assets", "skins", "whalemaid", "header.png")
-        elif skin == "custom" and self.custom_skin:
-            path = self.custom_skin.get("assets", {}).get("header", "")
-        else:
-            return
-        if not path or not os.path.isfile(path):
-            return
-        try:
-            image = tk.PhotoImage(file=path)
-        except tk.TclError:
-            return
-        self.skin_image = image
-        frame = tk.Frame(self.root, bg=self.palette["window_bg"], height=96)
-        frame.pack(fill="x", before=self.body)
-        tk.Label(frame, image=image, bg=self.palette["window_bg"], bd=0).pack()
-        self.skin_banner = frame
 
     def _on_theme_changed(self) -> None:
         mode = {"浅色": "light", "深色": "dark", "跟随系统": "system"}.get(
@@ -2314,15 +2167,12 @@ class App:
         palette = resolve_palette(
             str(self.settings.get("theme_mode", "light")),
             str(self.settings.get("accent", "blue")),
-            str(self.settings.get("skin", "default")),
-            self.custom_skin,
         )
         self.palette = palette
         self.root.configure(bg=palette["window_bg"])
         style = ttk.Style(self.root)
-        dark = palette["window_bg"] != "#eef1f5"
         try:
-            style.theme_use("clam" if dark else "vista")
+            style.theme_use("clam")
         except tk.TclError:
             pass
         style.configure(
@@ -2562,18 +2412,7 @@ class App:
             entry = getattr(self, "lookup_traffic_labels", {}).get(key)
             if entry:
                 entry[0].configure(fg=palette[value])
-        skin = self.settings.get("skin", "default")
-        state = "disabled" if skin in ("whalemaid", "bluefish", "custom") else "readonly"
-        for name in ("theme_combo", "accent_combo"):
-            combo = getattr(self, name, None)
-            if combo is not None:
-                try:
-                    combo.configure(state=state)
-                except tk.TclError:
-                    pass
-        self._apply_skin_banner()
-        self._update_side_skin()
-        self._update_empty_skin()
+        pass
 
     def _build_storage_tab(self) -> None:
         box = tk.Frame(self.tab_storage, bg="#eef1f5", padx=14, pady=10)
@@ -2712,13 +2551,13 @@ class App:
         help_box.pack(fill="x", pady=(0, 6))
         help_row = tk.Frame(help_box, bg="#eef1f5")
         help_row.pack(anchor="w", padx=8, pady=(6, 2))
-        ttk.Button(help_row, text="查看快速说明", command=self._show_quick_guide, width=14).pack(side="left")
+        ttk.Button(help_row, text="打开使用说明", command=self._open_usage_window, width=14).pack(side="left")
         ttk.Button(help_row, text="复制诊断信息", command=self._copy_diagnostics, width=14).pack(
             side="left", padx=(8, 0)
         )
         tk.Label(
             help_box,
-            text="第三方组件：Python / PyInstaller / lxml / openpyxl / Tcl-Tk；内置 Whale Maid 素材（MIT），详见 THIRD_PARTY_NOTICES.md。",
+            text="第三方组件：Python / PyInstaller / lxml / openpyxl / Tcl-Tk，各自按其许可证分发。",
             bg="#eef1f5",
             fg="#8a94a6",
             font=("Microsoft YaHei UI", 8),
@@ -2911,77 +2750,67 @@ class App:
         self.root.wait_window(win)
         return result["value"]
 
-    def _show_quick_guide(self) -> None:
-        existing = getattr(self, "_guide_window", None)
+    def _open_usage_window(self) -> None:
+        existing = getattr(self, "_usage_window", None)
         try:
             if existing is not None and existing.winfo_exists():
                 existing.lift()
+                existing.focus_set()
                 return
         except tk.TclError:
             pass
         win = tk.Toplevel(self.root)
-        self._guide_window = win
-        win.title("快速说明")
-        win.configure(bg="#ffffff")
-        win.resizable(False, False)
+        self._usage_window = win
+        win.title("使用说明")
+        win.configure(bg="#eef1f5")
+        win.geometry("780x640")
+        win.minsize(600, 420)
         win.transient(self.root)
-        win.grab_set()
-        frame = tk.Frame(win, bg="#ffffff", padx=20, pady=16)
+        frame = tk.Frame(win, bg="#eef1f5", padx=10, pady=8)
         frame.pack(fill="both", expand=True)
+        top = tk.Frame(frame, bg="#eef1f5")
+        top.pack(fill="x", pady=(0, 6))
         tk.Label(
-            frame,
-            text="快速说明",
-            bg="#ffffff",
+            top,
+            text="使用说明",
+            bg="#eef1f5",
             fg="#1F4E79",
             font=("Microsoft YaHei UI", 13, "bold"),
-        ).pack(anchor="w")
-        lines = [
-            "默认匿名，不需要 Cookie。",
-            "红绿灯和本地标记默认开启，只记录在本机。",
-            "关注增强默认关闭；需要时到「设置 → 关注增强」开启。",
-            "仅用于本地记录，请勿用于挂人、骚扰或公开曝光。",
-        ]
-        for index, line in enumerate(lines, start=1):
-            tk.Label(
-                frame,
-                text=f"{index}. {line}",
-                bg="#ffffff",
-                fg="#334155",
-                font=("Microsoft YaHei UI", 10),
-                wraplength=470,
-                justify="left",
-                anchor="w",
-            ).pack(fill="x", pady=(8 if index == 1 else 4, 0))
-        buttons = tk.Frame(frame, bg="#ffffff")
-        buttons.pack(fill="x", pady=(16, 0))
-        ttk.Button(buttons, text="知道了", command=win.destroy, width=10).pack(side="right")
-        ttk.Button(
-            buttons,
-            text="查看使用说明",
-            command=lambda: self._open_help_from_guide(win),
-            width=14,
-        ).pack(side="right", padx=(0, 8))
-        win.bind("<Return>", lambda _event: win.destroy())
+        ).pack(side="left")
+        ttk.Button(top, text="关闭", command=win.destroy, width=8).pack(side="right")
+        text = tk.Text(
+            frame,
+            wrap="word",
+            font=("Microsoft YaHei UI", 9),
+            relief="flat",
+            padx=10,
+            pady=8,
+            bg="#fbfcfe",
+            state="disabled",
+        )
+        scroll = ttk.Scrollbar(frame, orient="vertical", command=text.yview)
+        text.configure(yscrollcommand=scroll.set)
+        text.pack(side="left", fill="both", expand=True)
+        scroll.pack(side="right", fill="y")
+        content = ""
+        try:
+            path = os.path.join(resource_dir(), "使用说明.txt")
+            if os.path.isfile(path):
+                with open(path, "r", encoding="utf-8", errors="replace") as handle:
+                    content = handle.read()
+        except OSError:
+            content = ""
+        text.configure(state="normal")
+        text.insert("1.0", content or "使用说明文件未找到。")
+        text.configure(state="disabled")
+        self._theme_widget_tree(win)
         win.bind("<Escape>", lambda _event: win.destroy())
         win.protocol("WM_DELETE_WINDOW", win.destroy)
-        win.update_idletasks()
-        width, height = win.winfo_reqwidth(), win.winfo_reqheight()
-        x = self.root.winfo_rootx() + max(0, (self.root.winfo_width() - width) // 2)
-        y = self.root.winfo_rooty() + max(0, (self.root.winfo_height() - height) // 3)
-        self._theme_widget_tree(win)
-        win.geometry(f"+{x}+{y}")
         win.focus_set()
-
-    def _open_help_from_guide(self, win) -> None:
-        win.destroy()
-        self.notebook.select(self.tab_settings)
-        self.settings_nav.selection_clear(0, "end")
-        self.settings_nav.selection_set(4)
-        self._show_settings_page(4)
 
     def _open_guide_from_banner(self, banner) -> None:
         banner.destroy()
-        self._show_quick_guide()
+        self._open_usage_window()
 
     def _maybe_onboarding(self) -> None:
         if self.settings.get("onboarding_seen"):
@@ -3380,35 +3209,6 @@ class App:
         self._append_log("配置已恢复。", "ok")
         self.status_var.set("配置已恢复")
 
-    def _build_help_tab(self) -> None:
-        frame = tk.Frame(self.tab_help, bg="#eef1f5", padx=10, pady=10)
-        frame.pack(fill="both", expand=True)
-        text = tk.Text(
-            frame,
-            wrap="word",
-            font=("Microsoft YaHei UI", 9),
-            relief="flat",
-            padx=10,
-            pady=8,
-            bg="#fbfcfe",
-            state="disabled",
-        )
-        scroll = ttk.Scrollbar(frame, orient="vertical", command=text.yview)
-        text.configure(yscrollcommand=scroll.set)
-        text.pack(side="left", fill="both", expand=True)
-        scroll.pack(side="right", fill="y")
-        content = ""
-        try:
-            path = os.path.join(resource_dir(), "使用说明.txt")
-            if os.path.isfile(path):
-                with open(path, "r", encoding="utf-8", errors="replace") as handle:
-                    content = handle.read()
-        except OSError:
-            content = ""
-        text.configure(state="normal")
-        text.insert("1.0", content or "使用说明文件未找到。")
-        text.configure(state="disabled")
-
     def _save_blacklist_from_tab(self) -> None:
         data = {
             key: [line.strip() for line in editor.get("1.0", "end").splitlines() if line.strip()]
@@ -3559,7 +3359,6 @@ class App:
 
         self.grid_nb = ttk.Notebook(self.tab_grid, style="Sub.TNotebook")
         self.grid_nb.pack(fill="both", expand=True, padx=8, pady=8)
-        self.empty_skin_label = tk.Label(self.grid_nb, bd=0)
 
     def _apply_table_density(self) -> None:
         compact = self.settings.get("table_density") == "compact"
@@ -3570,112 +3369,6 @@ class App:
         self.settings["table_density"] = "compact" if self.table_density_var.get() == "紧凑" else "comfortable"
         save_settings(self.settings)
         self._apply_table_density()
-
-    def _stop_side_animation(self) -> None:
-        job = getattr(self, "skin_anim_job", None)
-        if job is not None:
-            try:
-                self.root.after_cancel(job)
-            except tk.TclError:
-                pass
-        self.skin_anim_job = None
-        self.side_frames = []
-        self.side_frame_index = 0
-
-    def _animate_side_frame(self) -> None:
-        frames = getattr(self, "side_frames", [])
-        label = getattr(self, "side_label", None)
-        if not frames or label is None:
-            self.skin_anim_job = None
-            return
-        self.side_frame_index = (self.side_frame_index + 1) % len(frames)
-        try:
-            label.configure(image=frames[self.side_frame_index])
-        except tk.TclError:
-            self.skin_anim_job = None
-            return
-        self.skin_anim_job = self.root.after(333, self._animate_side_frame)
-
-    def _update_side_skin(self) -> None:
-        panel = getattr(self, "side_panel", None)
-        if panel is None:
-            return
-        self._stop_side_animation()
-        for child in panel.winfo_children():
-            child.destroy()
-        self.side_label = None
-        skin = self.settings.get("skin", "default")
-        animate = bool(self.settings.get("skin_animate", True))
-        if skin in ("whalemaid", "bluefish") and animate:
-            frame_dir = _asset_path("assets", "skins", "whalemaid", "frames")
-            names = sorted(
-                name for name in os.listdir(frame_dir) if name.lower().endswith(".png")
-            ) if os.path.isdir(frame_dir) else []
-            if len(names) >= 2:
-                frames = []
-                for name in names:
-                    try:
-                        frames.append(tk.PhotoImage(file=os.path.join(frame_dir, name)))
-                    except tk.TclError:
-                        continue
-                if len(frames) >= 2:
-                    panel.configure(bg=self.palette["window_bg"])
-                    label = tk.Label(panel, image=frames[0], bg=self.palette["window_bg"], bd=0)
-                    label.pack(side="bottom", padx=6, pady=8)
-                    self.side_label = label
-                    self.side_frames = frames
-                    self.side_frame_index = 0
-                    if not panel.winfo_manager():
-                        panel.pack(side="right", fill="y", before=self.notebook)
-                    self.skin_anim_job = self.root.after(333, self._animate_side_frame)
-                    return
-        if skin in ("whalemaid", "bluefish"):
-            path = _asset_path("assets", "skins", "whalemaid", "side.png")
-        elif skin == "custom" and self.custom_skin:
-            path = self.custom_skin.get("assets", {}).get("side", "")
-        else:
-            path = ""
-        if not path or not os.path.isfile(path):
-            panel.pack_forget()
-            return
-        try:
-            image = tk.PhotoImage(file=path)
-        except tk.TclError:
-            panel.pack_forget()
-            return
-        if image.width() > 230:
-            factor = (image.width() + 229) // 230
-            image = image.subsample(factor, factor)
-        panel.configure(bg=self.palette["window_bg"])
-        label = tk.Label(panel, image=image, bg=self.palette["window_bg"], bd=0)
-        self.side_image = image
-        label.pack(side="bottom", padx=6, pady=8)
-        if not panel.winfo_manager():
-            panel.pack(side="right", fill="y", before=self.notebook)
-
-    def _update_empty_skin(self) -> None:
-        label = getattr(self, "empty_skin_label", None)
-        if label is None:
-            return
-        if self.last_threads or self.settings.get("skin") != "custom" or not self.custom_skin:
-            label.place_forget()
-            return
-        path = self.custom_skin.get("assets", {}).get("empty") or self.custom_skin.get("assets", {}).get("side")
-        if not path or not os.path.isfile(path):
-            label.place_forget()
-            return
-        try:
-            image = tk.PhotoImage(file=path)
-        except tk.TclError:
-            label.place_forget()
-            return
-        if image.width() > 520:
-            factor = (image.width() + 519) // 520
-            image = image.subsample(factor, factor)
-        self.empty_skin_image = image
-        label.configure(image=image, bg=self.palette["surface"])
-        label.place(in_=self.grid_nb, relx=0.5, rely=0.55, anchor="center")
-        label.lift()
 
     def _update_grid_selector(self) -> None:
         if not hasattr(self, "grid_thread_box"):
@@ -3756,7 +3449,6 @@ class App:
             self.grid_nb.forget(tab)
         if not self.last_threads:
             self.grid_hint.configure(text="还没有数据")
-            self._update_empty_skin()
             return
         self._update_grid_selector()
         threads = self._selected_grid_threads()

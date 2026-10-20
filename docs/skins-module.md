@@ -14,12 +14,10 @@
 - 单独目录、单独测试、单独素材许可；
 - 主程序只保留 S1：浅色/深色/跟随系统 + 强调色。
 
-## 既有素材
+## 历史素材
 
-- 鲸鱼女仆：`assets/skins/whalemaid`；
-- 自定义皮肤：`skin_store.py`；
-- 动画帧：`assets/skins/whalemaid/frames`；
-- 许可：见 `THIRD_PARTY_NOTICES.md`。
+- 鲸鱼女仆、动画帧、`skin_store.py` 已从主程序工作区移除；
+- 若恢复模块，需重新引入素材并单独确认许可。
 
 ## 后续讨论
 

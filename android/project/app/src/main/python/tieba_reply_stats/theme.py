@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import os
-from typing import Dict, Optional
+from typing import Dict
 
 LIGHT: Dict[str, str] = {
     "window_bg": "#eef1f5",
@@ -73,43 +73,6 @@ DARK: Dict[str, str] = {
     "banner_text": "#fbbf24",
 }
 
-WHALEMAID: Dict[str, str] = {
-    "window_bg": "#071426",
-    "surface": "#0b1f38",
-    "surface_alt": "#0e2947",
-    "border": "#1b4b73",
-    "text": "#d9f3ff",
-    "text_secondary": "#9fd4ee",
-    "text_muted": "#6aa3c2",
-    "accent": "#38bdf8",
-    "accent_hover": "#0ea5e9",
-    "accent_text": "#04121f",
-    "selection_bg": "#123f5e",
-    "selection_text": "#e6fbff",
-    "table_bg": "#0b1f38",
-    "table_alt": "#0e2947",
-    "table_header_bg": "#0b2c4a",
-    "table_header_text": "#d9f3ff",
-    "log_bg": "#071426",
-    "log_text": "#c7e9f7",
-    "danger": "#fb7185",
-    "danger_bg": "#3b1522",
-    "warning": "#fbbf24",
-    "warning_bg": "#3a2e12",
-    "safe": "#34d399",
-    "safe_bg": "#0f332a",
-    "button_bg": "#103552",
-    "button_hover": "#174a70",
-    "button_text": "#d9f3ff",
-    "disabled_bg": "#0b1f38",
-    "disabled_text": "#5c7f96",
-    "banner_bg": "#0a2038",
-    "banner_text": "#a5f3fc",
-}
-
-BLUEFISH = WHALEMAID
-SKINS = ("default", "whalemaid", "bluefish", "custom")
-
 ACCENTS = {
     "blue": {"accent": "#1F4E79", "accent_hover": "#163b5c", "selection_bg": "#dbeafe", "selection_text": "#1F4E79"},
     "green": {"accent": "#166534", "accent_hover": "#14532d", "selection_bg": "#dcfce7", "selection_text": "#166534"},
@@ -145,23 +108,7 @@ def detect_system_theme() -> str:
         return "light"
 
 
-def resolve_palette(
-    theme_mode: str,
-    accent: str,
-    skin: str = "default",
-    custom: Optional[Dict] = None,
-) -> Dict[str, str]:
-    if skin in ("whalemaid", "bluefish"):
-        return dict(WHALEMAID)
-    if skin == "custom" and custom:
-        mode = str(custom.get("mode") or "light")
-        palette = dict(DARK if mode == "dark" else LIGHT)
-        colors = custom.get("colors") or {}
-        if isinstance(colors, dict):
-            palette.update(
-                {key: value for key, value in colors.items() if key in palette and isinstance(value, str)}
-            )
-        return palette
+def resolve_palette(theme_mode: str, accent: str) -> Dict[str, str]:
     mode = theme_mode if theme_mode in THEME_MODES else "light"
     if mode == "system":
         mode = detect_system_theme()
@@ -223,7 +170,7 @@ _FG_OPTIONS = {"fg", "foreground", "activeforeground", "selectforeground", "inse
 
 
 _TOKEN_VALUES: Dict[str, str] = {}
-for _palette in (LIGHT, DARK, WHALEMAID):
+for _palette in (LIGHT, DARK):
     for _name, _value in _palette.items():
         if _value.lower() in ("#ffffff", "#f7f9fc"):
             continue

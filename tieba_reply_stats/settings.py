@@ -30,8 +30,6 @@ DEFAULTS: Dict[str, Any] = {
     "table_density": "comfortable",  # comfortable / compact
     "theme_mode": "light",  # light / dark / system
     "accent": "blue",  # blue / green / purple
-    "skin": "default",  # default / whalemaid / custom
-    "skin_animate": True,
     "settings_start": "general",  # general / last
     "onboarding_seen": False,
     "window_geometry": "",
@@ -46,7 +44,6 @@ _CHOICES = {
     "table_density": ("comfortable", "compact"),
     "theme_mode": ("light", "dark", "system"),
     "accent": ("blue", "green", "purple"),
-    "skin": ("default", "whalemaid", "bluefish", "custom"),
 }
 
 
