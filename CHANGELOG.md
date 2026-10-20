@@ -29,7 +29,7 @@
 
 - pytest 78 个通过；
 - ruff、mypy、selftest 通过；
-- 1.7.0 Windows 成品待打包。
+- 1.7.0 Windows 成品已构建，`--selftest` 通过。
 
 ## [1.6.0] - 2026-10-21
 
