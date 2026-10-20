@@ -54,3 +54,12 @@ def test_hidden_follow_list_does_not_mark():
         "followed_private": True,
     }
     assert app._profile_hit(profile) == ("", "")
+
+
+def test_post_query_failure_does_not_mark():
+    app = _app()
+    profile = {
+        "recent_posts": [],
+        "post_sources": {"replies_ok": False, "threads_ok": False},
+    }
+    assert app._profile_hit(profile) == ("", "")

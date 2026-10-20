@@ -19,7 +19,7 @@
 ```text
 ruff     通过
 mypy     26 个文件通过
-pytest   73 个通过
+pytest   74 个通过
 selftest 通过
 Android 核心同步通过
 ```

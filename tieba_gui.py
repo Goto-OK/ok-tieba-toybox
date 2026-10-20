@@ -4319,6 +4319,9 @@ class App:
         if not self._risk_enabled():
             return "", ""
         # 先按发言判定；只有拿到完整关注列表时，关注吧才参与。
+        src = profile.get("post_sources") or {}
+        if src and src.get("replies_ok") is False and src.get("threads_ok") is not True:
+            return "", ""
         bars = [post.get("bar") for post in profile.get("recent_posts") or [] if post.get("bar")]
         bars += [bar for bar in (extra_bars or []) if bar]
         complete_follow = bool(profile.get("follow_loaded")) and not self._hidden_follows(profile)
