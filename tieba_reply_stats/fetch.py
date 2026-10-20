@@ -171,6 +171,7 @@ class Fetcher:
         self.timeout = timeout
         self.retries = max(1, retries)
         self.delay = max(0.0, delay)
+        self.proxy = proxy
         self.cache_dir = cache_dir
         self.dump_dir = dump_dir
         self.refresh = refresh
@@ -199,6 +200,18 @@ class Fetcher:
         context = ssl.create_default_context()
         handlers.append(urllib.request.HTTPSHandler(context=context))
         return urllib.request.build_opener(*handlers)
+
+    def clone(self) -> "Fetcher":
+        """独立 Fetcher，复用 Cookie/代理配置，避免多线程共享 opener。"""
+        return Fetcher(
+            cookie=self.cookie_dict(),
+            user_agent=self.user_agent,
+            timeout=self.timeout,
+            retries=self.retries,
+            delay=self.delay,
+            proxy=self.proxy,
+            verbose=self.verbose,
+        )
 
     def add_cookies(self, cookies: Dict[str, str]) -> None:
         for name, value in cookies.items():

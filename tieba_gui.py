@@ -1443,6 +1443,7 @@ class App:
         self._lookup_post_urls: Dict[str, str] = {}
         self._lookup_forum_names: Dict[str, str] = {}
         self._lookup_cache: Dict[str, tuple[float, Dict[str, Any]]] = {}
+        self._lookup_generation = 0
         self.lookup_date_mode_var.trace_add("write", lambda *_: self._on_lookup_date_changed())
         self._toggle_lookup_dates()
 
@@ -1487,6 +1488,8 @@ class App:
         raw_query = query
         query = decode_display(query).strip() or query
         encoded_query = encode_display(raw_query).lower()
+        self._lookup_generation = getattr(self, "_lookup_generation", 0) + 1
+        generation = self._lookup_generation
         mode = self.lookup_mode_var.get()
         try:
             count = int(self.lookup_count_var.get())
@@ -1529,6 +1532,8 @@ class App:
                             break
                 if not info:
                     info = resolve_user(fetcher, query, mode)
+                if generation != self._lookup_generation:
+                    return
                 if not info.get("uid"):
                     self._post(
                         (
@@ -1549,6 +1554,8 @@ class App:
                     end_date,
                     "start" if "开始" in self.lookup_prefer_var.get() else "end",
                 )
+                if generation != self._lookup_generation:
+                    return
                 profile["nickname"] = profile.get("nickname") or info.get("nickname") or ""
                 if profile.get("ok"):
                     if len(self._lookup_cache) >= 200:
@@ -1556,7 +1563,8 @@ class App:
                     self._lookup_cache[cache_key] = (time.monotonic(), profile)
                 self._post(("lookup_ready", profile, ""))
             except Exception as error:  # noqa: BLE001
-                self._post(("lookup_ready", None, str(error)))
+                if generation == self._lookup_generation:
+                    self._post(("lookup_ready", None, str(error)))
 
         threading.Thread(target=worker, daemon=True).start()
 

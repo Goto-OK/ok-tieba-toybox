@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import hashlib
 import re
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from typing import Dict, List, Optional
 from urllib.parse import quote, urlencode
@@ -463,20 +464,38 @@ def fetch_user_profile(
         username = pb["username"]
     if not portrait:
         portrait = pb.get("portrait") or fetch_portrait(fetcher, username)
-    if load_follow:
-        follow = fetch_follow_forums(fetcher, user_id)
-    else:
-        follow = {"forums": [], "private": False, "error": ""}
     post_sources: Dict[str, object] = {}
-    posts = (
-        fetch_user_posts(
-            fetcher, portrait, post_count, start_date, end_date, prefer, uid=user_id,
-            status=post_sources,
-        )
-        if portrait or user_id
-        else []
-    )
-    panel = fetch_panel(fetcher, username)
+
+    def side() -> tuple:
+        if load_follow:
+            follow_data = fetch_follow_forums(fetcher.clone(), user_id)
+        else:
+            follow_data = {"forums": [], "private": False, "error": ""}
+        panel_data = fetch_panel(fetcher.clone(), username)
+        return follow_data, panel_data
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        posts_future = pool.submit(
+            fetch_user_posts,
+            fetcher.clone(),
+            portrait,
+            post_count,
+            start_date,
+            end_date,
+            prefer,
+            user_id,
+            post_sources,
+        ) if (portrait or user_id) else None
+        side_future = pool.submit(side)
+        try:
+            posts = posts_future.result() if posts_future is not None else []
+        except Exception:  # noqa: BLE001
+            posts = []
+        try:
+            follow, panel = side_future.result()
+        except Exception:  # noqa: BLE001
+            follow = {"forums": [], "private": False, "error": ""}
+            panel = {}
 
     target = (bar_name or "").rstrip("吧")
     level_in_bar = ""
