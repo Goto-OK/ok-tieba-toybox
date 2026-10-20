@@ -45,7 +45,7 @@ def test_export_report(tmp_path):
         base, user, profile, [make_thread()], mode="login", mark={"level": "红", "bar": "坏吧"}
     )
     book = load_workbook(xlsx)
-    assert book.sheetnames == ["基本信息", "关注贴吧", "最近发言", "本帖参与", "本地标记"]
+    assert book.sheetnames == ["基本信息", "关注贴吧", "发言", "本帖参与", "本地标记"]
     text = open(md, encoding="utf-8").read()
     assert "用户报告" in text
     assert "测试吧" in text

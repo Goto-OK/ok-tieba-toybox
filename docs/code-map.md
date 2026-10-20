@@ -20,7 +20,7 @@
 | `parse.py` | 网页楼层/楼中楼解析 |
 | `page_pb.py` | 匿名 `page` / `floor` protobuf、楼中楼补全 |
 | `pbapi.py` | `page_pc` / `nestedFloor` 补等级 |
-| `profile.py` | 资料、公开关注、隐藏恢复、最近发言 |
+| `profile.py` | 资料、公开关注、隐藏恢复、发言 |
 | `profile_pb.py` | 客户端 profile protobuf |
 | `userpost_pb.py` | 客户端 userpost protobuf |
 | `follow_probe.py` | 隐藏关注候选探测 |

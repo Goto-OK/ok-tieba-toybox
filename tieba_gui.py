@@ -876,7 +876,7 @@ class App:
         bar.pack(fill="x")
         tk.Label(
             bar,
-            text="点一行查看这个人的最近发言和关注的贴吧",
+            text="点一行查看这个人的发言和关注的贴吧",
             bg="#ffffff",
             fg="#6b7280",
             font=("Microsoft YaHei UI", 9),
@@ -898,12 +898,12 @@ class App:
         self.post_start_parts = self._date_group(self.post_date_row, "开始", 3)
         self.post_end_parts = self._date_group(self.post_date_row, "结束")
         tk.Label(
-            self.post_date_row, text="  贴近：", bg="#ffffff", fg="#475569", font=("Microsoft YaHei UI", 9)
+            self.post_date_row, text="  时间偏向：", bg="#ffffff", fg="#475569", font=("Microsoft YaHei UI", 9)
         ).pack(side="left")
-        self.post_prefer_var = tk.StringVar(value="贴近结束日期")
+        self.post_prefer_var = tk.StringVar(value="优先最近")
         ttk.Combobox(
             self.post_date_row,
-            values=("贴近结束日期", "贴近开始日期"),
+            values=("优先最近", "优先最早"),
             textvariable=self.post_prefer_var,
             width=12,
             state="readonly",
@@ -1076,6 +1076,7 @@ class App:
         self.people_tree.bind("<Button-3>", self._person_menu)
         self._person_popup = tk.Menu(self.people_tree, tearoff=0)
         self._person_popup.add_command(label="复制整行", command=self._copy_person_row)
+        self._person_popup.add_command(label="复制当前页", command=self._copy_people_page)
         self._person_popup.add_command(label="复制昵称", command=lambda: self._copy_person_field("name"))
         self._person_popup.add_command(
             label="复制用户名", command=lambda: self._copy_person_field("username")
@@ -1169,7 +1170,7 @@ class App:
 
         tk.Label(
             post_frame,
-            text="最近发言",
+            text="发言",
             bg="#fbfcfe",
             fg="#475569",
             font=("Microsoft YaHei UI", 9, "bold"),
@@ -1283,6 +1284,12 @@ class App:
 
     def _on_post_date_changed(self) -> None:
         self._toggle_date_entries()
+        if self.post_date_mode_var.get() == "指定日期":
+            self.post_start_var.set(self._group_date(self.post_start_parts))
+            self.post_end_var.set(self._group_date(self.post_end_parts))
+        else:
+            self.post_start_var.set("")
+            self.post_end_var.set("")
         if hasattr(self, "_profile_cache"):
             self._profile_cache.clear()
         self.profile_status.configure(text="条件已变更，点「刷新资料」生效")
@@ -1466,6 +1473,14 @@ class App:
 
     def _on_lookup_date_changed(self) -> None:
         self._toggle_lookup_dates()
+        if self.lookup_date_mode_var.get() == "指定日期":
+            self.lookup_start_var.set(self._group_date(self.lookup_start_parts))
+            self.lookup_end_var.set(self._group_date(self.lookup_end_parts))
+        else:
+            self.lookup_start_var.set("")
+            self.lookup_end_var.set("")
+        if hasattr(self, "_lookup_cache"):
+            self._lookup_cache.clear()
         if self.lookup_query_var.get().strip():
             self.lookup_status.configure(text="条件已变更，点「查询」生效")
 
@@ -1526,6 +1541,15 @@ class App:
         self.root.clipboard_clear()
         self.root.clipboard_append(content or "")
         self.people_hint.configure(text="已复制到剪贴板")
+
+    def _copy_tree_page(self, tree) -> None:
+        lines = []
+        for iid in tree.get_children():
+            lines.append("	".join(str(value) for value in tree.item(iid, "values")))
+        self._copy_text(chr(10).join(lines))
+
+    def _copy_people_page(self) -> None:
+        self._copy_tree_page(self.people_tree)
 
     def _copy_person_row(self) -> None:
         user = self._selected_person()
@@ -1721,7 +1745,7 @@ class App:
         self.lookup_summary = summary
         self.lookup_info = tk.Label(
             summary,
-            text="输入用户名 / 用户ID / 昵称，点「查询」查看资料、关注和最近发言。",
+            text="输入用户名 / 用户ID / 昵称，点「查询」查看资料、关注和发言。",
             anchor="w",
             bg="#eef1f5",
             fg="#64748b",
@@ -1785,10 +1809,17 @@ class App:
         paned.add(right, weight=2)
         tk.Label(
             left,
-            text="关注贴吧（双击）",
+            text="关注的贴吧",
             bg="#eef1f5",
             fg="#475569",
             font=("Microsoft YaHei UI", 9, "bold"),
+        ).pack(anchor="w")
+        tk.Label(
+            left,
+            text="双击贴吧行可打开主页",
+            bg="#eef1f5",
+            fg="#8a94a6",
+            font=("Microsoft YaHei UI", 8),
         ).pack(anchor="w")
         self.lookup_forum_tree = ttk.Treeview(
             left, columns=("bar", "level", "source"), show="headings", height=14
@@ -1806,7 +1837,7 @@ class App:
 
         tk.Label(
             right,
-            text="最近发言",
+            text="发言",
             bg="#eef1f5",
             fg="#475569",
             font=("Microsoft YaHei UI", 9, "bold"),
@@ -2003,7 +2034,7 @@ class App:
         if not candidates:
             messagebox.showinfo(
                 "没有候选吧",
-                "本帖发言、最近发言、本地标记里没有可探测的吧。",
+                "本帖发言、发言、本地标记里没有可探测的吧。",
                 parent=self.root,
             )
             return
@@ -3653,7 +3684,7 @@ class App:
         for key, text in (
             ("color_people", "在参与者列表里标色"),
             ("color_forum", "在「关注的贴吧」表格里标色"),
-            ("color_posts", "在「最近发言」表格里标色"),
+            ("color_posts", "在「发言」表格里标色"),
         ):
             var = tk.BooleanVar(value=bool(self.settings.get(key, True)))
             ttk.Checkbutton(color_box, text=text, variable=var, command=self._on_settings_changed).pack(
@@ -4578,6 +4609,10 @@ class App:
         menu = tk.Menu(tree, tearoff=0)
         menu.add_command(label="打开链接", command=open_row)
         menu.add_command(label="复制整行", command=copy_row)
+        menu.add_command(
+            label="复制当前页",
+            command=lambda: self._copy_tree_page(tree),
+        )
 
         def show_menu(event) -> None:
             row = tree.identify_row(event.y)
@@ -4958,7 +4993,7 @@ class App:
         self.people_hint.configure(text=f"批量查询 0/{self._batch_total}…")
         count = self._post_count()
         start_date, end_date = self._date_params()
-        prefer = "start" if "开始" in self.post_prefer_var.get() else "end"
+        prefer = "start" if "最早" in self.post_prefer_var.get() else "end"
 
         include_follows = bool(self.include_follows_var.get() and self.settings.get("follow_enhance"))
         guest = self.mode_var.get() == "guest"
@@ -5110,7 +5145,7 @@ class App:
                     count,
                     start_date,
                     end_date,
-                    "start" if "开始" in self.post_prefer_var.get() else "end",
+                    "start" if "最早" in self.post_prefer_var.get() else "end",
                     load_follow=force_follow or self.settings.get("follow_load_mode", "auto") == "auto",
                 )
             except Exception as error:  # noqa: BLE001
@@ -5799,7 +5834,7 @@ class App:
                 messagebox.showinfo(
                     "完成",
                     f"统计完成，共 {count} 个帖子。\n\n文件已保存到：\n{output}\n\n"
-                    "切到「参与者」选项卡可以点开每个人，查看他的最近发言和关注的贴吧。",
+                    "切到「参与者」选项卡可以点开每个人，查看他的发言和关注的贴吧。",
                     parent=self.root,
                 )
                 self._open_result()

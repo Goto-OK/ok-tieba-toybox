@@ -32,7 +32,7 @@ def candidate_bars(
     blacklist: Dict[str, List[str]],
     limit: int = 30,
 ) -> List[str]:
-    """只从本帖发言、最近发言、本地标记里取候选，排除已知关注。"""
+    """只从本帖发言、发言、本地标记里取候选，排除已知关注。"""
     known = set()
     for key in ("followed_forums", "hidden_forums", "like_forum", "probed_forums"):
         for forum in profile.get(key) or []:

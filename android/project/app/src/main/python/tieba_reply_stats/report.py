@@ -128,7 +128,7 @@ def export_user_report(
     for cell in forum_sheet[1]:
         cell.font = bold
 
-    post_sheet = book.create_sheet("最近发言")
+    post_sheet = book.create_sheet("发言")
     post_sheet.append(["日期", "类型", "贴吧", "标题", "内容", "链接"])
     for post in posts:
         post_sheet.append(
@@ -173,7 +173,7 @@ def export_user_report(
     lines += ["", "## 关注贴吧", "", "| 贴吧 | 等级 | 来源 |", "|---|---|---|"]
     for forum in forums:
         lines.append(f"| {forum['name']} | {forum['level'] or '-'} | {forum['source']} |")
-    lines += ["", "## 最近发言", "", "| 日期 | 类型 | 贴吧 | 标题 | 内容 |", "|---|---|---|---|---|"]
+    lines += ["", "## 发言", "", "| 日期 | 类型 | 贴吧 | 标题 | 内容 |", "|---|---|---|---|---|"]
     for post in posts:
         content = str(post.get("content") or "").replace("|", "\\|").replace("\n", " ")
         lines.append(

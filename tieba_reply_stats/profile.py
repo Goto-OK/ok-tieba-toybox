@@ -1,11 +1,11 @@
-"""查询单个贴吧用户的资料：最近发言、关注的贴吧、各吧等级。
+"""查询单个贴吧用户的资料：发言、关注的贴吧、各吧等级。
 
 接口：
 - 关注贴吧（官方客户端接口，POST，带 BDUSS）：
   https://tiebac.baidu.com/c/f/forum/like?friend_uid=...&page_no=..&page_size=..
   返回 forum_list.non-gconforum，包含每个吧的 level_id / level_name（头衔）。
   对方若把关注列表设为私密，则不会返回数据。
-- 最近发言（PC 接口，GET，带签名）：
+- 发言（PC 接口，GET，带签名）：
   https://tieba.baidu.com/c/u/feed/myThread?portrait=..&pn=..&rn=..
   返回 list，每项含 thread_info（标题、fname 吧名）和 post_info（正文片段）。
 """
@@ -320,8 +320,11 @@ def fetch_user_posts(
         )
 
     # 1) replies: old PC feed (type=2)
+    # 指定日期 + 优先最早时要翻到开始日期，不能只按 count 截断，
+    # 否则后面的主题流会把这批回复挤出结果。
+    collect_start = prefer == "start" and bool(start)
     page = 1
-    while page <= 80 and len(posts) < count:
+    while page <= 80 and (len(posts) < count or collect_start):
         params = _sign(
             {
                 "pn": page,
@@ -458,7 +461,7 @@ def fetch_user_profile(
     prefer: str = "end",
     load_follow: bool = True,
 ) -> Dict:
-    """组合查询：关注的吧（含等级）+ 最近发言 + 本吧等级。"""
+    """组合查询：关注的吧（含等级）+ 发言 + 本吧等级。"""
     pb = profile_pb.fetch_profile(fetcher, user_id) if user_id else {}
     if pb.get("username"):
         username = pb["username"]
