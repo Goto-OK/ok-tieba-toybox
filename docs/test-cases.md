@@ -76,6 +76,8 @@ python scripts/sync_android.py --check
 | DELETE-03 | junction 指向外部 | 清空所有数据 | 外部目标不删 |
 | SKIN-01 | 1.7.0 | 设置/安装目录 | 无皮肤入口/素材/动画 |
 
+> 可直接勾选版本：[manual-acceptance-1.7.md](manual-acceptance-1.7.md)
+
 ## 结果记录
 
 ```text
