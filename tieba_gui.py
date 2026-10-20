@@ -172,6 +172,7 @@ class App:
         self.last_outputs: List[str] = []
         self.last_threads: list = []
         self._auto_filled = False
+        self._lookup_normalize_job: Optional[str] = None
         self.blacklist = load_blacklist()
         self.settings = load_settings()
         self.palette = resolve_palette(
@@ -1217,6 +1218,18 @@ class App:
     def _on_lookup_query_changed(self, *_args) -> None:
         if getattr(self, "_normalizing_query", False):
             return
+        pending = getattr(self, "_lookup_normalize_job", None)
+        if pending is not None:
+            try:
+                self.root.after_cancel(pending)
+            except tk.TclError:
+                pass
+        self._lookup_normalize_job = self.root.after(50, self._normalize_lookup_query)
+
+    def _normalize_lookup_query(self) -> None:
+        self._lookup_normalize_job = None
+        if getattr(self, "_normalizing_query", False):
+            return
         raw = self.lookup_query_var.get()
         encoded = encode_display(raw)
         if encoded == raw:
@@ -1481,6 +1494,7 @@ class App:
         self.lookup_info.configure(text=content)
 
     def _on_lookup(self) -> None:
+        self._normalize_lookup_query()
         query = self.lookup_query_var.get().strip()
         if not query:
             self.lookup_status.configure(text="先输入要查询的内容")
