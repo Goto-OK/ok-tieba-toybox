@@ -6,7 +6,7 @@
 
 | 文档 | 用途 |
 |---|---|
-| [../SPEC.md](../SPEC.md) | **规范 1.6.0；后续实现、修改、验收只看这一份** |
+| [../SPEC.md](../SPEC.md) | **规范 1.7.0；后续实现、修改、验收只看这一份** |
 | [status.md](status.md) | 源码 / 测试 / 成品当前状态 |
 | [code-map.md](code-map.md) | 代码地图 |
 | [release.md](release.md) | 构建与发布步骤 |
