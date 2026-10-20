@@ -123,6 +123,9 @@ def resolve_palette(theme_mode: str, accent: str) -> Dict[str, str]:
     palette = dict(DARK if mode == "dark" else LIGHT)
     accents = DARK_ACCENTS if mode == "dark" else ACCENTS
     palette.update(accents.get(accent, accents["blue"]))
+    # 表头跟随强调色，避免切色后仍是固定蓝色。
+    palette["table_header_bg"] = palette["accent"]
+    palette["table_header_text"] = palette["accent_text"]
     return palette
 
 

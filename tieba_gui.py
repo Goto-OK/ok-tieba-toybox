@@ -2345,14 +2345,58 @@ class App:
         if enabled:
             self._set_mode("login")
             if not parse_cookie_input(self.cookie_var.get()).get("BDUSS"):
-                messagebox.showinfo(
-                    "需要 BDUSS",
-                    "关注增强需要 BDUSS 或整段 Cookie。请在抓取页粘贴后再开始。",
-                    parent=self.root,
-                )
+                if self._ask_go_fill_bduss():
+                    self._go_to_login()
         else:
             self._set_mode("guest")
         save_settings(self.settings)
+
+    def _ask_go_fill_bduss(self) -> bool:
+        win = tk.Toplevel(self.root)
+        win.title("需要 BDUSS")
+        win.configure(bg="#eef1f5")
+        win.resizable(False, False)
+        win.transient(self.root)
+        win.grab_set()
+        result = {"go": False}
+        tk.Label(
+            win,
+            text="抓取增强已开启，但还没有填写 BDUSS。现在去抓取页填写吗？",
+            bg="#eef1f5",
+            fg="#334155",
+            font=("Microsoft YaHei UI", 9),
+            justify="left",
+            wraplength=360,
+        ).pack(fill="x", padx=14, pady=(14, 8))
+        row = tk.Frame(win, bg="#eef1f5")
+        row.pack(fill="x", padx=14, pady=(0, 12))
+
+        def choose(go: bool) -> None:
+            result["go"] = go
+            win.destroy()
+
+        ttk.Button(row, text="稍后", command=lambda: choose(False), width=9).pack(side="right")
+        ttk.Button(row, text="去填写", command=lambda: choose(True), width=9).pack(
+            side="right", padx=(0, 6)
+        )
+        win.protocol("WM_DELETE_WINDOW", lambda: choose(False))
+        win.bind("<Escape>", lambda _event: choose(False))
+        self._theme_widget_tree(win)
+        win.update_idletasks()
+        width, height = 420, 150
+        x = self.root.winfo_rootx() + max(0, (self.root.winfo_width() - width) // 2)
+        y = self.root.winfo_rooty() + max(0, (self.root.winfo_height() - height) // 2)
+        win.geometry(f"{width}x{height}+{x}+{y}")
+        win.focus_set()
+        self.root.wait_window(win)
+        return bool(result["go"])
+
+    def _go_to_login(self) -> None:
+        self.notebook.select(self.tab_posts)
+        self.post_nb.select(self.tab_fetch)
+        self.root.update_idletasks()
+        target = self.bduss_entry if self.login_method_var.get() == "bduss" else self.cookie_entry
+        target.focus_set()
 
     def _on_follow_load_mode_changed(self) -> None:
         value = "manual" if self.follow_load_mode_var.get() == "手动" else "auto"
@@ -3152,10 +3196,50 @@ class App:
         if not os.path.isfile(path):
             messagebox.showinfo("第三方许可", "许可文件未找到。", parent=self.root)
             return
+        existing = getattr(self, "_notice_window", None)
         try:
-            os.startfile(path)  # type: ignore[attr-defined]
+            if existing is not None and existing.winfo_exists():
+                existing.lift()
+                existing.focus_set()
+                return
+        except tk.TclError:
+            pass
+        try:
+            with open(path, "r", encoding="utf-8") as handle:
+                content = handle.read()
         except OSError as error:
             messagebox.showerror("打不开许可文件", friendly_error(error), parent=self.root)
+            return
+        win = tk.Toplevel(self.root)
+        self._notice_window = win
+        win.title("第三方许可")
+        win.geometry("760x600")
+        win.minsize(560, 360)
+        win.configure(bg="#eef1f5")
+        win.transient(self.root)
+        frame = tk.Frame(win, bg="#eef1f5", padx=10, pady=8)
+        frame.pack(fill="both", expand=True)
+        top = tk.Frame(frame, bg="#eef1f5")
+        top.pack(fill="x", pady=(0, 6))
+        tk.Label(
+            top, text="第三方组件与许可", bg="#eef1f5", fg="#1F4E79",
+            font=("Microsoft YaHei UI", 12, "bold"),
+        ).pack(side="left")
+        ttk.Button(top, text="关闭", command=win.destroy, width=8).pack(side="right")
+        text = tk.Text(
+            frame, wrap="word", font=("Microsoft YaHei UI", 9), relief="flat",
+            padx=10, pady=8, bg="#fbfcfe", state="disabled",
+        )
+        scroll = ttk.Scrollbar(frame, orient="vertical", command=text.yview)
+        text.configure(yscrollcommand=scroll.set)
+        scroll.pack(side="right", fill="y")
+        text.pack(side="left", fill="both", expand=True)
+        text.configure(state="normal")
+        text.insert("1.0", content)
+        text.configure(state="disabled")
+        self._theme_widget_tree(win)
+        win.protocol("WM_DELETE_WINDOW", win.destroy)
+        win.focus_set()
 
     def _open_folder(self, path: str) -> None:
         try:
