@@ -64,3 +64,15 @@ def test_user_stats_latest_nickname_and_aliases():
     assert len(stats) == 1
     assert stats[0]["name"] == "新昵称"
     assert "旧昵称" in stats[0]["aliases"]
+
+
+def test_field_selector_limits_match_target():
+    assert [u["uid"] for u in filter_users(USERS, keyword="ming", field="用户名")] == ["1"]
+    assert filter_users(USERS, keyword="ming", field="昵称") == []
+    assert [u["uid"] for u in filter_users(USERS, keyword="2", field="用户ID")] == ["2"]
+    assert [u["uid"] for u in filter_users(USERS, keyword="小红", field="全部字段")] == ["2"]
+
+
+def test_nickname_field_includes_aliases():
+    users = [{"name": "现名", "username": "u", "uid": "9", "aliases": ["旧名"]}]
+    assert [u["uid"] for u in filter_users(users, keyword="旧名", field="昵称")] == ["9"]

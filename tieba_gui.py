@@ -51,7 +51,7 @@ from tieba_reply_stats.cookie_store import clear_cookie, load_cookie, save_cooki
 from tieba_reply_stats.errors import friendly_error
 from tieba_reply_stats.export import export_workbook
 from tieba_reply_stats.fetch import CaptchaError, Fetcher, FetchError, ThreadGoneError, parse_cookie_input
-from tieba_reply_stats.filters import LEVEL_OPTIONS, MARK_OPTIONS, filter_users
+from tieba_reply_stats.filters import FIELD_OPTIONS, LEVEL_OPTIONS, MARK_OPTIONS, filter_users
 from tieba_reply_stats.follow_probe import candidate_bars, probe_forums
 from tieba_reply_stats.pbapi import fill_thread_levels
 from tieba_reply_stats.profile import fetch_user_profile, resolve_user
@@ -759,12 +759,20 @@ class App:
 
         filter_bar = tk.Frame(self.tab_people, bg="#ffffff", padx=10, pady=6)
         filter_bar.pack(fill="x", padx=10)
-        tk.Label(filter_bar, text="筛选：", bg="#ffffff", fg="#475569", font=("Microsoft YaHei UI", 9)).pack(
+        tk.Label(filter_bar, text="关键词：", bg="#ffffff", fg="#475569", font=("Microsoft YaHei UI", 9)).pack(
             side="left"
         )
+        self.people_field_var = tk.StringVar(value="全部字段")
+        ttk.Combobox(
+            filter_bar,
+            values=FIELD_OPTIONS,
+            textvariable=self.people_field_var,
+            width=9,
+            state="readonly",
+        ).pack(side="left")
         self.people_keyword_var = tk.StringVar()
-        self.people_keyword_entry = ttk.Entry(filter_bar, textvariable=self.people_keyword_var, width=18)
-        self.people_keyword_entry.pack(side="left")
+        self.people_keyword_entry = ttk.Entry(filter_bar, textvariable=self.people_keyword_var, width=16)
+        self.people_keyword_entry.pack(side="left", padx=(4, 0))
         tk.Label(filter_bar, text=" 等级 ", bg="#ffffff", fg="#475569", font=("Microsoft YaHei UI", 9)).pack(
             side="left"
         )
@@ -792,6 +800,7 @@ class App:
         )
 
         for var in (
+            self.people_field_var,
             self.people_keyword_var,
             self.people_level_var,
             self.people_mark_var,
@@ -1950,6 +1959,7 @@ class App:
         self._filter_resetting = True
         try:
             self.people_keyword_var.set("")
+            self.people_field_var.set("全部字段")
             self.people_level_var.set("全部")
             self.people_mark_var.set("全部")
             self.people_min_var.set("")
@@ -1994,6 +2004,7 @@ class App:
         filtered = filter_users(
             users,
             keyword=self.people_keyword_var.get(),
+            field=self.people_field_var.get(),
             level=self.people_level_var.get(),
             mark=self.people_mark_var.get() if self._risk_enabled() else "全部",
             min_level=_optional_int(self.people_min_var.get()),
@@ -4182,6 +4193,7 @@ class App:
         return filter_users(
             self.people_users,
             keyword=self.people_keyword_var.get(),
+            field=self.people_field_var.get(),
             level=self.people_level_var.get(),
             mark=self.people_mark_var.get() if self._risk_enabled() else "全部",
             min_level=_optional_int(self.people_min_var.get()),
@@ -4195,6 +4207,7 @@ class App:
         filtered = filter_users(
             self.people_users,
             keyword=self.people_keyword_var.get(),
+            field=self.people_field_var.get(),
             level=self.people_level_var.get(),
             mark=self.people_mark_var.get() if self._risk_enabled() else "全部",
             min_level=_optional_int(self.people_min_var.get()),
