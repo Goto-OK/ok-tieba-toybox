@@ -32,3 +32,25 @@ def test_post_forum_marks_after_posts_loaded():
         "hidden_forums": [],
     }
     assert app._profile_hit(profile)[0] == "ban"
+
+
+def test_complete_follow_list_participates():
+    app = _app()
+    profile = {
+        "recent_posts": [],
+        "follow_loaded": True,
+        "followed_forums": [{"name": "坏吧"}],
+        "followed_private": False,
+    }
+    assert app._profile_hit(profile)[0] == "ban"
+
+
+def test_hidden_follow_list_does_not_mark():
+    app = _app()
+    profile = {
+        "recent_posts": [],
+        "follow_loaded": True,
+        "followed_forums": [{"name": "坏吧"}],
+        "followed_private": True,
+    }
+    assert app._profile_hit(profile) == ("", "")

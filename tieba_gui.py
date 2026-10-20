@@ -4259,15 +4259,15 @@ class App:
         prefer = "start" if "开始" in self.post_prefer_var.get() else "end"
 
         include_follows = bool(self.include_follows_var.get() and self.settings.get("follow_enhance"))
-        guest = self.mode_var.get() == "guest" or not include_follows
+        guest = self.mode_var.get() == "guest"
+        cookie = {} if guest else parse_cookie_input(self.cookie_var.get())
         concurrency = 1 if include_follows else max(1, min(3, int(self.settings.get("batch_concurrency", 1) or 1)))
 
-        def resolve(user, fetcher):
-            if guest:
-                return {"ok": True, "guest_only": True}
+        def resolve(user):
             if not (user.get("uid") or user.get("username")):
                 return {"ok": False, "error": "缺少用户ID"}
             try:
+                fetcher = Fetcher(cookie=cookie, delay=0.3, verbose=False)
                 return fetch_user_profile(
                     fetcher,
                     user.get("uid") or "",
@@ -4278,24 +4278,22 @@ class App:
                     start_date,
                     end_date,
                     prefer,
+                    load_follow=include_follows,
                 )
             except Exception as error:  # noqa: BLE001
                 return {"ok": False, "error": str(error)}
 
         def worker():
-            fetcher = Fetcher(
-                cookie={} if guest else parse_cookie_input(self.cookie_var.get()), delay=0.3, verbose=False
-            )
             if concurrency <= 1:
                 for index, user in enumerate(users):
                     if self._batch_cancel:
                         break
-                    self._post(("batch_profile", index, user, resolve(user, fetcher)))
+                    self._post(("batch_profile", index, user, resolve(user)))
             else:
                 from concurrent.futures import ThreadPoolExecutor
 
                 with ThreadPoolExecutor(max_workers=concurrency) as pool:
-                    futures = [pool.submit(resolve, user, fetcher) for user in users]
+                    futures = [pool.submit(resolve, user) for user in users]
                     for index, (user, future) in enumerate(zip(users, futures)):
                         if self._batch_cancel:
                             break
@@ -4320,9 +4318,12 @@ class App:
     def _profile_hit(self, profile, extra_bars=None):
         if not self._risk_enabled():
             return "", ""
-        # 只按发言所在吧判定；关注列表不能单独给用户上色。
+        # 先按发言判定；只有拿到完整关注列表时，关注吧才参与。
         bars = [post.get("bar") for post in profile.get("recent_posts") or [] if post.get("bar")]
         bars += [bar for bar in (extra_bars or []) if bar]
+        complete_follow = bool(profile.get("follow_loaded")) and not self._hidden_follows(profile)
+        if complete_follow and not profile.get("follow_error"):
+            bars += [forum["name"] for forum in profile.get("followed_forums") or []]
         return classify(bars, getattr(self, "blacklist", {}))
 
     def _apply_batch_mark(self, user, profile) -> None:
