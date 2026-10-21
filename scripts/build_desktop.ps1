@@ -1,4 +1,4 @@
-﻿<#
+<#
 .SYNOPSIS
   构建 Windows 桌面版（PyInstaller --onedir）。
 
@@ -57,6 +57,9 @@ if ($LASTEXITCODE -ne 0) { throw "安装 PyInstaller 失败" }
 
 & $VenvPython (Join-Path $Root "scripts\write_version_info.py")
 if ($LASTEXITCODE -ne 0) { throw "生成 version_info 失败" }
+
+& $VenvPython (Join-Path $Root "scripts\make_icon.py")
+if ($LASTEXITCODE -ne 0) { throw "生成图标失败" }
 
 Write-Host "[2/5] 构建 exe（版本 $Version）"
 & $VenvPython -m PyInstaller --noconfirm --clean --onedir --windowed `
