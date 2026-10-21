@@ -1182,9 +1182,9 @@ class App:
             fg="#2563eb",
             font=("Microsoft YaHei UI", 8),
         )
-        self.profile_cache_label.pack(fill="x", padx=6, pady=(0, 1))
-        profile_action_bar = tk.Frame(right, bg="#fbfcfe")
-        profile_action_bar.pack(fill="x", padx=6, pady=(0, 4))
+        self.profile_action_bar = tk.Frame(right, bg="#fbfcfe")
+        self.profile_action_bar.pack(fill="x", padx=6, pady=(0, 4))
+        profile_action_bar = self.profile_action_bar
         self.profile_topic_btn = ttk.Button(
             profile_action_bar, text="继续抓主题", command=self._continue_profile_topics
         )
@@ -2085,7 +2085,7 @@ class App:
         self.lookup_traffic_text.pack(side="left", padx=(8, 0))
 
         cache_row = tk.Frame(page, bg="#eef1f5", padx=12)
-        cache_row.pack(fill="x")
+        self.lookup_cache_row = cache_row
         self.lookup_cache_label = tk.Label(
             cache_row,
             text="",
@@ -2305,7 +2305,7 @@ class App:
             self.lookup_status.configure(text=f"{hit[1].get('username') or ''} · 缓存结果")
             return
         self.lookup_status.configure(text="查询中…")
-        self.lookup_cache_label.configure(text="")
+        self._set_lookup_cache_note("")
         self._set_lookup_text("查询中，请稍候…")
 
         def worker():
@@ -2439,6 +2439,24 @@ class App:
                 return f"缓存于 {age} 分钟前（刷新资料可强制更新）"
         return ""
 
+    def _set_profile_cache_note(self, text: str) -> None:
+        self.profile_cache_label.configure(text=text)
+        if text:
+            if not self.profile_cache_label.winfo_manager():
+                self.profile_cache_label.pack(
+                    fill="x", padx=6, pady=(0, 1), before=self.profile_action_bar
+                )
+        else:
+            self.profile_cache_label.pack_forget()
+
+    def _set_lookup_cache_note(self, text: str) -> None:
+        self.lookup_cache_label.configure(text=text)
+        if text:
+            if not self.lookup_cache_row.winfo_manager():
+                self.lookup_cache_row.pack(fill="x", after=self.lookup_summary)
+        else:
+            self.lookup_cache_row.pack_forget()
+
     def _render_lookup(self, profile) -> None:
         forum_tree = self.lookup_forum_tree
         post_tree = self.lookup_post_tree
@@ -2446,7 +2464,7 @@ class App:
             self._clear_loaded_tree(tree)
         self._lookup_forum_names = {}
         self._lookup_post_urls = {}
-        self.lookup_cache_label.configure(text="")
+        self._set_lookup_cache_note("")
         if not profile:
             self.lookup_info.configure(text="没有查到这个人。")
             try:
@@ -2540,7 +2558,7 @@ class App:
         if note:
             info += " | " + note
         self.lookup_info.configure(text=info)
-        self.lookup_cache_label.configure(text=self._cache_age_note(profile))
+        self._set_lookup_cache_note(self._cache_age_note(profile))
         self.lookup_status.configure(
             text=(f"{profile.get('username') or ''} · {len(posts)} 条发言" + (f" · {note}" if note else ""))
         )
@@ -2826,7 +2844,7 @@ class App:
             text=f"v{VERSION} · 当前 {len(filtered)} / 共 {len(users)} 人 · 有等级 {with_level}{mode_note}{warning_note}{stale_note}"
         )
         self.profile_status.configure(text="选择左边一个人查看详情")
-        self.profile_cache_label.configure(text="")
+        self._set_profile_cache_note("")
         for tree in (self.profile_forum_tree, self.profile_post_tree):
             for item in tree.get_children():
                 tree.delete(item)
@@ -6644,10 +6662,9 @@ class App:
             self._render_profile(user, cached)
             return
         self.profile_status.configure(text=f"正在查询 {display_text(user['name'])} …")
-        self.profile_cache_label.configure(text="")
+        self._set_profile_cache_note("")
         for tree in (self.profile_forum_tree, self.profile_post_tree):
-            for item in tree.get_children():
-                tree.delete(item)
+            self._clear_loaded_tree(tree)
         count = self._post_count()
         start_date, end_date = self._date_params()
         bar_name = self._user_bar(user)
@@ -7122,7 +7139,7 @@ class App:
         )
 
     def _render_profile(self, user, profile) -> None:
-        self.profile_cache_label.configure(text="")
+        self._set_profile_cache_note("")
         forum_tree = self.profile_forum_tree
         post_tree = self.profile_post_tree
         for tree in (forum_tree, post_tree):
@@ -7299,7 +7316,7 @@ class App:
         if note:
             status += " · " + note
         self.profile_status.configure(text=status)
-        self.profile_cache_label.configure(text=self._cache_age_note(profile))
+        self._set_profile_cache_note(self._cache_age_note(profile))
 
     def _comment_depth_value(self) -> int:
         text = self.comment_depth_var.get()
