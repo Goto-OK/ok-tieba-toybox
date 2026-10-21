@@ -1737,6 +1737,8 @@ class App:
     def _on_lookup_query_changed(self, *_args) -> None:
         if getattr(self, "_normalizing_query", False):
             return
+        if not self.lookup_query_var.get().strip():
+            self._reset_lookup_traffic()
         pending = getattr(self, "_lookup_normalize_job", None)
         if pending is not None:
             try:
@@ -2056,9 +2058,9 @@ class App:
             label = tk.Label(
                 traffic,
                 text="●",
-                fg=self.palette["disabled_text"],
+                fg="#d1d5db",
                 bg="#eef1f5",
-                font=("Microsoft YaHei UI", 12),
+                font=("Microsoft YaHei UI", 14),
             )
             label.pack(side="left", padx=(2, 0))
             self.lookup_traffic_labels[key] = (label, color)
@@ -2221,10 +2223,19 @@ class App:
         self.root.clipboard_append("\n".join(lines))
         self.lookup_status.configure(text="已复制")
 
+    def _reset_lookup_traffic(self) -> None:
+        try:
+            self.lookup_traffic_text.configure(text="")
+            for _key, (traffic_label, _color) in getattr(self, "lookup_traffic_labels", {}).items():
+                traffic_label.configure(fg="#d1d5db")
+        except tk.TclError:
+            pass
+
     def _set_lookup_text(self, content: str) -> None:
         for tree in (self.lookup_forum_tree, self.lookup_post_tree):
             for item in tree.get_children():
                 tree.delete(item)
+        self._reset_lookup_traffic()
         self.lookup_info.configure(text=content)
 
     def _on_lookup(self) -> None:
@@ -2233,6 +2244,7 @@ class App:
         query = self.lookup_query_var.get().strip()
         if not query:
             self.lookup_status.configure(text="先输入要查询的内容")
+            self._reset_lookup_traffic()
             return
         raw_query = query
         query = decode_display(query).strip() or query
@@ -2464,15 +2476,8 @@ class App:
             info += f" | 发帖 {profile['post_num']}"
         if self.mode_var.get() == "guest":
             info += " | 免登录：关注列表可能不完整"
-        participant = self._participant_for_lookup(profile)
-        if participant and participant.get("mark_level"):
-            # 查用户与参与者统一：同一个人直接复用左侧的批量标记。
-            hit_level = str(participant.get("mark_level") or "")
-            hit_bar = str(participant.get("mark_bar") or "")
-            hidden_follows = bool(participant.get("mark_hidden")) and self._risk_enabled()
-        else:
-            hit_level, hit_bar = self._profile_hit(profile) if posts else ("", "")
-            hidden_follows = self._hidden_follows(profile) if self._risk_enabled() else False
+        hit_level, hit_bar = self._profile_hit(profile) if posts else ("", "")
+        hidden_follows = self._hidden_follows(profile) if self._risk_enabled() else False
         risk_reason = "关注列表隐藏" if self.mode_var.get() != "guest" else "关注列表未加载"
         label = LEVEL_LABEL.get(hit_level, "")
         for key, (traffic_label, traffic_color) in getattr(self, "lookup_traffic_labels", {}).items():
@@ -3479,8 +3484,12 @@ class App:
         for key, value in (("ban", "danger"), ("warn", "warning"), ("safe", "safe")):
             entry = getattr(self, "lookup_traffic_labels", {}).get(key)
             if entry:
-                entry[0].configure(fg=palette[value])
-        pass
+                # 只更新备用颜色，不能因为切主题就把无结果的查用户红绿灯点亮。
+                self.lookup_traffic_labels[key] = (entry[0], palette[value])
+        if getattr(self, "_last_lookup_profile", None):
+            self._render_lookup(self._last_lookup_profile)
+        else:
+            self._reset_lookup_traffic()
 
     def _build_storage_tab(self) -> None:
         box = tk.Frame(self.tab_storage, bg="#eef1f5", padx=14, pady=10)
@@ -4415,7 +4424,13 @@ class App:
         self.last_threads = []
         self.last_output = None
         self.cookie_var.set("")
+        self._last_lookup_profile = None
+        self._profile_user = None
+        self._profile_data = None
+        self._lookup_cache.clear()
+        self._profile_cache.clear()
         self._apply_settings_to_ui()
+        self._set_lookup_text("软件数据已清空。")
         self.open_btn.configure(state="disabled")
         for key, editor in getattr(self, "blacklist_editors", {}).items():
             editor.delete("1.0", "end")
@@ -6408,19 +6423,6 @@ class App:
         if profile.get("follow_loaded") and not self._hidden_follows(profile) and not profile.get("follow_error"):
             return False
         return True
-
-    def _participant_for_lookup(self, profile):
-        uid = str(profile.get("user_id") or "")
-        username = str(profile.get("username") or "")
-        nickname = str(profile.get("nickname") or "")
-        for user in getattr(self, "people_users", []):
-            if uid and str(user.get("uid") or "") == uid:
-                return user
-            if username and str(user.get("username") or "") == username:
-                return user
-            if nickname and str(user.get("name") or "") == nickname:
-                return user
-        return None
 
     def _profile_hit(self, profile, extra_bars=None):
         if not self._risk_enabled():
