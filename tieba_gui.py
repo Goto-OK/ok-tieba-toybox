@@ -1174,6 +1174,15 @@ class App:
             font=("Microsoft YaHei UI", 9),
         )
         self.profile_status.pack(side="left", fill="x", expand=True)
+        self.profile_cache_label = tk.Label(
+            right,
+            text="",
+            anchor="w",
+            bg="#fbfcfe",
+            fg="#2563eb",
+            font=("Microsoft YaHei UI", 8),
+        )
+        self.profile_cache_label.pack(fill="x", padx=6, pady=(0, 1))
         profile_action_bar = tk.Frame(right, bg="#fbfcfe")
         profile_action_bar.pack(fill="x", padx=6, pady=(0, 4))
         self.profile_topic_btn = ttk.Button(
@@ -2075,6 +2084,18 @@ class App:
         )
         self.lookup_traffic_text.pack(side="left", padx=(8, 0))
 
+        cache_row = tk.Frame(page, bg="#eef1f5", padx=12)
+        cache_row.pack(fill="x")
+        self.lookup_cache_label = tk.Label(
+            cache_row,
+            text="",
+            anchor="w",
+            bg="#eef1f5",
+            fg="#2563eb",
+            font=("Microsoft YaHei UI", 8),
+        )
+        self.lookup_cache_label.pack(side="left")
+
         bottom = tk.Frame(page, bg="#eef1f5", padx=10, pady=6)
         bottom.pack(side="bottom", fill="x")
         self.lookup_bottom = bottom
@@ -2284,6 +2305,7 @@ class App:
             self.lookup_status.configure(text=f"{hit[1].get('username') or ''} · 缓存结果")
             return
         self.lookup_status.configure(text="查询中…")
+        self.lookup_cache_label.configure(text="")
         self._set_lookup_text("查询中，请稍候…")
 
         def worker():
@@ -2407,6 +2429,10 @@ class App:
             return "回复流查询失败，当前只显示主题帖"
         if src.get("replies_empty") and src.get("threads_ok"):
             return "回复流为空，当前只显示主题帖"
+        return ""
+
+    def _cache_age_note(self, profile) -> str:
+        src = profile.get("post_sources") or {}
         if src.get("cached"):
             age = src.get("cached_age_minutes")
             if age is not None:
@@ -2421,6 +2447,7 @@ class App:
                 tree.delete(item)
         self._lookup_forum_names = {}
         self._lookup_post_urls = {}
+        self.lookup_cache_label.configure(text="")
         if not profile:
             self.lookup_info.configure(text="没有查到这个人。")
             try:
@@ -2510,6 +2537,7 @@ class App:
         if note:
             info += " | " + note
         self.lookup_info.configure(text=info)
+        self.lookup_cache_label.configure(text=self._cache_age_note(profile))
         self.lookup_status.configure(
             text=(f"{profile.get('username') or ''} · {len(posts)} 条发言" + (f" · {note}" if note else ""))
         )
@@ -2795,6 +2823,7 @@ class App:
             text=f"v{VERSION} · 当前 {len(filtered)} / 共 {len(users)} 人 · 有等级 {with_level}{mode_note}{warning_note}{stale_note}"
         )
         self.profile_status.configure(text="选择左边一个人查看详情")
+        self.profile_cache_label.configure(text="")
         for tree in (self.profile_forum_tree, self.profile_post_tree):
             for item in tree.get_children():
                 tree.delete(item)
@@ -6548,6 +6577,7 @@ class App:
             self._render_profile(user, cached)
             return
         self.profile_status.configure(text=f"正在查询 {display_text(user['name'])} …")
+        self.profile_cache_label.configure(text="")
         for tree in (self.profile_forum_tree, self.profile_post_tree):
             for item in tree.get_children():
                 tree.delete(item)
@@ -7023,6 +7053,7 @@ class App:
         )
 
     def _render_profile(self, user, profile) -> None:
+        self.profile_cache_label.configure(text="")
         forum_tree = self.profile_forum_tree
         post_tree = self.profile_post_tree
         for tree in (forum_tree, post_tree):
@@ -7196,6 +7227,7 @@ class App:
         if note:
             status += " · " + note
         self.profile_status.configure(text=status)
+        self.profile_cache_label.configure(text=self._cache_age_note(profile))
 
     def _comment_depth_value(self) -> int:
         text = self.comment_depth_var.get()
