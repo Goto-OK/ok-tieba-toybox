@@ -900,9 +900,10 @@ class App:
             side="left"
         )
         self.post_count_var = tk.StringVar(value="50")
-        ttk.Spinbox(bar, from_=5, to=1000, increment=10, width=6, textvariable=self.post_count_var).pack(
-            side="left"
+        self.post_count_box = ttk.Spinbox(
+            bar, from_=5, to=1000, increment=10, width=6, textvariable=self.post_count_var
         )
+        self.post_count_box.pack(side="left")
         self.post_date_mode_var = tk.StringVar(value="近期")
         self.post_date_mode_box = ttk.Combobox(
             bar, values=("近期", "指定日期"), textvariable=self.post_date_mode_var, width=9, state="readonly"
@@ -918,13 +919,14 @@ class App:
             self.post_date_row, text="  时间偏向：", bg="#ffffff", fg="#475569", font=("Microsoft YaHei UI", 9)
         ).pack(side="left")
         self.post_prefer_var = tk.StringVar(value="优先最近")
-        ttk.Combobox(
+        self.post_prefer_box = ttk.Combobox(
             self.post_date_row,
             values=("优先最近", "优先最早"),
             textvariable=self.post_prefer_var,
             width=12,
             state="readonly",
-        ).pack(side="left")
+        )
+        self.post_prefer_box.pack(side="left")
         for _var in (*self.post_start_parts, *self.post_end_parts):
             _var.trace_add("write", lambda *_: self._on_post_parts_changed())
         self.post_date_mode_var.trace_add("write", lambda *_: self._on_post_date_changed())
@@ -935,7 +937,7 @@ class App:
         )
         self.people_range_var = tk.StringVar(value="全部帖子")
         self.people_range_box = ttk.Combobox(
-            bar, textvariable=self.people_range_var, width=24, state="readonly"
+            bar, textvariable=self.people_range_var, width=56, state="readonly"
         )
         self.people_range_box.pack(side="left")
         self.people_range_box.bind("<<ComboboxSelected>>", lambda _event: self._on_people_range_changed())
@@ -958,12 +960,19 @@ class App:
         self.resume_batch_btn = ttk.Button(
             bar2, text="继续未完成", command=self._resume_batch, width=12, state="disabled"
         )
-        self.resume_batch_btn.pack(side="left", padx=(6, 0))
+        self.remark_btn = ttk.Button(
+            bar2, text="重新标记（本地）", command=self._remark_local_marks, width=14
+        )
+        self.remark_btn.pack(side="left", padx=(6, 0))
         self._batch_running = False
         self._batch_plan: List[Dict[str, Any]] = []
         self._batch_pending: List[Dict[str, Any]] = []
         self._batch_cancel = False
-        ttk.Button(bar2, text="刷新", command=self._refresh_people, width=6).pack(side="left", padx=(6, 0))
+        self._marks_stale = False
+        self.refresh_people_btn = ttk.Button(
+            bar2, text="刷新列表", command=self._refresh_people, width=8
+        )
+        self.refresh_people_btn.pack(side="left", padx=(6, 0))
         ttk.Button(bar2, text="打开主页", command=self._open_current_profile, width=10).pack(
             side="left", padx=(6, 0)
         )
@@ -976,13 +985,14 @@ class App:
             side="left"
         )
         self.people_field_var = tk.StringVar(value="全部字段")
-        ttk.Combobox(
+        self.people_field_box = ttk.Combobox(
             filter_bar,
             values=FIELD_OPTIONS,
             textvariable=self.people_field_var,
             width=9,
             state="readonly",
-        ).pack(side="left")
+        )
+        self.people_field_box.pack(side="left")
         self.people_keyword_var = tk.StringVar()
         self.people_keyword_entry = ttk.Entry(filter_bar, textvariable=self.people_keyword_var, width=16)
         self.people_keyword_entry.pack(side="left", padx=(4, 0))
@@ -997,9 +1007,11 @@ class App:
         self.people_custom_frame = tk.Frame(filter_bar, bg="#ffffff")
         self.people_min_var = tk.StringVar()
         self.people_max_var = tk.StringVar()
-        ttk.Entry(self.people_custom_frame, textvariable=self.people_min_var, width=4).pack(side="left")
+        self.people_min_entry = ttk.Entry(self.people_custom_frame, textvariable=self.people_min_var, width=4)
+        self.people_min_entry.pack(side="left")
         tk.Label(self.people_custom_frame, text="~", bg="#ffffff", fg="#475569").pack(side="left")
-        ttk.Entry(self.people_custom_frame, textvariable=self.people_max_var, width=4).pack(side="left")
+        self.people_max_entry = ttk.Entry(self.people_custom_frame, textvariable=self.people_max_var, width=4)
+        self.people_max_entry.pack(side="left")
         tk.Label(filter_bar, text=" 标记 ", bg="#ffffff", fg="#475569", font=("Microsoft YaHei UI", 9)).pack(
             side="left"
         )
@@ -1008,9 +1020,10 @@ class App:
             filter_bar, values=MARK_OPTIONS, textvariable=self.people_mark_var, width=6, state="disabled"
         )
         self.people_mark_box.pack(side="left")
-        ttk.Button(filter_bar, text="清除筛选", command=self._reset_people_filters, width=10).pack(
-            side="left", padx=(8, 0)
+        self.people_reset_btn = ttk.Button(
+            filter_bar, text="清除筛选", command=self._reset_people_filters, width=10
         )
+        self.people_reset_btn.pack(side="left", padx=(8, 0))
 
         for var in (
             self.people_field_var,
@@ -1329,12 +1342,16 @@ class App:
             pass
 
     def _on_post_parts_changed(self, *_args) -> None:
+        if getattr(self, "_batch_running", False):
+            return
         self.post_start_var.set(self._group_date(self.post_start_parts))
         self.post_end_var.set(self._group_date(self.post_end_parts))
         if self.post_date_mode_var.get() == "指定日期":
             self._on_post_date_changed()
 
     def _on_post_date_changed(self) -> None:
+        if getattr(self, "_batch_running", False):
+            return
         self._toggle_date_entries()
         if self.post_date_mode_var.get() == "指定日期":
             self.post_start_var.set(self._group_date(self.post_start_parts))
@@ -1625,6 +1642,8 @@ class App:
             self._copy_text(str(user.get(key) or ""))
 
     def _person_menu(self, event) -> None:
+        if getattr(self, "_batch_running", False):
+            return
         if self.people_tree.identify_region(event.x, event.y) == "heading":
             column = self.people_tree.identify_column(event.x)
             try:
@@ -2298,6 +2317,8 @@ class App:
         self.post_nb.select(self.tab_people)
 
     def _sort_people(self, column: str) -> None:
+        if getattr(self, "_batch_running", False):
+            return
         if column not in ("mark", "level", "floor", "comment", "total"):
             return
         current, reverse = self._people_sort
@@ -2307,7 +2328,9 @@ class App:
 
     def _people_column_value(self, user, column: str) -> str:
         if column == "mark":
-            level, _bar = classify(user.get("bars") or [], self.blacklist)
+            level = str(user.get("mark_level") or "")
+            if not level:
+                level, _bar = classify(user.get("bars") or [], self.blacklist)
             return LEVEL_LABEL.get(level, "") if self._risk_enabled() else ""
         if column == "name":
             return self._display_name(user)
@@ -2318,6 +2341,8 @@ class App:
         return ""
 
     def _filter_people_column(self, column: str, anchor: Optional[tuple] = None) -> None:
+        if getattr(self, "_batch_running", False):
+            return
         values = sorted({self._people_column_value(user, column) for user in self.people_users})
         chosen = self._filter_text_dialog(
             {"mark": "标记", "name": "昵称", "username": "用户名", "uid": "用户ID"}.get(column, column),
@@ -2335,6 +2360,8 @@ class App:
         self._refresh_people()
 
     def _on_people_filter_changed(self) -> None:
+        if getattr(self, "_batch_running", False):
+            return
         self._people_page = 0
         if getattr(self, "_filter_resetting", False):
             return
@@ -2345,6 +2372,8 @@ class App:
         self._refresh_people()
 
     def _reset_people_filters(self) -> None:
+        if getattr(self, "_batch_running", False):
+            return
         self._filter_resetting = True
         try:
             self.people_keyword_var.set("")
@@ -2379,6 +2408,38 @@ class App:
                 return [thread]
         return list(self.last_threads)
 
+    def _person_mark_cell(self, user) -> str:
+        if not self._risk_enabled():
+            return ""
+        level = str(user.get("mark_level") or "")
+        if not level:
+            return "⚪"
+        label = LEVEL_LABEL.get(level, "")
+        suffix = " ⚠" if user.get("mark_hidden") else ""
+        return f"{marker(level)} {label}{suffix}"
+
+    def _set_person_mark_row(self, user) -> None:
+        iid = user.get("_iid")
+        if iid is None:
+            return
+        try:
+            values = list(self.people_tree.item(iid, "values"))
+            if not values:
+                return
+            values[0] = self._person_mark_cell(user)
+            level = str(user.get("level") or "")
+            if level:
+                values[4] = f"Lv.{level}"
+            self.people_tree.item(
+                iid,
+                values=values,
+                tags=(str(user.get("mark_level") or ""),)
+                if user.get("mark_level") and self.settings.get("color_people", True)
+                else (),
+            )
+        except tk.TclError:
+            pass
+
     def _refresh_people(self) -> None:
         values = ["全部帖子"]
         for index, thread in enumerate(self.last_threads, start=1):
@@ -2387,7 +2448,21 @@ class App:
             self.people_range_box.configure(values=values)
             if self.people_range_var.get() not in values:
                 self.people_range_var.set("全部帖子")
+        previous = {
+            str(user.get("uid") or user.get("username") or user.get("name") or ""): user
+            for user in getattr(self, "people_users", [])
+        }
         users = self._aggregate_users(self._people_threads())
+        for user in users:
+            key = str(user.get("uid") or user.get("username") or user.get("name") or "")
+            old = previous.get(key)
+            if not old:
+                continue
+            for field in ("mark_level", "mark_bar", "mark_hidden", "mark_at", "mark_error"):
+                if field in old:
+                    user[field] = old[field]
+            if not user.get("level") and old.get("level"):
+                user["level"] = old["level"]
         self.people_users = users
         self._people_index = {id(user): index for index, user in enumerate(users)}
         for index, user in enumerate(users):
@@ -2432,7 +2507,7 @@ class App:
                 "end",
                 iid=str(index),
                 values=(
-                    "⚪" if self._risk_enabled() else "",
+                    self._person_mark_cell(user),
                     self._display_name(user),
                     user["username"] or "-",
                     user["uid"] or "-",
@@ -2452,8 +2527,9 @@ class App:
             mode_note = " · 红绿灯：仅发言" if self.mode_var.get() == "guest" else " · 红绿灯：发言+关注"
         warning_count = sum(len(thread.warnings) for thread in self.last_threads)
         warning_note = f" · ⚠ {warning_count} 条数据警告" if warning_count else ""
+        stale_note = " · 标记规则已变更，可点重新标记（本地）" if getattr(self, "_marks_stale", False) else ""
         self.people_hint.configure(
-            text=f"v{VERSION} · 当前 {len(filtered)} / 共 {len(users)} 人 · 有等级 {with_level}{mode_note}{warning_note}"
+            text=f"v{VERSION} · 当前 {len(filtered)} / 共 {len(users)} 人 · 有等级 {with_level}{mode_note}{warning_note}{stale_note}"
         )
         self.profile_status.configure(text="选择左边一个人查看详情")
         for tree in (self.profile_forum_tree, self.profile_post_tree):
@@ -2488,6 +2564,8 @@ class App:
             pass
 
     def _on_people_range_changed(self) -> None:
+        if getattr(self, "_batch_running", False):
+            return
         self._people_page = 0
         self._refresh_people()
 
@@ -2527,9 +2605,11 @@ class App:
                 self.people_tree.configure(displaycolumns=display)
             except tk.TclError:
                 pass
-        if hasattr(self, "batch_btn"):
+        if hasattr(self, "batch_btn") and not getattr(self, "_batch_running", False):
             self.batch_btn.configure(state="normal" if enabled else "disabled", text="一键红绿灯")
-        if hasattr(self, "include_follows_check"):
+        if hasattr(self, "remark_btn") and not getattr(self, "_batch_running", False):
+            self.remark_btn.state(["!disabled"] if enabled else ["disabled"])
+        if hasattr(self, "include_follows_check") and not getattr(self, "_batch_running", False):
             allow_follow = enabled and bool(self.settings.get("follow_enhance"))
             self.include_follows_check.configure(state="normal" if allow_follow else "disabled")
             if not allow_follow:
@@ -2540,6 +2620,8 @@ class App:
                 self.people_mark_var.set("全部")
 
     def _on_include_follows_changed(self) -> None:
+        if getattr(self, "_batch_running", False):
+            return
         if self.include_follows_var.get() and not self.settings.get("follow_enhance"):
             self.include_follows_var.set(False)
 
@@ -3760,6 +3842,7 @@ class App:
         post_cache().reopen()
         clear_cookie()
         save_blacklist({"safe": [], "warn": [], "ban": []})
+        self._on_mark_rules_changed()
         save_settings({})
         self.settings = load_settings()
         post_cache().set_limit_mb(int(self.settings.get("post_cache_limit_mb", DEFAULT_LIMIT_MB)))
@@ -4083,6 +4166,7 @@ class App:
         save_settings(self.settings)
         self.blacklist = data["blacklist"]
         save_blacklist(self.blacklist)
+        self._on_mark_rules_changed()
         follow = bool(self.settings.get("follow_enhance", False))
         if follow and not parse_cookie_input(self.cookie_var.get()).get("BDUSS"):
             follow = False
@@ -4104,6 +4188,13 @@ class App:
         self._append_log("配置已恢复。", "ok")
         self.status_var.set("配置已恢复")
 
+    def _on_mark_rules_changed(self) -> None:
+        self._marks_stale = True
+        if hasattr(self, "people_hint"):
+            self.people_hint.configure(
+                text="标记规则已变更，可点「重新标记（本地）」；不会自动联网"
+            )
+
     def _save_blacklist_from_tab(self) -> None:
         data = {
             key: [line.strip() for line in editor.get("1.0", "end").splitlines() if line.strip()]
@@ -4112,6 +4203,7 @@ class App:
         if save_blacklist(data):
             self.blacklist = data
             self.settings_hint.configure(text="已保存")
+            self._on_mark_rules_changed()
             self._append_log("本地标记已保存。", "ok")
         else:
             self.settings_hint.configure(text="保存失败")
@@ -4177,6 +4269,7 @@ class App:
                 editor.delete("1.0", "end")
                 editor.insert("1.0", "\n".join(data[key]))
             self.settings_hint.configure(text="已导入")
+            self._on_mark_rules_changed()
             self._append_log(f"本地标记已导入：{path}", "ok")
         else:
             messagebox.showerror("导入失败", "保存失败，请检查配置目录权限。", parent=self.root)
@@ -5571,6 +5664,34 @@ class App:
             return self._group_date(self.post_start_parts), self._group_date(self.post_end_parts)
         return "", ""
 
+    def _set_people_controls_enabled(self, enabled: bool) -> None:
+        readonly = "readonly" if enabled else "disabled"
+        disabled = "normal" if enabled else "disabled"
+        for name, state in (
+            ("post_count_box", "normal" if enabled else "disabled"),
+            ("post_date_mode_box", readonly),
+            ("post_prefer_box", readonly),
+            ("people_range_box", readonly),
+            ("people_field_box", readonly),
+            ("people_keyword_entry", "normal" if enabled else "disabled"),
+            ("people_level_box", readonly),
+            ("people_min_entry", "normal" if enabled else "disabled"),
+            ("people_max_entry", "normal" if enabled else "disabled"),
+            ("people_reset_btn", disabled),
+        ):
+            widget = getattr(self, name, None)
+            if widget is not None:
+                try:
+                    widget.configure(state=state)
+                except tk.TclError:
+                    pass
+        mark_box = getattr(self, "people_mark_box", None)
+        if mark_box is not None:
+            try:
+                mark_box.configure(state=readonly if self._risk_enabled() else "disabled")
+            except tk.TclError:
+                pass
+
     def _batch_refresh_marks(self, resume_users=None) -> None:
         if getattr(self, "_batch_running", False):
             self._batch_cancel = True
@@ -5596,7 +5717,13 @@ class App:
         self._batch_total = len(users)
         self._batch_plan = list(users)
         self._batch_pending = []
+        self._marks_stale = False
+        self.resume_batch_btn.pack_forget()
         self.resume_batch_btn.configure(state="disabled", text="继续未完成")
+        self.remark_btn.state(["disabled"])
+        self.refresh_people_btn.state(["disabled"])
+        self.include_follows_check.state(["disabled"])
+        self._set_people_controls_enabled(False)
         self.batch_btn.configure(text="停止查询")
         self.people_hint.configure(text=f"批量查询 0/{self._batch_total}…")
         count = self._post_count()
@@ -5718,25 +5845,54 @@ class App:
         if level and not user.get("level"):
             user["level"] = level
         hit_level = ""
+        hit_bar = ""
         if profile.get("ok"):
-            hit_level, _ = self._profile_hit(profile, user.get("bars") or [self._user_bar(user)])
-        label = LEVEL_LABEL.get(hit_level, "")
+            hit_level, hit_bar = self._profile_hit(profile, user.get("bars") or [self._user_bar(user)])
         hidden = self._hidden_follows(profile) if profile.get("ok") else False
-        try:
-            values = list(self.people_tree.item(iid, "values"))
-            if hit_level:
-                values[0] = f"{marker(hit_level)} {label}" + (" ⚠" if hidden else "")
-            else:
-                values[0] = "⚪"
-            if level:
-                values[4] = f"Lv.{level}"
-            self.people_tree.item(
-                iid,
-                values=values,
-                tags=(hit_level,) if hit_level and self.settings.get("color_people", True) else (),
-            )
-        except tk.TclError:
-            pass
+        user["mark_level"] = hit_level
+        user["mark_bar"] = hit_bar or ""
+        user["mark_hidden"] = bool(hidden)
+        user["mark_at"] = time.time()
+        user["mark_error"] = str(profile.get("error") or "")
+        self._set_person_mark_row(user)
+
+    def _remark_local_marks(self) -> None:
+        if getattr(self, "_batch_running", False):
+            return
+        if not self._risk_enabled():
+            return
+        users = self._visible_people()
+        if not users:
+            self.people_hint.configure(text="当前筛选没有用户")
+            return
+        count = self._post_count()
+        start_date, end_date = self._date_params()
+        prefer = "start" if "最早" in self.post_prefer_var.get() else "end"
+        marked = 0
+        missing = 0
+        for user in users:
+            uid = user.get("uid") or ""
+            posts = cached_user_posts(uid, count, start_date, end_date, prefer) if uid else None
+            if posts is None:
+                missing += 1
+                continue
+            profile = {
+                "ok": True,
+                "recent_posts": posts,
+                "bar_level": str(user.get("level") or ""),
+                "follow_loaded": False,
+                "followed_forums": [],
+                "hidden_forums": [],
+                "post_sources": {"cached": True},
+            }
+            self._apply_batch_mark(user, profile)
+            marked += 1
+        self._marks_stale = missing > 0
+        self._refresh_people()
+        note = f"重新标记完成 {marked}/{len(users)} 人"
+        if missing:
+            note += f" · 缓存不足 {missing} 人（未联网）"
+        self.people_hint.configure(text=note)
 
     def _reload_profile(self) -> None:
         user = self._selected_person() if hasattr(self, "people_tree") else None
@@ -6725,6 +6881,12 @@ class App:
             self._batch_cancel = False
             self.status_var.set("准备就绪")
             self.batch_btn.configure(text="一键红绿灯")
+            self._set_people_controls_enabled(True)
+            self.remark_btn.state(["!disabled"])
+            self.refresh_people_btn.state(["!disabled"])
+            self.include_follows_check.configure(
+                state="normal" if self.settings.get("follow_enhance") and self._risk_enabled() else "disabled"
+            )
             done = getattr(self, "_batch_done", 0)
             total = getattr(self, "_batch_total", 0)
             if cancelled and done < total:
@@ -6732,9 +6894,11 @@ class App:
                 self.resume_batch_btn.configure(
                     state="normal", text=f"继续未完成（{done}/{total}）"
                 )
+                self.resume_batch_btn.pack(side="left", padx=(6, 0), after=self.batch_btn)
             else:
                 self._batch_pending = []
                 self.resume_batch_btn.configure(state="disabled", text="继续未完成")
+                self.resume_batch_btn.pack_forget()
             self.people_hint.configure(text=f"已刷新 {done}/{total} 人的红绿灯")
             self._append_log(
                 ("已停止" if cancelled else "完成") + f"一键红绿灯：刷新 {done} 人。",
