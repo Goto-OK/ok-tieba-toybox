@@ -116,13 +116,15 @@ Android 核心同步通过
 - 运行中隐藏继续未完成、禁用包含关注/重新标记/刷新列表/筛选；
 - 停止后才显示「继续未完成」，完成后隐藏；
 - 楼中楼解析保留 `user_id/user_name/portrait/showname`；
+- 抓取完成后自动补全缺失 uid，写回楼层/楼中楼；
 - 无 uid/username 时按昵称、portrait 兜底；
 - 昵称搜索 exactMatch/fuzzyMatch 兼容 dict/list；
 - portrait 通过 profile protobuf 反查 uid，无需 Cookie；
 - 无 BDUSS 时展示 profile 片段关注，并标明不完整；
 - 批量状态显示成功/跳过/失败；
 - 顶部和表头标记筛选统一使用 `mark_level`；
-- 主窗口默认 1400×900，启动居中；旧小尺寸回退默认。
+- 主窗口默认 1400×900，启动居中；旧小尺寸回退默认；
+- 「每次询问」旧帖处理已实现：移除 / 保留 / 取消。
 
 ## 6. 已知限制
 

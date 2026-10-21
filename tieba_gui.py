@@ -2419,6 +2419,14 @@ class App:
                 return [thread]
         return list(self.last_threads)
 
+    def _person_uid_text(self, user) -> str:
+        uid = str(user.get("uid") or "")
+        if uid:
+            return uid
+        if user.get("username") or user.get("portrait"):
+            return "待补全"
+        return "-"
+
     def _person_mark_cell(self, user) -> str:
         if not self._risk_enabled():
             return ""
@@ -2439,7 +2447,7 @@ class App:
                 return
             values[0] = self._person_mark_cell(user)
             values[2] = str(user.get("username") or "-")
-            values[3] = str(user.get("uid") or "-")
+            values[3] = self._person_uid_text(user)
             level = str(user.get("level") or "")
             if level:
                 values[4] = f"Lv.{level}"
@@ -2523,7 +2531,7 @@ class App:
                     self._person_mark_cell(user),
                     self._display_name(user),
                     user["username"] or "-",
-                    user["uid"] or "-",
+                    self._person_uid_text(user),
                     f"Lv.{user['level']}" if user["level"] else "-",
                     user["floor"],
                     user["comment"],
@@ -6670,9 +6678,22 @@ class App:
         existing = {thread.meta.tid for thread in self.last_threads}
         current = {extract_tid(url) for url in urls}
         removed = existing - current
-        if removed and self.settings.get("removed_thread_action") == "remove":
+        removed_action = self.settings.get("removed_thread_action", "keep")
+        if removed and removed_action == "ask":
+            choice = self._ask_choice(
+                "旧帖处理",
+                f"有 {len(removed)} 个已抓过的帖子不在本次输入框中。\n"
+                "要移除这些旧结果，还是保留？",
+                [("移除旧结果", "remove"), ("保留旧结果", "keep"), ("取消", None)],
+                default=0,
+            )
+            if choice is None:
+                return
+            removed_action = choice
+        if removed and removed_action == "remove":
             self.last_threads = [thread for thread in self.last_threads if thread.meta.tid not in removed]
             existing = {thread.meta.tid for thread in self.last_threads}
+            self._append_log(f"已移除 {len(removed)} 个旧帖结果。", "muted")
         if existing and not self.settings.get("auto_refresh_old", False):
             fresh = [url for url in urls if extract_tid(url) not in existing]
             if not fresh:
@@ -6731,6 +6752,7 @@ class App:
             comment_depth=self._comment_depth_value(),
             comment_concurrency=max(1, min(3, int(self.comment_concurrency_var.get() or 1))),
             enrich_levels=True,
+            enrich_identities=True,
             pb_levels=True,
             verbose=True,
             log=self._log_from_thread,

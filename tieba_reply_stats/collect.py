@@ -33,6 +33,7 @@ class CollectOptions:
     comment_concurrency: int = 1  # 1~3
     max_comment_pages: int = 30  # 单层楼中楼最多翻多少页（防止异常死循环）
     enrich_levels: bool = False  # 为只回楼中楼、没发过楼层的用户补全等级（较慢）
+    enrich_identities: bool = False  # 抓取后按 username/portrait 补全缺失 uid（GUI 开启）
     pb_levels: bool = True  # 用新版网页接口补全楼层/楼中楼等级（较快，默认开）
     verbose: bool = True
     log: Optional[Callable[[str], None]] = None  # 自定义输出（GUI 用）
@@ -197,6 +198,9 @@ def collect_thread(url: str, fetcher: Fetcher, options: CollectOptions) -> Threa
     else:
         log("  已跳过楼中楼（--no-comments）")
         thread.warnings.append("已按 --no-comments 跳过楼中楼")
+
+    if options.enrich_identities:
+        enrich_identities(thread, fetcher, options, log)
 
     if options.pb_levels:
         from .pbapi import fill_thread_levels
@@ -465,6 +469,90 @@ def enrich_user_levels(thread: ThreadData, fetcher: Fetcher, options: CollectOpt
             log(f"    已补全 {done}/{len(todo)}，当前 {item['name']} → Lv.{level}")
 
     log(f"  等级补全完成：{done} 位用户")
+
+
+def enrich_identities(thread: ThreadData, fetcher: Fetcher, options: CollectOptions, log) -> None:
+    """抓取后补全楼中楼/楼层缺失的 uid，写回原始对象。"""
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
+    from . import profile_pb
+    from .profile import resolve_user
+
+    def key_of(obj) -> str:
+        if obj.author_id:
+            return ""
+        if obj.author_name:
+            return f"un:{obj.author_name}"
+        if obj.portrait:
+            return f"pt:{obj.portrait.split('?')[0]}"
+        return f"nm:{obj.author}"
+
+    todo: Dict[str, Dict[str, str]] = {}
+    for obj in list(thread.floors) + list(thread.comments):
+        key = key_of(obj)
+        if key:
+            todo.setdefault(
+                key,
+                {
+                    "key": key,
+                    "name": obj.author,
+                    "username": obj.author_name,
+                    "portrait": obj.portrait,
+                },
+            )
+    if not todo:
+        log("  身份补全：所有人都已有 uid")
+        return
+    log(f"  身份补全：{len(todo)} 位用户需要解析（并发 3）…")
+
+    def resolve(item):
+        name = item["name"]
+        username = item["username"]
+        portrait = item["portrait"]
+        if username:
+            info = resolve_user(fetcher.clone(), username, "用户名")
+            if info.get("uid"):
+                return item["key"], info
+        if portrait:
+            pb = profile_pb.fetch_profile(fetcher.clone(), "", portrait)
+            if pb.get("uid"):
+                return item["key"], {
+                    "uid": str(pb.get("uid")),
+                    "username": pb.get("username") or "",
+                    "portrait": pb.get("portrait") or portrait,
+                }
+        if name:
+            info = resolve_user(fetcher.clone(), name, "昵称")
+            if info.get("uid"):
+                return item["key"], info
+        return item["key"], {}
+
+    resolved: Dict[str, Dict] = {}
+    with ThreadPoolExecutor(max_workers=3) as pool:
+        futures = {pool.submit(resolve, item): item for item in todo.values()}
+        for future in as_completed(futures):
+            _check_stop(options)
+            try:
+                key, info = future.result()
+            except Exception as error:  # noqa: BLE001
+                if options.verbose:
+                    log(f"    ! 身份解析失败：{error}")
+                continue
+            if info.get("uid"):
+                resolved[key] = info
+
+    for obj in list(thread.floors) + list(thread.comments):
+        key = key_of(obj)
+        if not key or key not in resolved:
+            continue
+        info = resolved[key]
+        obj.author_id = str(info.get("uid") or obj.author_id)
+        if not obj.author_name:
+            obj.author_name = str(info.get("username") or "")
+        if not obj.portrait:
+            obj.portrait = str(info.get("portrait") or "")
+
+    log(f"  身份补全完成：{len(resolved)}/{len(todo)} 位用户")
 
 
 def _check_stop(options: CollectOptions) -> None:
