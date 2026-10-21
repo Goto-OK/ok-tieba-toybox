@@ -209,9 +209,18 @@ class App:
         self._apply_table_density()
         self.notebook.bind("<<NotebookTabChanged>>", self._on_main_tab_changed)
         saved_geometry = str(self.settings.get("window_geometry") or "")
-        if saved_geometry:
+        match = re.match(r"(\d+)x(\d+)", saved_geometry)
+        if match:
+            saved_w, saved_h = int(match.group(1)), int(match.group(2))
+            # 旧版本可能记住了窄窗口；小于新默认值时恢复默认尺寸。
+            screen_w = self.root.winfo_screenwidth()
+            screen_h = self.root.winfo_screenheight()
+            width = max(1300, min(saved_w, screen_w - 100)) if saved_w >= 1300 else min(1400, screen_w - 100)
+            height = max(820, min(saved_h, screen_h - 120)) if saved_h >= 820 else min(900, screen_h - 120)
+            x = max(0, (screen_w - width) // 2)
+            y = max(0, (screen_h - height) // 2)
             try:
-                self.root.geometry(saved_geometry)
+                self.root.geometry(f"{width}x{height}+{x}+{y}")
             except tk.TclError:
                 pass
         self._set_output(default_output_path())
@@ -247,15 +256,17 @@ class App:
         except (tk.TclError, ValueError):
             scale = 1.0
         if scale >= 1.45:
-            base_w, base_h = 1240, 860
+            base_w, base_h = 1500, 960
         elif scale >= 1.2:
-            base_w, base_h = 1100, 840
+            base_w, base_h = 1440, 920
         else:
-            base_w, base_h = 980, 820
-        width = max(900, min(base_w, screen_w - 80))
-        height = max(720, min(base_h, screen_h - 100))
-        self.root.geometry(f"{width}x{height}")
-        self.root.minsize(min(900 if scale >= 1.2 else 840, screen_w - 40), min(680, screen_h - 80))
+            base_w, base_h = 1400, 900
+        width = max(1100, min(base_w, screen_w - 100))
+        height = max(780, min(base_h, screen_h - 120))
+        x = max(0, (screen_w - width) // 2)
+        y = max(0, (screen_h - height) // 2)
+        self.root.geometry(f"{width}x{height}+{x}+{y}")
+        self.root.minsize(min(1100, screen_w - 40), min(760, screen_h - 80))
         self.root.configure(bg="#eef1f5")
 
         style = ttk.Style(self.root)
@@ -6087,7 +6098,12 @@ class App:
             if not name:
                 continue
             item = dict(forum)
-            item["source"] = "公开" if forums else "隐藏恢复"
+            if forums:
+                item["source"] = "公开"
+            elif "BDUSS" in str(profile.get("follow_error") or ""):
+                item["source"] = "profile片段"
+            else:
+                item["source"] = "隐藏恢复"
             merged[name] = item
         if not forums:
             for forum in profile.get("like_forum") or []:
@@ -6128,7 +6144,10 @@ class App:
             return f"共 {len(forums)} 个（完整）"
         if hidden or profile.get("like_forum"):
             count = len(self._merge_forum_lists(profile, bar_name, bar_level))
-            note = f"对方隐藏了完整关注列表，已从等级头衔/精选恢复 {count} 个，可能不全"
+            if "BDUSS" in str(profile.get("follow_error") or ""):
+                note = f"未登录，仅从 profile 片段补 {count} 个关注，不完整"
+            else:
+                note = f"对方隐藏了完整关注列表，已从等级头衔/精选恢复 {count} 个，可能不全"
             probed = len(profile.get("probed_forums") or [])
             if probed:
                 note += f"；候选确认 {probed} 个"
