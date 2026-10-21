@@ -2464,8 +2464,15 @@ class App:
             info += f" | 发帖 {profile['post_num']}"
         if self.mode_var.get() == "guest":
             info += " | 免登录：关注列表可能不完整"
-        hit_level, hit_bar = self._profile_hit(profile) if posts else ("", "")
-        hidden_follows = self._hidden_follows(profile) if self._risk_enabled() else False
+        participant = self._participant_for_lookup(profile)
+        if participant and participant.get("mark_level"):
+            # 查用户与参与者统一：同一个人直接复用左侧的批量标记。
+            hit_level = str(participant.get("mark_level") or "")
+            hit_bar = str(participant.get("mark_bar") or "")
+            hidden_follows = bool(participant.get("mark_hidden")) and self._risk_enabled()
+        else:
+            hit_level, hit_bar = self._profile_hit(profile) if posts else ("", "")
+            hidden_follows = self._hidden_follows(profile) if self._risk_enabled() else False
         risk_reason = "关注列表隐藏" if self.mode_var.get() != "guest" else "关注列表未加载"
         label = LEVEL_LABEL.get(hit_level, "")
         for key, (traffic_label, traffic_color) in getattr(self, "lookup_traffic_labels", {}).items():
@@ -6401,6 +6408,19 @@ class App:
         if profile.get("follow_loaded") and not self._hidden_follows(profile) and not profile.get("follow_error"):
             return False
         return True
+
+    def _participant_for_lookup(self, profile):
+        uid = str(profile.get("user_id") or "")
+        username = str(profile.get("username") or "")
+        nickname = str(profile.get("nickname") or "")
+        for user in getattr(self, "people_users", []):
+            if uid and str(user.get("uid") or "") == uid:
+                return user
+            if username and str(user.get("username") or "") == username:
+                return user
+            if nickname and str(user.get("name") or "") == nickname:
+                return user
+        return None
 
     def _profile_hit(self, profile, extra_bars=None):
         if not self._risk_enabled():
