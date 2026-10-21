@@ -54,7 +54,8 @@ def _level_match(user: Dict, level: str, min_level: Optional[int], max_level: Op
 def _mark_match(user: Dict, mark: str) -> bool:
     if mark == "全部":
         return True
-    hit = str(user.get("hit") or "")
+    # 当前显示标记优先；兼容旧数据的 hit 字段。
+    hit = str(user.get("mark_level") or user.get("hit") or "")
     mapping = {"警告": "ban", "可疑": "warn", "安全": "safe", "白": "", "红": "ban", "黄": "warn", "绿": "safe"}
     return hit == mapping.get(mark, "")
 

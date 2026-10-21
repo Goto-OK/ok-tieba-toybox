@@ -2427,6 +2427,8 @@ class App:
             if not values:
                 return
             values[0] = self._person_mark_cell(user)
+            values[2] = str(user.get("username") or "-")
+            values[3] = str(user.get("uid") or "-")
             level = str(user.get("level") or "")
             if level:
                 values[4] = f"Lv.{level}"
@@ -2458,7 +2460,7 @@ class App:
             old = previous.get(key)
             if not old:
                 continue
-            for field in ("mark_level", "mark_bar", "mark_hidden", "mark_at", "mark_error"):
+            for field in ("mark_level", "hit", "mark_bar", "mark_hidden", "mark_at", "mark_error"):
                 if field in old:
                     user[field] = old[field]
             if not user.get("level") and old.get("level"):
@@ -5718,6 +5720,9 @@ class App:
         self._batch_plan = list(users)
         self._batch_pending = []
         self._marks_stale = False
+        self._batch_success = 0
+        self._batch_skip = 0
+        self._batch_fail = 0
         self.resume_batch_btn.pack_forget()
         self.resume_batch_btn.configure(state="disabled", text="继续未完成")
         self.remark_btn.state(["disabled"])
@@ -5736,10 +5741,11 @@ class App:
         concurrency = 1 if include_follows else max(1, min(3, int(self.settings.get("batch_concurrency", 1) or 1)))
 
         def resolve(user):
-            if not (user.get("uid") or user.get("username")):
-                return {"ok": False, "error": "缺少用户ID"}
+            name = str(user.get("name") or "").strip()
+            if not (user.get("uid") or user.get("username")) and not name:
+                return {"ok": False, "skipped": True, "error": "缺少用户ID"}
             key = (
-                f"{user.get('uid') or user.get('username')}|{count}|{start_date}|{end_date}|"
+                f"{user.get('uid') or user.get('username') or name}|{count}|{start_date}|{end_date}|"
                 f"{prefer}|{int(include_follows)}|{int(guest)}"
             )
             hit = self._batch_cache.get(key)
@@ -5748,6 +5754,16 @@ class App:
             try:
                 fetcher = Fetcher(cookie=cookie, delay=0.3, verbose=False)
                 uid = user.get("uid") or ""
+                username = user.get("username") or ""
+                if not (uid or username):
+                    info = resolve_user(fetcher, name, "昵称")
+                    if not info.get("uid"):
+                        return {"ok": False, "skipped": True, "error": "昵称无法唯一定位"}
+                    uid = info.get("uid") or ""
+                    username = info.get("username") or ""
+                    user["uid"] = uid
+                    user["username"] = username
+                    user["portrait"] = info.get("portrait") or user.get("portrait") or ""
                 cached_posts = cached_user_posts(uid, count, start_date, end_date, prefer)
                 if cached_posts is not None and not include_follows:
                     return {
@@ -5850,6 +5866,7 @@ class App:
             hit_level, hit_bar = self._profile_hit(profile, user.get("bars") or [self._user_bar(user)])
         hidden = self._hidden_follows(profile) if profile.get("ok") else False
         user["mark_level"] = hit_level
+        user["hit"] = hit_level
         user["mark_bar"] = hit_bar or ""
         user["mark_hidden"] = bool(hidden)
         user["mark_at"] = time.time()
@@ -5928,11 +5945,29 @@ class App:
         def worker():
             try:
                 fetcher = Fetcher(cookie=self._request_cookie(), delay=0.3, verbose=False)
+                uid = str(user.get("uid") or "")
+                username = str(user.get("username") or "")
+                portrait = str(user.get("portrait") or "")
+                if not (uid or username) and user.get("name"):
+                    info = resolve_user(fetcher, str(user["name"]), "昵称")
+                    if not info.get("uid"):
+                        profile = {"ok": False, "error": "昵称无法唯一定位"}
+                        self._post(("profile_ready", key, user, profile))
+                        return
+                    uid = str(info.get("uid") or "")
+                    username = str(info.get("username") or "")
+                    portrait = str(info.get("portrait") or portrait)
+                    user["uid"] = uid
+                    user["username"] = username
+                    user["portrait"] = portrait
+                local_cached = cached_posts
+                if local_cached is None and uid:
+                    local_cached = cached_user_posts(uid, count, start_date, end_date, prefer)
                 profile = fetch_user_profile(
                     fetcher,
-                    user["uid"],
-                    user["username"],
-                    user["portrait"],
+                    uid,
+                    username,
+                    portrait,
                     bar_name,
                     count,
                     start_date,
@@ -5940,7 +5975,7 @@ class App:
                     prefer,
                     load_follow=force_follow or self.settings.get("follow_load_mode", "auto") == "auto",
                     topic_max_pages=topic_limit,
-                    cached_posts=cached_posts,
+                    cached_posts=local_cached,
                 )
             except Exception as error:  # noqa: BLE001
                 profile = {"ok": False, "error": str(error)}
@@ -6362,6 +6397,7 @@ class App:
 
         self._profile_user = user
         self._profile_data = profile
+        self._set_person_mark_row(user)
         posts = profile.get("recent_posts") or []
         combined = self._merge_forum_lists(profile, self._user_bar(user), level or "")
         self.profile_report_btn.pack(side="left", padx=(0, 6))
@@ -6872,9 +6908,20 @@ class App:
             key = user.get("uid") or f"name:{user['name']}"
             if profile and profile.get("ok"):
                 self._profile_cache[key] = profile
+                self._batch_success = getattr(self, "_batch_success", 0) + 1
+            elif profile and profile.get("skipped"):
+                self._batch_skip = getattr(self, "_batch_skip", 0) + 1
+                user["mark_error"] = str(profile.get("error") or "跳过")
+            else:
+                self._batch_fail = getattr(self, "_batch_fail", 0) + 1
             self._apply_batch_mark(user, profile)
             if getattr(self, "_batch_total", 0):
-                self.people_hint.configure(text=f"批量查询 {self._batch_done}/{self._batch_total}…")
+                live = f"批量查询 {self._batch_done}/{self._batch_total}…"
+                if getattr(self, "_batch_skip", 0):
+                    live += f" · 跳过 {self._batch_skip}"
+                if getattr(self, "_batch_fail", 0):
+                    live += f" · 失败 {self._batch_fail}"
+                self.people_hint.configure(text=live)
         elif kind == "batch_done":
             cancelled = getattr(self, "_batch_cancel", False)
             self._batch_running = False
@@ -6891,15 +6938,21 @@ class App:
             total = getattr(self, "_batch_total", 0)
             if cancelled and done < total:
                 self._batch_pending = list(self._batch_plan[done:])
+                resume_text = f"继续未完成（{done}/{total}）"
                 self.resume_batch_btn.configure(
-                    state="normal", text=f"继续未完成（{done}/{total}）"
+                    state="normal", text=resume_text, width=max(12, len(resume_text) + 8)
                 )
                 self.resume_batch_btn.pack(side="left", padx=(6, 0), after=self.batch_btn)
             else:
                 self._batch_pending = []
                 self.resume_batch_btn.configure(state="disabled", text="继续未完成")
                 self.resume_batch_btn.pack_forget()
-            self.people_hint.configure(text=f"已刷新 {done}/{total} 人的红绿灯")
+            summary = f"已刷新 {done}/{total} 人的红绿灯"
+            if getattr(self, "_batch_skip", 0):
+                summary += f" · 跳过 {self._batch_skip}（缺少身份/昵称不唯一）"
+            if getattr(self, "_batch_fail", 0):
+                summary += f" · 失败 {self._batch_fail}"
+            self.people_hint.configure(text=summary)
             self._append_log(
                 ("已停止" if cancelled else "完成") + f"一键红绿灯：刷新 {done} 人。",
                 "muted" if cancelled else "ok",

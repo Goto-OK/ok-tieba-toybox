@@ -33,6 +33,12 @@ def test_custom_level_range():
 def test_mark_filter():
     assert [u["uid"] for u in filter_users(USERS, mark="警告")] == ["1"]
     assert [u["uid"] for u in filter_users(USERS, mark="可疑")] == ["4"]
+
+
+def test_mark_filter_prefers_displayed_mark_level():
+    users = [{"uid": "1", "mark_level": "warn", "hit": "ban"}]
+    assert [u["uid"] for u in filter_users(users, mark="可疑")] == ["1"]
+    assert filter_users(users, mark="警告") == []
     assert [u["uid"] for u in filter_users(USERS, mark="安全")] == ["2"]
     assert [u["uid"] for u in filter_users(USERS, mark="白")] == ["3"]
 

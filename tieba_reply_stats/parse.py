@@ -571,7 +571,7 @@ def _comments_from_html(payload: str, floor: Floor) -> List[Comment]:
                 pid=pid,
                 author=author or "匿名用户",
                 author_name=username,
-                author_id="",
+                author_id=str(data.get("user_id") or data.get("uid") or ""),
                 portrait=str(data.get("portrait") or ""),
                 posted_at=parse_datetime(when),
                 content=strip_html(cleaned),
