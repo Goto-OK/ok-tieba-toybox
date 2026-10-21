@@ -172,8 +172,8 @@ Android 核心同步通过
 dist/贴吧回复统计_v1.7.0/
 ```
 
-- v1.7.0，2026-10-22 04:17 重建；
-- 图标以 `assets/app.svg` 为矢量母版，`scripts/make_icon.py` 生成多尺寸 ICO；小尺寸另行锐化；
+- v1.7.0，2026-10-22 04:22 重建；
+- 图标采用渐变蓝 B 方案；以 `assets/app.svg` 为矢量母版，`scripts/make_icon.py` 生成多尺寸 ICO；小尺寸另行锐化；
 - `--selftest` 通过；
 - 版本信息 1.7.0；
 - 含 `使用说明.txt`、`THIRD_PARTY_NOTICES.md`；

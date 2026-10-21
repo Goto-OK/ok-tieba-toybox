@@ -36,7 +36,7 @@ def _edge() -> Path | None:
 def _render_edge(edge: Path, size: int = 512) -> Image.Image | None:
     try:
         svg = SVG.read_text(encoding="utf-8")
-        svg = svg.replace('width="256" height="256"', f'width="{size}" height="{size}"', 1)
+        svg = svg.replace('width="512" height="512"', f'width="{size}" height="{size}"', 1)
         with tempfile.TemporaryDirectory(prefix="tieba-icon-") as folder:
             source = Path(folder) / "app.svg"
             target = Path(folder) / "app.png"
