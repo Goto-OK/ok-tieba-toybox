@@ -1373,6 +1373,7 @@ class App:
         else:
             self.post_start_var.set("")
             self.post_end_var.set("")
+            self.post_prefer_var.set("优先最近")
         if hasattr(self, "_profile_cache"):
             self._profile_cache.clear()
         self.profile_status.configure(text="条件已变更，点「刷新资料」生效")
@@ -1562,6 +1563,7 @@ class App:
         else:
             self.lookup_start_var.set("")
             self.lookup_end_var.set("")
+            self.lookup_prefer_var.set("优先最近")
         if hasattr(self, "_lookup_cache"):
             self._lookup_cache.clear()
         if self.lookup_query_var.get().strip():
@@ -2054,9 +2056,14 @@ class App:
             self.lookup_end_var.set("")
         start_date = self.lookup_start_var.get().strip() if date_mode == "指定日期" else ""
         end_date = self.lookup_end_var.get().strip() if date_mode == "指定日期" else ""
+        prefer = (
+            "start"
+            if date_mode == "指定日期" and "最早" in self.lookup_prefer_var.get()
+            else "end"
+        )
         cache_key = (
             f"{query}|{mode}|{count}|{start_date}|{end_date}|"
-            f"{self.lookup_prefer_var.get()}|{self.mode_var.get()}|{self._lookup_topic_limit}"
+            f"{prefer}|{self.mode_var.get()}|{self._lookup_topic_limit}"
         )
         hit = self._lookup_cache.get(cache_key)
         if hit and time.monotonic() - hit[0] < 60:
@@ -2107,7 +2114,7 @@ class App:
                     count,
                     start_date,
                     end_date,
-                    "start" if "最早" in self.lookup_prefer_var.get() else "end",
+                    prefer,
                     topic_max_pages=self._lookup_topic_limit,
                 )
                 if generation != self._lookup_generation:
@@ -5755,7 +5762,11 @@ class App:
         self.people_hint.configure(text=f"批量查询 0/{self._batch_total}…")
         count = self._post_count()
         start_date, end_date = self._date_params()
-        prefer = "start" if "最早" in self.post_prefer_var.get() else "end"
+        prefer = (
+            "start"
+            if self.post_date_mode_var.get() == "指定日期" and "最早" in self.post_prefer_var.get()
+            else "end"
+        )
 
         include_follows = bool(self.include_follows_var.get() and self.settings.get("follow_enhance"))
         guest = self.mode_var.get() == "guest"
@@ -5915,7 +5926,11 @@ class App:
             return
         count = self._post_count()
         start_date, end_date = self._date_params()
-        prefer = "start" if "最早" in self.post_prefer_var.get() else "end"
+        prefer = (
+            "start"
+            if self.post_date_mode_var.get() == "指定日期" and "最早" in self.post_prefer_var.get()
+            else "end"
+        )
         marked = 0
         missing = 0
         for user in users:
@@ -5966,7 +5981,11 @@ class App:
         count = self._post_count()
         start_date, end_date = self._date_params()
         bar_name = self._user_bar(user)
-        prefer = "start" if "最早" in self.post_prefer_var.get() else "end"
+        prefer = (
+            "start"
+            if self.post_date_mode_var.get() == "指定日期" and "最早" in self.post_prefer_var.get()
+            else "end"
+        )
         topic_limit = int(topic_max_pages or getattr(self, "_profile_topic_limit", 50) or 50)
         self._profile_topic_limit = topic_limit
         cached_posts = None
