@@ -55,7 +55,7 @@ from tieba_reply_stats.cookie_store import clear_cookie, load_cookie, save_cooki
 from tieba_reply_stats.errors import friendly_error
 from tieba_reply_stats.export import export_workbook
 from tieba_reply_stats.fetch import CaptchaError, Fetcher, FetchError, ThreadGoneError, parse_cookie_input
-from tieba_reply_stats.filters import FIELD_OPTIONS, LEVEL_OPTIONS, MARK_OPTIONS, filter_users
+from tieba_reply_stats.filters import FIELD_OPTIONS, LEVEL_OPTIONS, filter_users
 from tieba_reply_stats.follow_probe import candidate_bars, probe_forums
 from tieba_reply_stats.pbapi import fill_thread_levels
 from tieba_reply_stats.post_cache import DEFAULT_LIMIT_MB, MAX_LIMIT_MB, MIN_LIMIT_MB
@@ -1044,14 +1044,7 @@ class App:
         tk.Label(self.people_custom_frame, text="~", bg="#ffffff", fg="#475569").pack(side="left")
         self.people_max_entry = ttk.Entry(self.people_custom_frame, textvariable=self.people_max_var, width=4)
         self.people_max_entry.pack(side="left")
-        tk.Label(filter_bar, text=" 标记 ", bg="#ffffff", fg="#475569", font=("Microsoft YaHei UI", 9)).pack(
-            side="left"
-        )
         self.people_mark_var = tk.StringVar(value="全部")
-        self.people_mark_box = ttk.Combobox(
-            filter_bar, values=MARK_OPTIONS, textvariable=self.people_mark_var, width=6, state="disabled"
-        )
-        self.people_mark_box.pack(side="left")
         self.people_reset_btn = ttk.Button(
             filter_bar, text="清除筛选", command=self._reset_people_filters, width=10
         )
@@ -1061,7 +1054,6 @@ class App:
             self.people_field_var,
             self.people_keyword_var,
             self.people_level_var,
-            self.people_mark_var,
             self.people_min_var,
             self.people_max_var,
         ):
@@ -1091,6 +1083,7 @@ class App:
             "comment": "楼中楼",
             "total": "合计",
         }
+        self._people_headings = headings
         widths = {
             "mark": 50,
             "name": 135,
@@ -1122,7 +1115,7 @@ class App:
         tree_wrap.pack(fill="both", expand=True)
         self.people_tree = ttk.Treeview(tree_wrap, columns=columns, show="headings")
         for col in columns:
-            mark = "  ▼" if col in ("mark", "name", "username", "uid") else ""
+            mark = "  ▼" if col in ("name", "username", "uid") else ""
             command = (
                 partial(self._filter_people_column, col)
                 if col in ("name", "username", "uid")
@@ -2559,6 +2552,21 @@ class App:
         self.notebook.select(self.tab_posts)
         self.post_nb.select(self.tab_people)
 
+    def _update_people_sort_headings(self) -> None:
+        if not hasattr(self, "people_tree"):
+            return
+        current, reverse = getattr(self, "_people_sort", ("", False))
+        for column, label in getattr(self, "_people_headings", {}).items():
+            if column not in ("mark", "level", "floor", "comment", "total"):
+                continue
+            arrow = ""
+            if column == current:
+                arrow = "  ▲" if not reverse else "  ▼"
+            try:
+                self.people_tree.heading(column, text=label + arrow)
+            except tk.TclError:
+                pass
+
     def _sort_people(self, column: str) -> None:
         if getattr(self, "_batch_running", False):
             return
@@ -2567,6 +2575,7 @@ class App:
         current, reverse = self._people_sort
         self._people_sort = (column, (not reverse) if current == column else False)
         self._people_page = 0
+        self._update_people_sort_headings()
         self._refresh_people()
 
     def _people_column_value(self, user, column: str) -> str:
@@ -2630,6 +2639,7 @@ class App:
             self.people_custom_frame.pack_forget()
         finally:
             self._filter_resetting = False
+        self._update_people_sort_headings()
         self._refresh_people()
 
     def _display_name(self, item) -> str:
@@ -2867,10 +2877,7 @@ class App:
             self.include_follows_check.configure(state="normal" if allow_follow else "disabled")
             if not allow_follow:
                 self.include_follows_var.set(False)
-        if hasattr(self, "people_mark_box"):
-            self.people_mark_box.configure(state="readonly" if enabled else "disabled")
-            if not enabled:
-                self.people_mark_var.set("全部")
+
 
     def _on_include_follows_changed(self) -> None:
         if getattr(self, "_batch_running", False):
@@ -6271,12 +6278,6 @@ class App:
                     widget.configure(state=state)
                 except tk.TclError:
                     pass
-        mark_box = getattr(self, "people_mark_box", None)
-        if mark_box is not None:
-            try:
-                mark_box.configure(state=readonly if self._risk_enabled() else "disabled")
-            except tk.TclError:
-                pass
 
     def _batch_refresh_marks(self, resume_users=None) -> None:
         if getattr(self, "_batch_running", False):
