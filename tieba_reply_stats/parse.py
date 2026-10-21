@@ -19,6 +19,7 @@ import json
 import re
 from datetime import datetime
 from typing import Dict, Iterable, List, Optional, Tuple
+from urllib.parse import parse_qs, unquote, urlparse
 
 import lxml.html
 
@@ -513,6 +514,56 @@ def _comment_from_dict(data: dict, floor: Floor) -> Optional[Comment]:
     )
 
 
+def _comment_card_identity(node) -> Tuple[str, str, str]:
+    """从 j_user_card 取 (username, uid, portrait)，兼容多种改版属性。"""
+    username = ""
+    uid = ""
+    portrait = ""
+    anchors = node.xpath('.//a[contains(@class,"j_user_card") or contains(@class,"at")]')
+    if not anchors:
+        anchors = node.xpath(".//a[@username or @data-username or @user_id or @data-user-id]")
+    for anchor in anchors:
+        username = username or str(
+            anchor.get("username")
+            or anchor.get("data-username")
+            or anchor.get("user_name")
+            or anchor.get("un")
+            or ""
+        ).strip()
+        uid = uid or str(
+            anchor.get("user_id")
+            or anchor.get("data-user-id")
+            or anchor.get("uid")
+            or ""
+        ).strip()
+        portrait = portrait or str(anchor.get("portrait") or "").strip()
+        raw = anchor.get("data-field") or anchor.get("data")
+        if raw:
+            try:
+                data = json.loads(html_lib.unescape(raw))
+            except (TypeError, ValueError):
+                data = None
+            if isinstance(data, dict):
+                username = username or str(
+                    data.get("user_name") or data.get("username") or data.get("un") or ""
+                ).strip()
+                uid = uid or str(data.get("user_id") or data.get("uid") or "").strip()
+                portrait = portrait or str(data.get("portrait") or "").strip()
+        href = str(anchor.get("href") or "")
+        if href:
+            query = parse_qs(urlparse(href).query)
+            username = username or str((query.get("un") or [""])[0] or "").strip()
+            href_id = str((query.get("id") or [""])[0] or "").strip()
+            if href_id:
+                if href_id.isdigit():
+                    uid = uid or href_id
+                else:
+                    portrait = portrait or href_id
+        if username and (uid or portrait):
+            break
+    return username, uid, unquote(portrait)
+
+
 def _comments_from_html(payload: str, floor: Floor) -> List[Comment]:
     """解析新版 /p/comment 返回的 HTML 片段。
 
@@ -544,23 +595,12 @@ def _comments_from_html(payload: str, floor: Floor) -> List[Comment]:
         author = str(data.get("showname") or "").strip()
         username = str(data.get("user_name") or "").strip()
         user_id = str(data.get("user_id") or data.get("uid") or "").strip()
-        at = node.xpath('.//a[contains(@class,"at")]')
-        # data-field 不一定带用户名，j_user_card 上仍有 username 属性。
-        if at:
-            if not username:
-                username = str(
-                    at[0].get("username")
-                    or at[0].get("data-username")
-                    or at[0].get("user_name")
-                    or ""
-                ).strip()
-            if not user_id:
-                user_id = str(
-                    at[0].get("user_id")
-                    or at[0].get("data-user-id")
-                    or at[0].get("uid")
-                    or ""
-                ).strip()
+        portrait = str(data.get("portrait") or "").strip()
+        card_username, card_uid, card_portrait = _comment_card_identity(node)
+        username = username or card_username
+        user_id = user_id or card_uid
+        portrait = portrait or card_portrait
+        at = node.xpath('.//a[contains(@class,"j_user_card") or contains(@class,"at")]')
         if not author:
             author = username
         if not author and at:
@@ -588,7 +628,7 @@ def _comments_from_html(payload: str, floor: Floor) -> List[Comment]:
                 author=author or "匿名用户",
                 author_name=username,
                 author_id=user_id,
-                portrait=str(data.get("portrait") or ""),
+                portrait=portrait,
                 posted_at=parse_datetime(when),
                 content=strip_html(cleaned),
                 reply_to=reply_to,

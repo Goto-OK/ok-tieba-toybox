@@ -5756,14 +5756,16 @@ class App:
                 uid = user.get("uid") or ""
                 username = user.get("username") or ""
                 if not (uid or username):
-                    info = resolve_user(fetcher, name, "昵称")
-                    if not info.get("uid"):
+                    info = resolve_user(fetcher, name, "昵称") if name else {}
+                    if info.get("uid"):
+                        uid = info.get("uid") or ""
+                        username = info.get("username") or ""
+                        user["uid"] = uid
+                        user["username"] = username
+                        user["portrait"] = info.get("portrait") or user.get("portrait") or ""
+                    elif not user.get("portrait"):
                         return {"ok": False, "skipped": True, "error": "昵称无法唯一定位"}
-                    uid = info.get("uid") or ""
-                    username = info.get("username") or ""
-                    user["uid"] = uid
-                    user["username"] = username
-                    user["portrait"] = info.get("portrait") or user.get("portrait") or ""
+                    # 没有 uid/username 但保留 portrait 时，仍可用 portrait 查发言。
                 cached_posts = cached_user_posts(uid, count, start_date, end_date, prefer)
                 if cached_posts is not None and not include_follows:
                     return {
@@ -5950,16 +5952,17 @@ class App:
                 portrait = str(user.get("portrait") or "")
                 if not (uid or username) and user.get("name"):
                     info = resolve_user(fetcher, str(user["name"]), "昵称")
-                    if not info.get("uid"):
+                    if info.get("uid"):
+                        uid = str(info.get("uid") or "")
+                        username = str(info.get("username") or "")
+                        portrait = str(info.get("portrait") or portrait)
+                        user["uid"] = uid
+                        user["username"] = username
+                        user["portrait"] = portrait
+                    elif not portrait:
                         profile = {"ok": False, "error": "昵称无法唯一定位"}
                         self._post(("profile_ready", key, user, profile))
                         return
-                    uid = str(info.get("uid") or "")
-                    username = str(info.get("username") or "")
-                    portrait = str(info.get("portrait") or portrait)
-                    user["uid"] = uid
-                    user["username"] = username
-                    user["portrait"] = portrait
                 local_cached = cached_posts
                 if local_cached is None and uid:
                     local_cached = cached_user_posts(uid, count, start_date, end_date, prefer)
