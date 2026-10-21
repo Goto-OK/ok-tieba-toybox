@@ -188,9 +188,10 @@ class PostCache:
             old = self._hot_pages.pop(key, None)
             if old:
                 self._hot_bytes -= _json_size(old[1])
-            self._hot_pages[key] = (now, payload)
-            self._hot_bytes += _json_size(payload)
-            self._trim_hot()
+            if priority != PRIORITY_LOW:
+                self._hot_pages[key] = (now, payload)
+                self._hot_bytes += _json_size(payload)
+                self._trim_hot()
             if self._conn is not None:
                 self._conn.execute(
                     "INSERT OR REPLACE INTO pages(user_key,kind,page,payload,updated,priority) VALUES(?,?,?,?,?,?)",
@@ -201,14 +202,15 @@ class PostCache:
 
     # ---------- normalized users ----------
 
-    def get_user(self, user_key: str) -> Optional[Dict]:
+    def get_user(self, user_key: str, promote: bool = True) -> Optional[Dict]:
         if not user_key:
             return None
         with self._lock:
-            hit = self._hot_users.pop(user_key, None)
-            if hit is not None:
-                self._hot_users[user_key] = hit
-                return hit[1]
+            if promote:
+                hit = self._hot_users.pop(user_key, None)
+                if hit is not None:
+                    self._hot_users[user_key] = hit
+                    return hit[1]
             if self._conn is None:
                 return None
             row = self._conn.execute(
@@ -220,9 +222,10 @@ class PostCache:
                 data = json.loads(row[0])
             except (TypeError, ValueError):
                 return None
-            self._hot_users[user_key] = (float(row[1]), data)
-            self._hot_bytes += _json_size(data)
-            self._trim_hot()
+            if promote:
+                self._hot_users[user_key] = (float(row[1]), data)
+                self._hot_bytes += _json_size(data)
+                self._trim_hot()
             return data
 
     def put_user(self, user_key: str, data: Dict, priority: int = PRIORITY_HIGH) -> None:
@@ -233,9 +236,10 @@ class PostCache:
             old = self._hot_users.pop(user_key, None)
             if old:
                 self._hot_bytes -= _json_size(old[1])
-            self._hot_users[user_key] = (now, data)
-            self._hot_bytes += _json_size(data)
-            self._trim_hot()
+            if priority != PRIORITY_LOW:
+                self._hot_users[user_key] = (now, data)
+                self._hot_bytes += _json_size(data)
+                self._trim_hot()
             if self._conn is not None:
                 self._conn.execute(
                     "INSERT OR REPLACE INTO users(user_key,data,updated,priority) VALUES(?,?,?,?)",
@@ -267,10 +271,14 @@ class PostCache:
         return self._limit_mb
 
     def _bytes(self) -> int:
-        try:
-            return os.path.getsize(self._path) if self._path and os.path.exists(self._path) else 0
-        except OSError:
-            return 0
+        total = 0
+        for path in (self._path, self._path + "-wal", self._path + "-shm"):
+            try:
+                if path and os.path.exists(path):
+                    total += os.path.getsize(path)
+            except OSError:
+                continue
+        return total
 
     def _enforce_limit(self) -> None:
         if self._conn is None:

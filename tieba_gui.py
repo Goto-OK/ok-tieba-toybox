@@ -2194,6 +2194,10 @@ class App:
             return "回复流查询失败，当前只显示主题帖"
         if src.get("replies_empty") and src.get("threads_ok"):
             return "回复流为空，当前只显示主题帖"
+        if src.get("cached"):
+            age = src.get("cached_age_minutes")
+            if age is not None:
+                return f"缓存于 {age} 分钟前（刷新资料可强制更新）"
         return ""
 
     def _render_lookup(self, profile) -> None:
@@ -5799,7 +5803,9 @@ class App:
                     elif not user.get("portrait"):
                         return {"ok": False, "skipped": True, "error": "昵称无法唯一定位"}
                     # 没有 uid/username 但保留 portrait 时，仍可用 portrait 查发言。
-                cached_posts = cached_user_posts(uid, count, start_date, end_date, prefer)
+                cached_posts = cached_user_posts(
+                    uid, count, start_date, end_date, prefer, promote=False
+                )
                 if cached_posts is not None and not include_follows:
                     return {
                         "ok": True,
@@ -6012,7 +6018,7 @@ class App:
                         self._post(("profile_ready", key, user, profile))
                         return
                 local_cached = cached_posts
-                if local_cached is None and uid:
+                if local_cached is None and uid and not force:
                     local_cached = cached_user_posts(uid, count, start_date, end_date, prefer)
                 profile = fetch_user_profile(
                     fetcher,
@@ -6026,6 +6032,7 @@ class App:
                     prefer,
                     load_follow=force_follow or self.settings.get("follow_load_mode", "auto") == "auto",
                     topic_max_pages=topic_limit,
+                    use_cache=not force,
                     cached_posts=local_cached,
                 )
             except Exception as error:  # noqa: BLE001

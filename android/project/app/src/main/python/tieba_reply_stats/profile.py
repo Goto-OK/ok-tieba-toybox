@@ -29,7 +29,14 @@ def _cache_user_key(uid: str, portrait: str) -> str:
     return str(uid or portrait or "").strip()
 
 
-def _cached_get_json(fetcher, url: str, name: str, key: tuple[str, str, int], use_cache: bool = True):
+def _cached_get_json(
+    fetcher,
+    url: str,
+    name: str,
+    key: tuple[str, str, int],
+    use_cache: bool = True,
+    cache_priority: int = post_cache.PRIORITY_HIGH,
+):
     user_key, kind, page = key
     if use_cache:
         hit = post_cache.cache().get_page(user_key, kind, page)
@@ -37,11 +44,17 @@ def _cached_get_json(fetcher, url: str, name: str, key: tuple[str, str, int], us
             return hit
     payload = fetcher.get_json(url, name=name)
     if use_cache and user_key:
-        post_cache.cache().put_page(user_key, kind, page, payload)
+        post_cache.cache().put_page(user_key, kind, page, payload, priority=cache_priority)
     return payload
 
 
-def _cached_thread_page(fetcher, uid: str, page: int, use_cache: bool = True) -> List[Dict]:
+def _cached_thread_page(
+    fetcher,
+    uid: str,
+    page: int,
+    use_cache: bool = True,
+    cache_priority: int = post_cache.PRIORITY_HIGH,
+) -> List[Dict]:
     if use_cache:
         hit = post_cache.cache().get_page(uid, "topic", page)
         if hit is not None:
@@ -49,7 +62,7 @@ def _cached_thread_page(fetcher, uid: str, page: int, use_cache: bool = True) ->
     raw = userpost_pb._request(fetcher, int(uid), page)
     items = userpost_pb.parse_response(raw)
     if use_cache:
-        post_cache.cache().put_page(uid, "topic", page, {"items": items})
+        post_cache.cache().put_page(uid, "topic", page, {"items": items}, priority=cache_priority)
     return items
 
 
@@ -332,6 +345,7 @@ def fetch_user_posts(
     if status is not None:
         status.clear()
         status.update({"replies_ok": None, "replies_error": "", "replies_empty": False,
+                       "replies_exhausted": False,
                        "threads_ok": None, "threads_error": "",
                        "topic_pages": 0, "topic_reached_start": False,
                        "topic_truncated": False, "topic_exhausted": False})
@@ -397,6 +411,7 @@ def fetch_user_posts(
                 f"posts_{portrait[:12]}_2_{page}",
                 (_cache_user_key(uid, portrait), "reply", page),
                 use_cache=use_cache,
+                cache_priority=cache_priority,
             )
             if status is not None:
                 status["replies_ok"] = True
@@ -410,6 +425,7 @@ def fetch_user_posts(
         if not items:
             if status is not None:
                 status["replies_empty"] = True
+                status["replies_exhausted"] = True
             break
         reached_start = False
         for item in items:
@@ -433,6 +449,8 @@ def fetch_user_posts(
         if reached_start:
             break
         if not data.get("has_more"):
+            if status is not None:
+                status["replies_exhausted"] = True
             break
         page += 1
 
@@ -444,7 +462,9 @@ def fetch_user_posts(
         while topic_page < max(1, int(topic_max_pages)):
             topic_page += 1
             try:
-                thread_items = _cached_thread_page(fetcher, uid, topic_page, use_cache=use_cache)
+                thread_items = _cached_thread_page(
+                    fetcher, uid, topic_page, use_cache=use_cache, cache_priority=cache_priority
+                )
                 if status is not None:
                     status["threads_ok"] = True
                     status["topic_pages"] = topic_page
@@ -501,6 +521,7 @@ def fetch_user_posts(
                     f"posts_{portrait[:12]}_1_{page}",
                     (_cache_user_key(uid, portrait), "thread", page),
                     use_cache=use_cache,
+                    cache_priority=cache_priority,
                 )
             except Exception as error:  # noqa: BLE001
                 if status is not None:
@@ -545,6 +566,8 @@ def fetch_user_posts(
                 "start_date": start_date,
                 "end_date": end_date,
                 "prefer": prefer,
+                "replies_exhausted": bool((status or {}).get("replies_exhausted")),
+                "topic_exhausted": bool((status or {}).get("topic_exhausted")),
                 "status": dict(status or {}),
                 "oldest_ts": min((int(item.get("ts") or 0) for item in known), default=0),
                 "newest_ts": max((int(item.get("ts") or 0) for item in known), default=0),
@@ -560,9 +583,10 @@ def cached_user_posts(
     start_date: str = "",
     end_date: str = "",
     prefer: str = "end",
+    promote: bool = True,
 ) -> Optional[List[Dict]]:
     """命中批量/交互缓存时返回筛选后的发言；覆盖不足返回 None。"""
-    data = post_cache.cache().get_user(str(uid or ""))
+    data = post_cache.cache().get_user(str(uid or ""), promote=promote)
     if not data:
         return None
     posts = list(data.get("posts") or [])
@@ -571,7 +595,14 @@ def cached_user_posts(
     start = _parse_date(start_date)
     end = _parse_date(end_date)
     cached_start = _parse_date(str(data.get("start_date") or ""))
+    cached_end = _parse_date(str(data.get("end_date") or ""))
     if start and (not cached_start or start < cached_start):
+        return None
+    if not start and cached_start:
+        return None
+    if end and (not cached_end or end > cached_end):
+        return None
+    if not end and cached_end:
         return None
     filtered = []
     for item in posts:
@@ -581,10 +612,13 @@ def cached_user_posts(
         if end and day and day > end:
             continue
         filtered.append(item)
-    if len(filtered) < count and not data.get("status", {}).get("topic_exhausted"):
-        # 条数不够且不确定已经到头时，交给联网补抓。
-        if not start:
-            return None
+    exhausted = bool(
+        data.get("replies_exhausted")
+        and data.get("topic_exhausted")
+    )
+    if len(filtered) < count and not start and not exhausted:
+        # 条数不够，且回复流/主题流没有都确认到底时，交给联网补抓。
+        return None
     filtered.sort(key=lambda item: item.get("ts") or 0, reverse=(prefer != "start"))
     return filtered[:count]
 
@@ -605,6 +639,7 @@ def fetch_user_profile(
     cached_posts: Optional[List[Dict]] = None,
     cache_priority: int = 1,
 ) -> Dict:
+
     """组合查询：关注的吧（含等级）+ 发言 + 本吧等级。"""
     pb = profile_pb.fetch_profile(fetcher, user_id, portrait) if (user_id or portrait) else {}
     if pb.get("uid") and not user_id:
@@ -653,6 +688,17 @@ def fetch_user_profile(
 
     if cached_posts is not None:
         post_sources["cached"] = True
+        cached_data = post_cache.cache().get_user(str(user_id or ""), promote=False)
+        if cached_data:
+            fetched_at = float(cached_data.get("fetched_at") or 0)
+            if fetched_at:
+                post_sources["cached_age_minutes"] = max(0, int((time.time() - fetched_at) / 60))
+            for key in ("replies_exhausted", "topic_exhausted"):
+                if key in cached_data:
+                    post_sources[key] = cached_data[key]
+            cached_status = cached_data.get("status") or {}
+            post_sources.setdefault("topic_pages", cached_status.get("topic_pages", 0))
+            post_sources.setdefault("topic_truncated", cached_status.get("topic_truncated", False))
     target = (bar_name or "").rstrip("吧")
     level_in_bar = ""
     level_name = ""

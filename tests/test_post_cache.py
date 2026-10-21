@@ -1,4 +1,9 @@
 from tieba_reply_stats import post_cache
+from tieba_reply_stats.profile import cached_user_posts
+
+
+def _post(day: str, ts: int) -> dict:
+    return {"time": day, "ts": ts}
 
 
 def test_post_cache_roundtrip():
@@ -14,3 +19,88 @@ def test_post_cache_roundtrip():
     cache.clear()
     assert cache.get_page("u1", "reply", 1) is None
     assert cache.get_user("u1") is None
+
+
+def test_cached_user_posts_rejects_wider_end():
+    cache = post_cache.cache()
+    cache.clear()
+    cache.put_user(
+        "u2",
+        {
+            "posts": [_post("2025-01-01", 1735689600)],
+            "start_date": "",
+            "end_date": "2025-01-31",
+            "replies_exhausted": True,
+            "topic_exhausted": True,
+        },
+        priority=post_cache.PRIORITY_LOW,
+    )
+    assert cached_user_posts("u2", 1, "", "2025-06-30") is None
+
+
+def test_cached_user_posts_rejects_earlier_start():
+    cache = post_cache.cache()
+    cache.clear()
+    cache.put_user(
+        "u3",
+        {
+            "posts": [_post("2025-02-01", 1738368000)],
+            "start_date": "2025-02-01",
+            "end_date": "",
+            "replies_exhausted": True,
+            "topic_exhausted": True,
+        },
+        priority=post_cache.PRIORITY_LOW,
+    )
+    assert cached_user_posts("u3", 1, "2025-01-01", "") is None
+
+
+def test_cached_user_posts_rejects_broader_start():
+    cache = post_cache.cache()
+    cache.clear()
+    cache.put_user(
+        "u6",
+        {
+            "posts": [_post("2025-02-01", 1738368000)],
+            "start_date": "2025-02-01",
+            "end_date": "",
+            "replies_exhausted": True,
+            "topic_exhausted": True,
+        },
+        priority=post_cache.PRIORITY_LOW,
+    )
+    assert cached_user_posts("u6", 1, "", "") is None
+
+
+def test_cached_user_posts_rejects_larger_count_without_complete_feeds():
+    cache = post_cache.cache()
+    cache.clear()
+    cache.put_user(
+        "u4",
+        {
+            "posts": [_post("2025-03-01", 1740787200)],
+            "start_date": "",
+            "end_date": "",
+            "replies_exhausted": True,
+            "topic_exhausted": False,
+        },
+        priority=post_cache.PRIORITY_LOW,
+    )
+    assert cached_user_posts("u4", 50, "", "") is None
+
+
+def test_cached_user_posts_accepts_complete_cache():
+    cache = post_cache.cache()
+    cache.clear()
+    cache.put_user(
+        "u5",
+        {
+            "posts": [_post("2025-03-01", 1740787200)],
+            "start_date": "",
+            "end_date": "",
+            "replies_exhausted": True,
+            "topic_exhausted": True,
+        },
+        priority=post_cache.PRIORITY_LOW,
+    )
+    assert cached_user_posts("u5", 50, "", "") is not None
