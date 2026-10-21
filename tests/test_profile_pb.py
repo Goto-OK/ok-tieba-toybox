@@ -33,6 +33,14 @@ def test_build_request_fields():
     assert _text(common, 10) == "BDUSS_VALUE"
 
 
+def test_build_portrait_request_fields():
+    request = profile_pb.build_request_portrait("tb.1.abc", "")
+    data = _msg(request, 1)
+    assert _text(data, 16) == "tb.1.abc"
+    assert _num(data, 2) == 1
+    assert _num(data, 15) == 1
+
+
 def test_parse_profile_response():
     profile = profile_pb.parse_response(build_response())
     assert profile["uid"] == 1001

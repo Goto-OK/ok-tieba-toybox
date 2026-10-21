@@ -266,11 +266,12 @@ UID > portrait > 用户名 > 昵称
 - 标记筛选唯一来源是 `user.mark_level`；顶部标记、表头标记、一键红绿灯、重新标记必须同一口径；
 - 空交集显示 0 人，不自动放宽条件；
 - 楼中楼解析必须保留 `data-field` 中的 `user_id`、`user_name`、`portrait`、`showname`；
-- 缺少 uid/username 但有昵称：
-  - 先用昵称解析 uid；
+- 缺少 uid/username 时按以下顺序兜底：
+  - 有昵称 → 昵称解析 uid；
+  - 有 portrait → profile protobuf 的 `friend_uid_portrait` 反查 uid，无需 Cookie；
   - 唯一命中 → 正常查发言；
-  - 无法唯一定位 → 跳过，状态计入“跳过（昵称无法唯一定位）”；
-- 昵称、uid、username 都没有：
+  - 昵称不唯一但 portrait 可用 → 用 portrait；
+- 昵称、uid、username、portrait 都没有：
   - 一键红绿灯跳过；
   - 行保持未标记，状态计入“跳过（缺少身份）”；
   - 不当作失败，不重试；
@@ -320,8 +321,8 @@ UID > portrait > 用户名 > 昵称
 - 连续 3 次超时停止；
 - 停止保留已处理标记，显示“已停止 X/Y”；
 - 状态行同时显示“成功 / 跳过（缺少ID） / 失败 / 未完成”；
-- 缺少 uid/username 但有昵称时先按昵称解析；
-- 昵称无法唯一定位或身份全缺时跳过，状态显示“跳过 K（原因）”；
+- 缺少 uid/username 时先按昵称、再用 portrait 反查 uid（无需 Cookie）；
+- 昵称不唯一且 portrait 不可用、或身份全缺时跳过，状态显示“跳过 K（原因）”；
 - 跳过不计入网络失败，不重试；
 - 只有停止且 X<Y 时才显示「继续未完成（X/Y）」；
 - 运行中、正常完成后隐藏「继续未完成」；

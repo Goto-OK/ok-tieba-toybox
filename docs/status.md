@@ -19,7 +19,7 @@
 ```text
 ruff     通过
 mypy     27 个文件通过
-pytest   84 个通过
+pytest   85 个通过
 selftest 通过
 Android 核心同步通过
 ```
@@ -116,7 +116,8 @@ Android 核心同步通过
 - 运行中隐藏继续未完成、禁用包含关注/重新标记/刷新列表/筛选；
 - 停止后才显示「继续未完成」，完成后隐藏；
 - 楼中楼解析保留 `user_id/user_name/portrait/showname`；
-- 无 uid/username 时按昵称解析，无法唯一定位才跳过；
+- 无 uid/username 时按昵称、portrait 兜底；
+- portrait 通过 profile protobuf 反查 uid，无需 Cookie；
 - 批量状态显示成功/跳过/失败；
 - 顶部和表头标记筛选统一使用 `mark_level`。
 

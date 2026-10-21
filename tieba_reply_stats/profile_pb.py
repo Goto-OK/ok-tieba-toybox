@@ -100,6 +100,25 @@ def _text(data: bytes, number: int) -> Optional[str]:
         return value.decode("gb18030", "replace")
 
 
+def build_request_portrait(portrait: str, bduss: str = "") -> bytes:
+    common = b"".join(
+        [
+            _fv(1, 2),
+            _fb(2, CLIENT_VERSION),
+            _fb(10, bduss.encode()),
+        ]
+    )
+    data = b"".join(
+        [
+            _fv(2, 1),
+            _fv(15, 1),
+            _fb(9, common),
+            _fb(16, portrait.encode()),
+        ]
+    )
+    return _fb(1, data)
+
+
 def build_request(uid: int, bduss: str) -> bytes:
     common = b"".join(
         [
@@ -119,19 +138,23 @@ def build_request(uid: int, bduss: str) -> bytes:
     return _fb(1, data)
 
 
-def fetch_profile(fetcher, uid: str) -> Dict:
-    """Return profile info from the client protobuf endpoint; {} on failure."""
-    if not uid:
-        return {}
-    try:
-        uid_int = int(uid)
-    except (TypeError, ValueError):
+def fetch_profile(fetcher, uid: str = "", portrait: str = "") -> Dict:
+    """Return profile info from the client protobuf endpoint; {} on failure.
+
+    portrait 可直接反查 uid，无需 BDUSS；这是楼中楼只有 portrait 时的关键兜底。
+    """
+    if not uid and not portrait:
         return {}
     bduss = fetcher.cookie_dict().get("BDUSS", "")
-    if not bduss:
-        return {}
+    if uid:
+        try:
+            uid_int = int(uid)
+        except (TypeError, ValueError):
+            return {}
+        payload = build_request(uid_int, bduss)
+    else:
+        payload = build_request_portrait(portrait, bduss)
     boundary = "----tbpb" + uuid.uuid4().hex
-    payload = build_request(uid_int, bduss)
     body = (
         (
             f"--{boundary}\r\n"

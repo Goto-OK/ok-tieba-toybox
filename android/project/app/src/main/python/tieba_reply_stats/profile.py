@@ -600,7 +600,9 @@ def fetch_user_profile(
     cache_priority: int = 1,
 ) -> Dict:
     """组合查询：关注的吧（含等级）+ 发言 + 本吧等级。"""
-    pb = profile_pb.fetch_profile(fetcher, user_id) if user_id else {}
+    pb = profile_pb.fetch_profile(fetcher, user_id, portrait) if (user_id or portrait) else {}
+    if pb.get("uid") and not user_id:
+        user_id = str(pb["uid"])
     if pb.get("username"):
         username = pb["username"]
     if not portrait:

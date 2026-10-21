@@ -5862,6 +5862,13 @@ class App:
                 level = ""
         if level and not user.get("level"):
             user["level"] = level
+        if profile.get("ok"):
+            if profile.get("user_id") and not user.get("uid"):
+                user["uid"] = str(profile.get("user_id") or "")
+            if profile.get("username") and not user.get("username"):
+                user["username"] = str(profile.get("username") or "")
+            if profile.get("portrait") and not user.get("portrait"):
+                user["portrait"] = str(profile.get("portrait") or "")
         hit_level = ""
         hit_bar = ""
         if profile.get("ok"):
@@ -6398,6 +6405,12 @@ class App:
                 except tk.TclError:
                     pass
 
+        if profile.get("user_id") and not user.get("uid"):
+            user["uid"] = str(profile.get("user_id") or "")
+        if profile.get("username") and not user.get("username"):
+            user["username"] = str(profile.get("username") or "")
+        if profile.get("portrait") and not user.get("portrait"):
+            user["portrait"] = str(profile.get("portrait") or "")
         self._profile_user = user
         self._profile_data = profile
         self._set_person_mark_row(user)
