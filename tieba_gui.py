@@ -4809,6 +4809,25 @@ class App:
         def take_selection() -> set:
             return {str(listbox.get(i)) for i in listbox.curselection()}
 
+        select_all_btn: Optional[ttk.Button] = None
+
+        def update_select_all_label() -> None:
+            if select_all_btn is None:
+                return
+            size = listbox.size()
+            selected = len(listbox.curselection())
+            select_all_btn.configure(text="取消全选" if size and selected >= size else "全选")
+
+        def toggle_all() -> None:
+            size = listbox.size()
+            if not size:
+                return
+            if len(listbox.curselection()) >= size:
+                listbox.selection_clear(0, "end")
+            else:
+                listbox.selection_set(0, "end")
+            update_select_all_label()
+
         def refresh(*_args) -> None:
             nonlocal chosen
             chosen = take_selection()
@@ -4820,8 +4839,10 @@ class App:
             for index, value in enumerate(listbox.get(0, "end")):
                 if value in chosen:
                     listbox.selection_set(index)
+            update_select_all_label()
 
         search.trace_add("write", refresh)
+        listbox.bind("<<ListboxSelect>>", lambda _event: update_select_all_label())
         result: Dict[str, Any] = {"value": None}
         buttons = tk.Frame(frame, bg="#ffffff")
         buttons.pack(fill="x", pady=(8, 0))
@@ -4830,15 +4851,19 @@ class App:
             result["value"] = take_selection()
             win.destroy()
 
-        def clear() -> None:
+        def clear_filter() -> None:
             result["value"] = set()
             win.destroy()
 
+        select_all_btn = ttk.Button(buttons, text="全选", command=toggle_all, width=8)
+        select_all_btn.pack(side="left")
+        ttk.Button(buttons, text="清除筛选", command=clear_filter, width=10).pack(
+            side="left", padx=(6, 0)
+        )
         ttk.Button(buttons, text="取消", command=lambda: win.destroy(), width=8).pack(side="right")
         ttk.Button(buttons, text="应用", command=apply, width=8).pack(side="right", padx=(0, 6))
-        ttk.Button(buttons, text="清空", command=clear, width=8).pack(side="left")
-        ttk.Button(buttons, text="全选", command=lambda: listbox.selection_set(0, "end"), width=8).pack(side="left", padx=(0, 6))
-        self._place_filter_window(win, anchor, 340)
+        update_select_all_label()
+        self._place_filter_window(win, anchor, 380)
         self.root.wait_window(win)
         return result["value"]
 
