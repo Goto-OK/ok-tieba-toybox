@@ -6787,7 +6787,7 @@ class App:
             comment_depth=self._comment_depth_value(),
             comment_concurrency=max(1, min(3, int(self.comment_concurrency_var.get() or 1))),
             enrich_levels=True,
-            enrich_identities=True,
+            enrich_identities=False,
             pb_levels=True,
             verbose=True,
             log=self._log_from_thread,
@@ -6899,6 +6899,26 @@ class App:
                 )
                 return
 
+            # 补全身份属于抓取完成的一部分：补完才允许界面进入“完成”。
+            identity_options = CollectOptions(
+                verbose=True,
+                log=self._log_from_thread,
+                should_stop=self.stop_event.is_set,
+            )
+            self._post(("log", "  正在补全用户身份，补全完成后才算抓取完成…", "muted"))
+            for thread in completed:
+                enrich_identities(thread, fetcher, identity_options, self._log_from_thread)
+            self._identity_missing = sum(
+                1
+                for thread in completed
+                for item in list(thread.floors) + list(thread.comments)
+                if not item.author_id and (item.author_name or item.portrait)
+            )
+            if self._identity_missing:
+                self._post(
+                    ("log", f"  ⚠ 仍有 {self._identity_missing} 条身份待补全（不影响已抓内容）", "err")
+                )
+
             if export:
                 export_workbook(output, completed, include_op=include_op)
                 self._post(("done", output, len(completed), list(completed)))
@@ -6945,8 +6965,11 @@ class App:
             self._persist_result(self.last_threads)
             self._auto_filled = False
             self._set_running(False)
-            self.root.after(500, self._backfill_identities)
-            self.status_var.set(f"完成 · {len(self.last_threads)} 个帖子 / {len(self._aggregate_users())} 位用户")
+            identity_missing = int(getattr(self, "_identity_missing", 0) or 0)
+            status = f"完成 · {len(self.last_threads)} 个帖子 / {len(self._aggregate_users())} 位用户"
+            if identity_missing:
+                status += f" · 身份待补全 {identity_missing} 条"
+            self.status_var.set(status)
             try:
                 self._reset_people_filters()
                 self._refresh_people()

@@ -38,6 +38,7 @@
 - 楼中楼 data-field 缺 user_name 时从 j_user_card 的 username 兜底；
 - 通过 portrait 调用 profile protobuf 反查 uid，无需 Cookie；
 - 昵称搜索 exactMatch/fuzzyMatch 兼容 dict/list，避免批量直接失败；
+- 身份补全并入抓取阶段，补完才显示完成；
 - 抓取完成后自动补全缺失 uid，写回楼层/楼中楼；
 - 旧帖处理「每次询问」弹窗真正生效。
 - 无 uid/username 时按昵称解析，无法唯一定位才跳过；
