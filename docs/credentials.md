@@ -47,12 +47,19 @@ Cookie: BAIDUID=...; BDUSS=...; STOKEN=...; PSTM=...
 
 匿名不是残废模式，核心能力全部可用。
 
+匿名还能：
+
+- 用 username → user_json 补 uid；
+- 用 portrait → profile protobuf 反查 uid（无需 BDUSS）；
+- 显示 profile 返回的少量 likeForum，标为「profile片段」，不完整；
+- 完整公开关注列表仍然需要 BDUSS。
+
 ## 4. 关注增强
 
 入口：
 
 ```text
-设置 → 高级 → 关注增强（需要 Cookie）
+设置 → 常规 → 抓取增强（需要 Cookie）
 ```
 
 - 默认关闭；

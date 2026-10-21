@@ -13,7 +13,7 @@
 | `https://tieba.baidu.com/c/f/pb/page_pc` | POST | PC sign + Cookie | 新 PC 帖子页用户/等级 | 参数 `kz,pn,r,lz,_client_type` |
 | `https://tieba.baidu.com/c/f/pb/nestedFloor` | POST | PC sign + Cookie | 按层翻楼中楼 | `post_id,thread_id,offset` |
 | `https://tiebac.baidu.com/c/f/pb/page?cmd=302001` | POST | **可匿名** | 客户端楼层/楼中楼/用户 | protobuf，见 §2 |
-| `https://tiebac.baidu.com/c/u/user/profile?cmd=303012` | POST | BDUSS | 用户资料 likeForum | protobuf，见 §3 |
+| `https://tiebac.baidu.com/c/u/user/profile?cmd=303012` | POST | 可匿名（portrait）/BDUSS（uid） | 用户资料 likeForum | protobuf，见 §3 |
 | `https://tiebac.baidu.com/c/u/feed/userpost?cmd=303002` | POST | **可匿名** | 用户发言深分页 | protobuf，见 §4 |
 | `https://tiebac.baidu.com/home/get/panel?un=` | GET | 可匿名 | 面板等级/关注数 | `honor.grade` 部分关注 |
 | `https://tiebac.baidu.com/c/f/forum/like` | POST | BDUSS + APP sign | 关注列表 | 查别人常返回空 |
@@ -92,6 +92,9 @@ x_bd_data_type: protobuf
 证据：`aiotieba 4.8.1` 的 `get_comments` 源码 + 2026-10-19 匿名实测
 （tid=1234567890，floor 13，reply_num=32，pn=1 返回 29，pn=2 返回 2）。
 
+楼中楼 HTML 的 `lzl_single_post` 可能只有 `showname/portrait`，没有 `user_name`；
+同一节点的 `j_user_card` 可能带 `username`、`user_id`，解析时必须兜底读取。
+
 登录态补充实测（2026-10-19）：同一楼层带 BDUSS 返回 29 + 2 条，与匿名一致；
 `_collect_comments` 登录路径走 floor 后总计 116 条、floor 13 为 31 条，未触发网页回退。
 
@@ -101,7 +104,7 @@ x_bd_data_type: protobuf
 POST https://tiebac.baidu.com/c/u/user/profile?cmd=303012
 ```
 
-请求 `ProfileReqIdl.data`：`uid=1, need_post_count=2, pn=6, common=9`。  
+请求 `ProfileReqIdl.data`：`uid=1, need_post_count=2, pn=6, common=9`，或 `friend_uid_portrait=16`。
 响应 `User`（`data.user=1`）关键字段：
 
 | 字段 | 编号 | 说明 |
@@ -119,6 +122,9 @@ POST https://tiebac.baidu.com/c/u/user/profile?cmd=303012
 | `tieba_uid` | 120 | 另一种 UID |
 
 注意：`likeForum` **不是完整关注列表**；隐藏关注仍无法完整枚举。
+
+`friend_uid_portrait` 可直接用 portrait 反查 uid/用户名，**不需要 BDUSS**。
+楼中楼只有 portrait 时优先走这个接口，不要因为 username 为空就跳过。
 
 ## 4. 用户发言 protobuf
 

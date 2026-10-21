@@ -1,6 +1,6 @@
 # 代码地图
 
-最后更新：2026-10-20  
+最后更新：2026-10-22
 规范以 [../SPEC.md](../SPEC.md) 为准；本文只说明代码位置。
 
 ## 1. 入口
@@ -25,7 +25,7 @@
 | `profile_pb.py` | 客户端 profile protobuf |
 | `userpost_pb.py` | 客户端 userpost protobuf |
 | `follow_probe.py` | 隐藏关注候选探测 |
-| `collect.py` | 抓取编排、匿名/关注增强分流 |
+| `collect.py` | 抓取编排、身份/等级补全、匿名/关注增强分流 |
 | `models.py` | Floor / Comment / ThreadData / 用户汇总 |
 | `filters.py` | 参与者关键词/等级/标记筛选 |
 | `compare.py` | 多帖对比 |
@@ -71,6 +71,8 @@
 | `tests/test_report.py` | 用户报告 |
 | `tests/test_posts_export.py` | 导出发言三表/超链接 |
 | `tests/test_post_cache.py` | 发言缓存读写 |
+| `tests/test_parse_comments.py` | 楼中楼身份字段/username 兜底 |
+| `tests/test_profile_identity.py` | 昵称搜索 dict/list 兼容 |
 | `tests/test_config_backup.py` | 设置备份 |
 | `tests/test_follow_probe.py` | 候选探测 |
 | `tests/test_floor_depth.py` | 楼中楼深度/去重 |
@@ -78,7 +80,7 @@
 | `tests/test_errors.py` | 错误文案 |
 | `tests/test_version.py` | 版本一致性 |
 
-当前：81 个 pytest 通过，selftest 通过。
+当前：86 个 pytest 通过，selftest 通过。
 
 ## 5. 脚本
 
