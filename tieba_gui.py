@@ -2909,6 +2909,9 @@ class App:
     def _risk_enabled(self) -> bool:
         return bool(self.settings.get("risk_enabled", False))
 
+    def _has_mark_rules(self) -> bool:
+        return any(self.blacklist.get(key) for key in ("safe", "warn", "ban"))
+
     def _apply_risk_ui(self) -> None:
         enabled = self._risk_enabled()
         if hasattr(self, "people_tree"):
@@ -3073,6 +3076,15 @@ class App:
         body.bind("<MouseWheel>", on_wheel)
         return outer, body
 
+    def _bind_mousewheel_tree(self, widget, canvas) -> None:
+        def on_wheel(event) -> str:
+            canvas.yview_scroll(int(-event.delta / 120), "units")
+            return "break"
+
+        widget.bind("<MouseWheel>", on_wheel)
+        for child in widget.winfo_children():
+            self._bind_mousewheel_tree(child, canvas)
+
     def _build_settings_tab(self) -> None:
         wrap = tk.Frame(self.tab_settings, bg="#eef1f5")
         wrap.pack(fill="both", expand=True, padx=6, pady=6)
@@ -3096,6 +3108,9 @@ class App:
         inner.pack(side="left", fill="both", expand=True)
         self.settings_inner = inner
         self.tab_general_page, self.tab_general = self._make_scrollable_settings_page(inner)
+        self.tab_general_canvas = next(
+            child for child in self.tab_general_page.winfo_children() if isinstance(child, tk.Canvas)
+        )
         self.tab_appearance = tk.Frame(inner, bg="#eef1f5")
         self.tab_blacklist = tk.Frame(inner, bg="#eef1f5")
         self.tab_storage = tk.Frame(inner, bg="#eef1f5")
@@ -3108,6 +3123,7 @@ class App:
             self.tab_about,
         ]
         self._build_general_tab()
+        self._bind_mousewheel_tree(self.tab_general, self.tab_general_canvas)
         self._build_appearance_tab()
         self._build_storage_tab()
         self._build_about_tab()
@@ -6405,6 +6421,13 @@ class App:
                 parent=self.root,
             )
             return
+        if not self._has_mark_rules():
+            messagebox.showinfo(
+                "没有本地标记规则",
+                "先在「设置 → 本地标记」里填写安全/可疑/警告贴吧，再刷红绿灯。",
+                parent=self.root,
+            )
+            return
         if not getattr(self, "people_users", None):
             messagebox.showinfo("还没有数据", "先点「开始统计」抓一个帖子。", parent=self.root)
             return
@@ -6605,6 +6628,9 @@ class App:
         if getattr(self, "_batch_running", False):
             return
         if not self._risk_enabled():
+            return
+        if not self._has_mark_rules():
+            self.people_hint.configure(text="没有本地标记规则，请先在设置→本地标记中填写")
             return
         users = self._visible_people()
         if not users:
