@@ -2314,7 +2314,7 @@ class App:
             self.lookup_topic_btn.pack(side="left", padx=(0, 6))
         else:
             self.lookup_topic_btn.pack_forget()
-        if self._hidden_follows(profile):
+        if self._follow_incomplete(profile):
             self.lookup_probe_btn.pack(side="left", padx=(6, 0))
             self.lookup_probe_btn.configure(state="normal", text="探测候选关注")
         else:
@@ -6139,6 +6139,14 @@ class App:
     def _hidden_follows(self, profile) -> bool:
         return bool(profile.get("followed_private")) or profile.get("priv_like") == 3
 
+    def _follow_incomplete(self, profile) -> bool:
+        """关注列表是否不完整；游客、无 BDUSS、隐藏关注都需要候选探测。"""
+        if profile.get("followed_forums"):
+            return False
+        if profile.get("follow_loaded") and not self._hidden_follows(profile) and not profile.get("follow_error"):
+            return False
+        return True
+
     def _profile_hit(self, profile, extra_bars=None):
         if not self._risk_enabled():
             return "", ""
@@ -6767,7 +6775,7 @@ class App:
             self.profile_follow_btn.pack(side="left", padx=(0, 6))
         else:
             self.profile_follow_btn.pack_forget()
-        if self._hidden_follows(profile):
+        if self._follow_incomplete(profile):
             self.profile_probe_btn.pack(side="left", padx=(0, 6))
             self.profile_probe_btn.configure(state="normal", text="探测候选关注")
         else:

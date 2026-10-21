@@ -136,6 +136,7 @@ Android 核心同步通过
 - 昵称搜索 exactMatch/fuzzyMatch 兼容 dict/list；
 - portrait 通过 profile protobuf 反查 uid，无需 Cookie；
 - 无 BDUSS 时展示 profile 片段关注，并标明不完整；
+- 游客/无 BDUSS/隐藏关注都显示「探测候选关注」，游客可匿名探测；
 - 批量状态显示成功/跳过/失败；
 - 顶部和表头标记筛选统一使用 `mark_level`；
 - 主窗口默认 1400×900，启动居中；旧小尺寸回退默认；
