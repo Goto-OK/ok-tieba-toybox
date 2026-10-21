@@ -16,9 +16,20 @@ def test_post_cache_roundtrip():
     stats = cache.stats()
     assert stats["cold_users"] >= 1
     assert stats["cold_pages"] >= 1
+    assert stats["cold_posts"] >= 1
     cache.clear()
     assert cache.get_page("u1", "reply", 1) is None
     assert cache.get_user("u1") is None
+
+
+def test_cache_eviction_is_observable():
+    cache = post_cache.cache()
+    cache.clear()
+    cache._limit_mb = 0
+    cache.put_user("evict-me", {"posts": []}, priority=post_cache.PRIORITY_LOW)
+    assert cache.take_eviction_notice() >= 1
+    cache.clear()
+    cache._limit_mb = post_cache.DEFAULT_LIMIT_MB
 
 
 def test_cached_user_posts_rejects_wider_end():

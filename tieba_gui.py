@@ -1163,12 +1163,14 @@ class App:
             font=("Microsoft YaHei UI", 9),
         )
         self.profile_status.pack(side="left", fill="x", expand=True)
+        profile_action_bar = tk.Frame(right, bg="#fbfcfe")
+        profile_action_bar.pack(fill="x", padx=6, pady=(0, 4))
         self.profile_topic_btn = ttk.Button(
-            profile_bar, text="继续抓主题", command=self._continue_profile_topics, width=12
+            profile_action_bar, text="继续抓主题", command=self._continue_profile_topics
         )
         self.profile_topic_btn.pack(side="right", padx=(0, 4))
         self.profile_topic_btn.pack_forget()
-        ttk.Button(profile_bar, text="刷新资料", command=self._reload_profile, width=8).pack(
+        ttk.Button(profile_action_bar, text="刷新资料", command=self._reload_profile, width=8).pack(
             side="right"
         )
 
@@ -2305,9 +2307,8 @@ class App:
         self.lookup_posts_btn.pack(side="left", padx=(0, 6))
         sources = profile.get("post_sources") or {}
         if sources.get("topic_truncated"):
-            self.lookup_topic_btn.configure(
-                text=f"继续抓主题（已 {sources.get('topic_pages') or 50} 页）"
-            )
+            topic_text = f"继续抓主题（已 {sources.get('topic_pages') or 50} 页）"
+            self.lookup_topic_btn.configure(text=topic_text, width=max(12, len(topic_text) + 2))
             self.lookup_topic_btn.pack(side="left", padx=(0, 6))
         else:
             self.lookup_topic_btn.pack_forget()
@@ -2850,6 +2851,7 @@ class App:
                 page.pack(fill="both", expand=True)
             else:
                 page.pack_forget()
+        self._set_cache_stats_timer(index == 3)
 
     def _on_settings_start_changed(self) -> None:
         self.settings["settings_start"] = "last" if self.settings_start_var.get() == "上次分类" else "general"
@@ -2857,6 +2859,7 @@ class App:
 
     def _on_main_tab_changed(self, _event=None) -> None:
         if self.notebook.select() != str(self.tab_settings):
+            self._set_cache_stats_timer(False)
             return
         index = 0
         if self.settings.get("settings_start") == "last":
@@ -3284,7 +3287,7 @@ class App:
         box = tk.Frame(self.tab_storage, bg="#eef1f5", padx=14, pady=10)
         box.pack(fill="both", expand=True)
 
-        save_box = ttk.LabelFrame(box, text=" 保存与恢复 ")
+        save_box = ttk.LabelFrame(box, text=" 最近结果 ")
         save_box.pack(fill="x", pady=(0, 6))
         self.save_result_var = tk.BooleanVar(value=bool(self.settings.get("save_result", True)))
         ttk.Checkbutton(
@@ -3321,6 +3324,17 @@ class App:
             fg="#8a94a6",
             font=("Microsoft YaHei UI", 8),
         ).pack(anchor="w", padx=8, pady=(2, 4))
+        result_buttons = tk.Frame(save_box, bg="#eef1f5")
+        result_buttons.pack(fill="x", padx=8, pady=(2, 4))
+        ttk.Button(result_buttons, text="删除当前结果", command=self._clear_result, width=14).pack(side="left")
+        ttk.Button(
+            result_buttons, text="清理旧版本结果", command=self._cleanup_old_results, width=14
+        ).pack(side="left", padx=(6, 0))
+        self.old_files_label = tk.Label(
+            result_buttons, text="", bg="#eef1f5", fg="#8a94a6", font=("Microsoft YaHei UI", 8)
+        )
+        self.old_files_label.pack(side="left", padx=(10, 0))
+        self._refresh_old_files_label()
 
         log_box = ttk.LabelFrame(box, text=" 运行日志 ")
         log_box.pack(fill="x", pady=(0, 6))
@@ -3337,7 +3351,21 @@ class App:
             bg="#eef1f5",
             fg="#8a94a6",
             font=("Microsoft YaHei UI", 8),
-        ).pack(anchor="w", padx=8, pady=(2, 4))
+        ).pack(anchor="w", padx=8, pady=(2, 2))
+        log_buttons = tk.Frame(log_box, bg="#eef1f5")
+        log_buttons.pack(fill="x", padx=8, pady=(0, 2))
+        ttk.Button(log_buttons, text="查看日志", command=self._view_logs, width=10).pack(side="left")
+        ttk.Button(
+            log_buttons, text="打开日志目录", command=self._open_logs_dir, width=12
+        ).pack(side="left", padx=(6, 0))
+        ttk.Button(log_buttons, text="删除日志", command=self._delete_logs, width=10).pack(
+            side="left", padx=(6, 0)
+        )
+        self.log_summary_label = tk.Label(
+            log_box, text="", bg="#eef1f5", fg="#8a94a6", font=("Microsoft YaHei UI", 8), anchor="w"
+        )
+        self.log_summary_label.pack(fill="x", padx=8, pady=(0, 4))
+        self._refresh_log_summary()
 
         cache_box = ttk.LabelFrame(box, text=" 发言缓存 ")
         cache_box.pack(fill="x", pady=(0, 6))
@@ -3374,26 +3402,26 @@ class App:
         self.cache_stats_label.pack(fill="x", padx=8, pady=(2, 4))
         self._refresh_cache_stats()
 
-        maint_box = ttk.LabelFrame(box, text=" 数据位置与维护 ")
-        maint_box.pack(fill="x")
+        maint_box = ttk.LabelFrame(box, text=" 数据位置 ")
+        maint_box.pack(fill="x", pady=(0, 6))
         data_row = tk.Frame(maint_box, bg="#eef1f5")
         data_row.pack(fill="x", padx=8, pady=(6, 2))
         tk.Label(
             data_row,
-            text=f"数据：{APP_DIR}",
+            text=f"应用数据：{APP_DIR}",
             bg="#eef1f5",
             fg="#475569",
             font=("Microsoft YaHei UI", 8),
             anchor="w",
         ).pack(side="left", fill="x", expand=True)
-        ttk.Button(data_row, text="打开", command=lambda: self._open_folder(APP_DIR), width=8).pack(
-            side="right"
-        )
+        ttk.Button(
+            data_row, text="打开数据目录", command=lambda: self._open_folder(APP_DIR), width=13
+        ).pack(side="right")
         temp_row = tk.Frame(maint_box, bg="#eef1f5")
-        temp_row.pack(fill="x", padx=8, pady=(2, 2))
+        temp_row.pack(fill="x", padx=8, pady=(2, 4))
         tk.Label(
             temp_row,
-            text="临时：%TEMP%\\TiebaReplyStats",
+            text="临时文件：%TEMP%\\TiebaReplyStats",
             bg="#eef1f5",
             fg="#475569",
             font=("Microsoft YaHei UI", 8),
@@ -3401,20 +3429,14 @@ class App:
         ).pack(side="left", fill="x", expand=True)
         ttk.Button(
             temp_row,
-            text="打开",
+            text="打开临时目录",
             command=lambda: self._open_folder(os.path.join(os.environ.get("TEMP", ""), "TiebaReplyStats")),
-            width=8,
+            width=13,
         ).pack(side="right")
-        buttons = tk.Frame(maint_box, bg="#eef1f5")
-        buttons.pack(fill="x", padx=8, pady=(4, 2))
-        ttk.Button(buttons, text="删除当前结果", command=self._clear_result, width=14).pack(side="left")
-        self.old_files_label = tk.Label(
-            buttons, text="", bg="#eef1f5", fg="#8a94a6", font=("Microsoft YaHei UI", 8)
-        )
-        self.old_files_label.pack(side="left", padx=(10, 0))
-        ttk.Button(buttons, text="清理旧版本残留", command=self._cleanup_old_results, width=14).pack(side="right")
-        self._refresh_old_files_label()
-        danger = tk.Frame(maint_box, bg="#eef1f5")
+
+        danger_box = ttk.LabelFrame(box, text=" 危险操作 ")
+        danger_box.pack(fill="x")
+        danger = tk.Frame(danger_box, bg="#eef1f5")
         danger.pack(fill="x", padx=8, pady=(6, 4))
         tk.Button(
             danger,
@@ -3431,34 +3453,243 @@ class App:
             font=("Microsoft YaHei UI", 9),
         ).pack(side="left")
         tk.Label(
-            maint_box,
-            text="清空所有本地数据不会删除你导出的 Excel 或 Markdown；恢复默认设置在「常规」。",
+            danger_box,
+            text="会删除结果、BDUSS、标记、设置、临时文件和日志；不会删除导出的 Excel/Markdown。",
             bg="#eef1f5",
             fg="#8a94a6",
             font=("Microsoft YaHei UI", 8),
         ).pack(anchor="w", padx=8, pady=(0, 4))
 
-    def _on_cache_limit_changed(self) -> None:
+    def _logs_dir(self) -> str:
+        return os.path.join(APP_DIR, "logs")
+
+    def _log_files(self) -> List[str]:
+        folder = self._logs_dir()
+        if not os.path.isdir(folder):
+            return []
+        paths = [
+            os.path.join(folder, name)
+            for name in os.listdir(folder)
+            if name.startswith("app-") and name.endswith(".log")
+        ]
+        paths.sort(key=lambda path: os.path.getmtime(path), reverse=True)
+        return paths
+
+    def _refresh_log_summary(self) -> None:
+        label = getattr(self, "log_summary_label", None)
+        if label is None:
+            return
+        files = self._log_files()
+        total = 0
+        for path in files:
+            try:
+                total += os.path.getsize(path)
+            except OSError:
+                continue
+        if not files:
+            label.configure(text="日志：暂无")
+        else:
+            label.configure(text=f"日志：{len(files)} 个 / {total / 1024:.1f} KB")
+
+    def _open_logs_dir(self) -> None:
+        folder = self._logs_dir()
         try:
-            value = int(float(self.cache_limit_var.get().strip()))
-        except (TypeError, ValueError):
-            value = int(self.settings.get("post_cache_limit_mb", DEFAULT_LIMIT_MB))
-        value = max(MIN_LIMIT_MB, min(MAX_LIMIT_MB, value))
-        old = int(self.settings.get("post_cache_limit_mb", DEFAULT_LIMIT_MB))
-        if value < old:
-            if not messagebox.askokcancel(
-                "降低发言缓存上限",
-                "降低上限会立即清除部分发言缓存，之后查询可能变慢。\n"
-                "不会删除 Excel、本地标记或最近结果。\n\n继续？",
-                parent=self.root,
-            ):
-                self.cache_limit_var.set(str(old))
+            os.makedirs(folder, exist_ok=True)
+        except OSError as error:
+            messagebox.showerror("打开失败", str(error), parent=self.root)
+            return
+        self._open_folder(folder)
+
+    def _delete_logs(self) -> None:
+        files = self._log_files()
+        if not files:
+            messagebox.showinfo("没有日志", "当前没有可删除的日志。", parent=self.root)
+            return
+        if not messagebox.askyesno(
+            "删除日志",
+            f"删除全部 {len(files)} 个日志文件？\n不会改变“保存运行日志”开关。",
+            parent=self.root,
+            default=messagebox.NO,
+        ):
+            return
+        deleted = 0
+        for path in files:
+            try:
+                os.remove(path)
+                deleted += 1
+            except OSError:
+                continue
+        self._refresh_log_summary()
+        self._append_log(f"已删除日志：{deleted} 个", "muted")
+
+    def _view_logs(self) -> None:
+        files = self._log_files()
+        if not files:
+            messagebox.showinfo(
+                "没有日志", "还没有日志。先开启“保存运行日志”并运行一次抓取。", parent=self.root
+            )
+            return
+        win = tk.Toplevel(self.root)
+        win.title("运行日志")
+        win.transient(self.root)
+        win.geometry("820x560")
+        win.minsize(620, 400)
+        win.configure(bg="#eef1f5")
+        body = tk.Frame(win, bg="#eef1f5", padx=10, pady=10)
+        body.pack(fill="both", expand=True)
+
+        left = tk.Frame(body, bg="#eef1f5", width=210)
+        left.pack(side="left", fill="y", padx=(0, 8))
+        left.pack_propagate(False)
+        tk.Label(left, text="日志文件", bg="#eef1f5", fg="#475569", anchor="w").pack(fill="x")
+        listbox = tk.Listbox(left, exportselection=False, activestyle="none")
+        listbox.pack(fill="both", expand=True, pady=(4, 0))
+
+        right = tk.Frame(body, bg="#eef1f5")
+        right.pack(side="left", fill="both", expand=True)
+        text = tk.Text(right, wrap="none", state="disabled", bg="#ffffff", fg="#111827")
+        y_scroll = ttk.Scrollbar(right, orient="vertical", command=text.yview)
+        x_scroll = ttk.Scrollbar(right, orient="horizontal", command=text.xview)
+        text.configure(yscrollcommand=y_scroll.set, xscrollcommand=x_scroll.set)
+        text.grid(row=0, column=0, sticky="nsew")
+        y_scroll.grid(row=0, column=1, sticky="ns")
+        x_scroll.grid(row=1, column=0, sticky="ew")
+        right.rowconfigure(0, weight=1)
+        right.columnconfigure(0, weight=1)
+
+        footer = tk.Frame(win, bg="#eef1f5", padx=10)
+        footer.pack(fill="x", pady=(0, 10))
+
+        def selected_path() -> str:
+            selection = listbox.curselection()
+            return files[int(selection[0])] if selection else ""
+
+        def show_file(path: str) -> None:
+            if not path:
                 return
-        self.cache_limit_var.set(str(value))
-        self.settings["post_cache_limit_mb"] = value
-        save_settings(self.settings)
-        post_cache().set_limit_mb(value)
+            try:
+                with open(path, "r", encoding="utf-8", errors="replace") as handle:
+                    content = handle.read(512 * 1024)
+            except OSError as error:
+                content = f"读取失败：{error}"
+            text.configure(state="normal")
+            text.delete("1.0", "end")
+            text.insert("end", content)
+            text.configure(state="disabled")
+
+        def on_select(_event=None) -> None:
+            show_file(selected_path())
+
+        def delete_current() -> None:
+            path = selected_path()
+            if not path:
+                return
+            if not messagebox.askyesno(
+                "删除当前日志",
+                f"删除 {os.path.basename(path)}？",
+                parent=win,
+                default=messagebox.NO,
+            ):
+                return
+            try:
+                os.remove(path)
+            except OSError as error:
+                messagebox.showerror("删除失败", str(error), parent=win)
+                return
+            self._refresh_log_summary()
+            reload_list()
+
+        def reload_list() -> None:
+            listbox.delete(0, "end")
+            current_files = self._log_files()
+            files[:] = current_files
+            for path in files:
+                listbox.insert("end", os.path.basename(path))
+            if files:
+                listbox.selection_set(0)
+                show_file(files[0])
+            else:
+                text.configure(state="normal")
+                text.delete("1.0", "end")
+                text.insert("end", "没有日志。")
+                text.configure(state="disabled")
+
+        for path in files:
+            listbox.insert("end", os.path.basename(path))
+        listbox.selection_set(0)
+        show_file(files[0])
+        listbox.bind("<<ListboxSelect>>", on_select)
+
+        ttk.Button(footer, text="打开日志目录", command=self._open_logs_dir, width=12).pack(side="left")
+        ttk.Button(footer, text="删除当前日志", command=delete_current, width=12).pack(
+            side="left", padx=(6, 0)
+        )
+        ttk.Button(footer, text="关闭", command=win.destroy, width=8).pack(side="right")
+        try:
+            self._theme_widget_tree(win)
+        except Exception:  # noqa: BLE001
+            pass
+
+    def _on_cache_limit_changed(self) -> None:
+        if getattr(self, "_cache_limit_busy", False):
+            return
+        self._cache_limit_busy = True
+        try:
+            try:
+                value = int(float(self.cache_limit_var.get().strip()))
+            except (TypeError, ValueError):
+                value = int(self.settings.get("post_cache_limit_mb", DEFAULT_LIMIT_MB))
+            value = max(MIN_LIMIT_MB, min(MAX_LIMIT_MB, value))
+            old = int(self.settings.get("post_cache_limit_mb", DEFAULT_LIMIT_MB))
+            if value < old:
+                if not messagebox.askokcancel(
+                    "降低发言缓存上限",
+                    "降低上限会立即清除部分发言缓存，之后查询可能变慢。\n"
+                    "不会删除 Excel、本地标记或最近结果。\n\n继续？",
+                    parent=self.root,
+                ):
+                    self.cache_limit_var.set(str(old))
+                    return
+            self.cache_limit_var.set(str(value))
+            self.settings["post_cache_limit_mb"] = value
+            save_settings(self.settings)
+            post_cache().set_limit_mb(value)
+            self._refresh_cache_stats()
+        finally:
+            self._cache_limit_busy = False
+
+    def _set_cache_stats_timer(self, enabled: bool) -> None:
+        timer = getattr(self, "_cache_stats_timer", None)
+        if timer is not None:
+            try:
+                self.root.after_cancel(timer)
+            except tk.TclError:
+                pass
+            self._cache_stats_timer = None
+        if enabled:
+            self._cache_stats_timer = self.root.after(2000, self._cache_stats_tick)
+
+    def _cache_stats_tick(self) -> None:
+        self._cache_stats_timer = None
+        self._notify_cache_eviction()
         self._refresh_cache_stats()
+        self._cache_stats_timer = self.root.after(2000, self._cache_stats_tick)
+
+    def _notify_cache_eviction(self) -> None:
+        if getattr(self, "_cache_eviction_notified", False):
+            post_cache().take_eviction_notice()
+            return
+        count = post_cache().take_eviction_notice()
+        if not count:
+            return
+        self._cache_eviction_notified = True
+        text = "缓存已达上限，已淘汰部分旧缓存；不影响本次标记和导出。"
+        self.status_var.set(text)
+        self._append_log(text, "muted")
+
+    def _refresh_cache_stats_if_visible(self) -> None:
+        if getattr(self, "_cache_stats_timer", None) is not None:
+            self._refresh_cache_stats()
 
     def _refresh_cache_stats(self) -> None:
         label = getattr(self, "cache_stats_label", None)
@@ -3569,11 +3800,11 @@ class App:
     def _cleanup_old_results(self) -> None:
         files = stored_old_files()
         if not files:
-            self.status_var.set("没有需要清理的旧版本残留")
+            self.status_var.set("没有需要清理的旧版本结果")
             return
         if not messagebox.askyesno(
-            "清理旧版本残留",
-            f"删除 {len(files)} 个旧版本残留文件？不会影响当前结果。",
+            "清理旧版本结果",
+            f"删除 {len(files)} 个旧版本结果文件？不会影响当前结果。",
             parent=self.root,
             default=messagebox.NO,
         ):
@@ -3584,7 +3815,7 @@ class App:
             except (OSError, ValueError):
                 pass
         self._refresh_old_files_label()
-        self._append_log(f"已清理旧版本残留：{len(files)} 个", "muted")
+        self._append_log(f"已清理旧版本结果：{len(files)} 个", "muted")
 
     def _refresh_old_files_label(self) -> None:
         if not hasattr(self, "old_files_label"):
@@ -3901,6 +4132,7 @@ class App:
         self._refresh_people()
         self._refresh_grid()
         self._refresh_old_files_label()
+        self._refresh_log_summary()
         self._append_log("软件数据已清空；导出文件未受影响。", "ok")
 
     def _build_general_tab(self) -> None:
@@ -5779,8 +6011,8 @@ class App:
 
         def resolve(user):
             name = str(user.get("name") or "").strip()
-            if not (user.get("uid") or user.get("username")) and not name:
-                return {"ok": False, "skipped": True, "error": "缺少用户ID"}
+            if not any((user.get("uid"), user.get("username"), user.get("portrait"), name)):
+                return {"ok": False, "skipped": True, "error": "缺少用户身份"}
             key = (
                 f"{user.get('uid') or user.get('username') or name}|{count}|{start_date}|{end_date}|"
                 f"{prefer}|{int(include_follows)}|{int(guest)}"
@@ -5792,16 +6024,22 @@ class App:
                 fetcher = Fetcher(cookie=cookie, delay=0.3, verbose=False)
                 uid = user.get("uid") or ""
                 username = user.get("username") or ""
-                if not (uid or username):
-                    info = resolve_user(fetcher, name, "昵称") if name else {}
+                if not uid:
+                    info = {}
+                    if username:
+                        info = resolve_user(fetcher, username, "用户名")
+                    elif name:
+                        info = resolve_user(fetcher, name, "昵称")
+                    if not info.get("uid") and not user.get("portrait") and name and username:
+                        info = resolve_user(fetcher, name, "昵称")
                     if info.get("uid"):
                         uid = info.get("uid") or ""
-                        username = info.get("username") or ""
+                        username = info.get("username") or username
                         user["uid"] = uid
                         user["username"] = username
                         user["portrait"] = info.get("portrait") or user.get("portrait") or ""
                     elif not user.get("portrait"):
-                        return {"ok": False, "skipped": True, "error": "昵称无法唯一定位"}
+                        return {"ok": False, "skipped": True, "error": "用户名/昵称无法唯一定位"}
                     # 没有 uid/username 但保留 portrait 时，仍可用 portrait 查发言。
                 cached_posts = cached_user_posts(
                     uid, count, start_date, end_date, prefer, promote=False
@@ -5974,6 +6212,7 @@ class App:
         force: bool = False,
         force_follow: bool = False,
         topic_max_pages: Optional[int] = None,
+        use_page_cache: Optional[bool] = None,
     ) -> None:
         key = user["uid"] or f"name:{user['name']}"
         cached = None if (force or force_follow) else getattr(self, "_profile_cache", {}).get(key)
@@ -6004,17 +6243,23 @@ class App:
                 uid = str(user.get("uid") or "")
                 username = str(user.get("username") or "")
                 portrait = str(user.get("portrait") or "")
-                if not (uid or username) and user.get("name"):
-                    info = resolve_user(fetcher, str(user["name"]), "昵称")
+                if not uid:
+                    info = {}
+                    if username:
+                        info = resolve_user(fetcher, username, "用户名")
+                    elif user.get("name"):
+                        info = resolve_user(fetcher, str(user["name"]), "昵称")
+                    if not info.get("uid") and not portrait and user.get("name") and username:
+                        info = resolve_user(fetcher, str(user["name"]), "昵称")
                     if info.get("uid"):
                         uid = str(info.get("uid") or "")
-                        username = str(info.get("username") or "")
+                        username = str(info.get("username") or username)
                         portrait = str(info.get("portrait") or portrait)
                         user["uid"] = uid
                         user["username"] = username
                         user["portrait"] = portrait
                     elif not portrait:
-                        profile = {"ok": False, "error": "昵称无法唯一定位"}
+                        profile = {"ok": False, "error": "用户名/昵称无法唯一定位"}
                         self._post(("profile_ready", key, user, profile))
                         return
                 local_cached = cached_posts
@@ -6032,7 +6277,7 @@ class App:
                     prefer,
                     load_follow=force_follow or self.settings.get("follow_load_mode", "auto") == "auto",
                     topic_max_pages=topic_limit,
-                    use_cache=not force,
+                    use_cache=(not force if use_page_cache is None else bool(use_page_cache)),
                     cached_posts=local_cached,
                 )
             except Exception as error:  # noqa: BLE001
@@ -6064,7 +6309,9 @@ class App:
             self.profile_topic_btn.pack_forget()
             return
         limit = 100000 if choice == "all" else int(getattr(self, "_profile_topic_limit", 50)) + 50
-        self._load_profile(user, force=True, topic_max_pages=limit)
+        self._load_profile(
+            user, force=True, topic_max_pages=limit, use_page_cache=True
+        )
 
     def _apply_level_to_threads(self, user, level: str) -> None:
         """把某个人的本吧等级写回楼层/楼中楼数据，刷新和导出时都不会丢。"""
@@ -6476,9 +6723,8 @@ class App:
         self.profile_posts_btn.pack(side="left", padx=(0, 6))
         sources = profile.get("post_sources") or {}
         if sources.get("topic_truncated"):
-            self.profile_topic_btn.configure(
-                text=f"继续抓主题（已 {sources.get('topic_pages') or 50} 页）"
-            )
+            topic_text = f"继续抓主题（已 {sources.get('topic_pages') or 50} 页）"
+            self.profile_topic_btn.configure(text=topic_text, width=max(12, len(topic_text) + 2))
             self.profile_topic_btn.pack(side="right", padx=(0, 4))
         else:
             self.profile_topic_btn.pack_forget()
@@ -6631,6 +6877,25 @@ class App:
             for old in files[7:]:
                 try:
                     os.remove(old)
+                except OSError:
+                    pass
+            files = files[:7]
+            total = 0
+            sizes = {}
+            for item in files:
+                try:
+                    sizes[item] = os.path.getsize(item)
+                except OSError:
+                    sizes[item] = 0
+                total += sizes[item]
+            for old in reversed(files):
+                if total <= 10 * 1024 * 1024:
+                    break
+                if old == path:
+                    continue
+                try:
+                    os.remove(old)
+                    total -= sizes.get(old, 0)
                 except OSError:
                     pass
         except OSError:
@@ -6892,21 +7157,31 @@ class App:
             for index, url in enumerate(urls, start=1):
                 self._post(("log", f"\n[{index}/{len(urls)}] {url}", "title"))
                 try:
+                    tid = extract_tid(url)
+                except ValueError:
+                    tid = ""
+                self._write_log("thread_start", tid=tid)
+                try:
                     thread = collect_thread(url, fetcher, options)
                 except CaptchaError:
                     raise
                 except CollectCancelled:
                     raise
                 except (ThreadGoneError, FetchError, CollectError, ValueError) as error:
+                    self._write_log("thread_error", tid=tid, error=type(error).__name__)
                     self._post(("log", f"  ✗ 抓取失败：{error}", "err"))
                     continue
                 completed.append(thread)
+                users = thread.user_stats()
+                leveled = sum(1 for item in users if item.get("level"))
                 self._write_log(
                     "thread_done",
                     tid=thread.meta.tid,
                     floors=len(thread.floors),
                     comments=len(thread.comments),
+                    users=len(users),
                 )
+                self._write_log("level_done", tid=thread.meta.tid, leveled=leveled, users=len(users))
                 title = thread.meta.title or thread.meta.tid
                 self._post(
                     (
@@ -6940,6 +7215,11 @@ class App:
                 for item in list(thread.floors) + list(thread.comments)
                 if not item.author_id and (item.author_name or item.portrait)
             )
+            self._write_log(
+                "identity_done",
+                missing=self._identity_missing,
+                users=sum(len(thread.user_stats()) for thread in completed),
+            )
             if self._identity_missing:
                 self._post(
                     ("log", f"  ⚠ 仍有 {self._identity_missing} 条身份待补全（不影响已抓内容）", "err")
@@ -6947,15 +7227,31 @@ class App:
 
             if export:
                 export_workbook(output, completed, include_op=include_op)
+                self._write_log("export", ok=True, threads=len(completed))
+                self._write_log(
+                    "done",
+                    threads=len(completed),
+                    users=sum(len(thread.user_stats()) for thread in completed),
+                    exported=True,
+                )
                 self._post(("done", output, len(completed), list(completed)))
             else:
+                self._write_log(
+                    "done",
+                    threads=len(completed),
+                    users=sum(len(thread.user_stats()) for thread in completed),
+                    exported=False,
+                )
                 self._post(("done", None, len(completed), list(completed)))
         except CaptchaError as error:
+            self._write_log("error", error="CaptchaError")
             self._post(("captcha", str(error)))
         except CollectCancelled:
+            self._write_log("cancelled", threads=len(completed), exported=bool(export and completed))
             if completed:
                 if export:
                     export_workbook(output, completed, include_op=include_op)
+                    self._write_log("export", ok=True, threads=len(completed))
                 self._post(("cancelled_partial", output if export else None, len(completed), list(completed)))
             else:
                 self._post(("cancelled",))
@@ -6977,6 +7273,7 @@ class App:
                 self._handle_message(message)
         except queue.Empty:
             pass
+        self._notify_cache_eviction()
         self.root.after(120, self._poll_queue)
 
     def _handle_message(self, message: tuple) -> None:
@@ -7002,6 +7299,8 @@ class App:
             if identity_missing:
                 status += f" · 身份待补全 {identity_missing} 条"
             self.status_var.set(status)
+            self._refresh_cache_stats_if_visible()
+            self._refresh_log_summary()
             if output:
                 self.open_btn.configure(state="normal")
                 self._append_log(f"\n完成！共 {count} 个帖子，文件已保存：\n{output}", "ok")
@@ -7034,6 +7333,7 @@ class App:
             else:
                 self.open_btn.configure(state="disabled")
                 self._append_log(f"\n已停止，完成了 {count} 个帖子的抓取（未导出 Excel）。", "err")
+            self._refresh_log_summary()
         elif kind == "probe_done":
             _, profile, results, button = message
             self._probe_running = False
@@ -7099,6 +7399,7 @@ class App:
                 ("已停止" if cancelled else "完成") + f"一键红绿灯：刷新 {done} 人。",
                 "muted" if cancelled else "ok",
             )
+            self._refresh_cache_stats_if_visible()
         elif kind == "identities_ready":
             try:
                 self._refresh_people()
@@ -7119,6 +7420,7 @@ class App:
                     current = None
                 if current and (current["uid"] or f"name:{current['name']}") == key:
                     self._render_profile(user, profile)
+            self._refresh_cache_stats_if_visible()
         elif kind == "enrich_done":
             self._enriching = False
             self._refresh_people()
@@ -7147,6 +7449,7 @@ class App:
             self._set_running(False)
             self.status_var.set("已停止")
             self._append_log("\n已停止，没有生成文件。", "err")
+            self._refresh_log_summary()
         elif kind == "captcha":
             _, detail = message
             self._set_running(False)
@@ -7178,11 +7481,13 @@ class App:
                     "请在浏览器完成验证，重新复制完整 Cookie 后再试。",
                     parent=self.root,
                 )
+            self._refresh_log_summary()
         elif kind == "error":
             _, detail = message
             self._set_running(False)
             self.status_var.set("出错了")
             self._append_log(f"\n✗ {detail}", "err")
+            self._refresh_log_summary()
             messagebox.showerror("出错了", detail.split("\n\n")[0], parent=self.root)
 
     def _set_running(self, running: bool) -> None:

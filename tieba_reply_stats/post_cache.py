@@ -43,6 +43,7 @@ class PostCache:
         self._path = ""
         self._limit_mb = DEFAULT_LIMIT_MB
         self._closed = False
+        self._evicted = 0
         self._open()
         atexit.register(self.close)
 
@@ -72,11 +73,18 @@ class PostCache:
                 user_key TEXT PRIMARY KEY,
                 data TEXT NOT NULL,
                 updated REAL NOT NULL,
-                priority INTEGER NOT NULL DEFAULT 1
+                priority INTEGER NOT NULL DEFAULT 1,
+                post_count INTEGER NOT NULL DEFAULT 0
             );
             CREATE INDEX IF NOT EXISTS idx_users_updated ON users(updated);
             """
         )
+        try:
+            columns = {row[1] for row in self._conn.execute("PRAGMA table_info(users)")}
+            if "post_count" not in columns:
+                self._conn.execute("ALTER TABLE users ADD COLUMN post_count INTEGER NOT NULL DEFAULT 0")
+        except sqlite3.Error:
+            pass
         self._conn.commit()
 
     def _cleanup_stale(self) -> None:
@@ -130,6 +138,7 @@ class PostCache:
             self._hot_pages.clear()
             self._hot_users.clear()
             self._hot_bytes = 0
+            self._evicted = 0
             if self._conn is not None:
                 self._conn.execute("DELETE FROM pages")
                 self._conn.execute("DELETE FROM users")
@@ -242,8 +251,15 @@ class PostCache:
                 self._trim_hot()
             if self._conn is not None:
                 self._conn.execute(
-                    "INSERT OR REPLACE INTO users(user_key,data,updated,priority) VALUES(?,?,?,?)",
-                    (user_key, json.dumps(data, ensure_ascii=False), now, priority),
+                    "INSERT OR REPLACE INTO users(user_key,data,updated,priority,post_count) "
+                    "VALUES(?,?,?,?,?)",
+                    (
+                        user_key,
+                        json.dumps(data, ensure_ascii=False),
+                        now,
+                        priority,
+                        len(data.get("posts") or []),
+                    ),
                 )
                 self._conn.commit()
             self._enforce_limit()
@@ -296,6 +312,14 @@ class PostCache:
             if self._bytes() <= limit:
                 break
             self.drop_user(str(user_key))
+            self._evicted += 1
+
+    def take_eviction_notice(self) -> int:
+        """返回自上次调用后被淘汰的用户数，并把计数清零。"""
+        with self._lock:
+            count = self._evicted
+            self._evicted = 0
+            return count
 
     def stats(self) -> Dict[str, int]:
         with self._lock:
@@ -303,11 +327,8 @@ class PostCache:
             if self._conn is not None:
                 pages = int(self._conn.execute("SELECT COUNT(*) FROM pages").fetchone()[0])
                 users = int(self._conn.execute("SELECT COUNT(*) FROM users").fetchone()[0])
-                for (raw,) in self._conn.execute("SELECT data FROM users"):
-                    try:
-                        posts += len((json.loads(raw) or {}).get("posts") or [])
-                    except (TypeError, ValueError):
-                        continue
+                row = self._conn.execute("SELECT COALESCE(SUM(post_count), 0) FROM users").fetchone()
+                posts = int(row[0] or 0) if row else 0
             return {
                 "hot_users": len(self._hot_users),
                 "hot_bytes": self._hot_bytes,

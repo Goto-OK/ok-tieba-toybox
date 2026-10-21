@@ -19,7 +19,7 @@
 ```text
 ruff     通过
 mypy     27 个文件通过
-pytest   91 个通过
+pytest   92 个通过
 selftest 通过
 Android 核心同步通过
 ```
@@ -122,7 +122,15 @@ Android 核心同步通过
 - 发言缓存命中严格校验起止日期、条数和两条流是否到底；
 - 详情显示缓存年龄，强制刷新绕过用户缓存和原始页缓存；
 - 批量用户/页缓存按低优先写入，不升级热内存；
-- 无 uid/username 时按昵称、portrait 兜底；
+- 结果与存储页按最近结果/运行日志/发言缓存/数据位置/危险操作分区；
+- 运行日志支持查看、打开目录、删除，落盘上限 7 个文件/10MB；
+- 落盘日志补充 thread_start/thread_error/identity_done/level_done/done/cancelled/export；
+- 缓存状态在操作后和设置页可见时每 2 秒刷新，统计不再全量解析用户 JSON；
+- 缓存上限弹窗去重，command/FocusOut/Return 不会重复弹出；
+- 缓存淘汰时状态栏提示一次，不停止批量、不影响表格/结果；
+- 继续抓主题按钮完整显示并分两行布局，继续时复用页缓存；
+- 详情/批量身份解析改为 uid → username → portrait → 昵称；
+- 无 uid 时按 username → user_json、portrait → profile、昵称搜索兜底；
 - 昵称搜索 exactMatch/fuzzyMatch 兼容 dict/list；
 - portrait 通过 profile protobuf 反查 uid，无需 Cookie；
 - 无 BDUSS 时展示 profile 片段关注，并标明不完整；
@@ -130,7 +138,8 @@ Android 核心同步通过
 - 顶部和表头标记筛选统一使用 `mark_level`；
 - 主窗口默认 1400×900，启动居中；旧小尺寸回退默认；
 - 「每次询问」旧帖处理已实现：移除 / 保留 / 取消；
-- README/使用说明/测试用例/人工验收/protocol/credentials/release/code-map 已同步增补。
+- 早期 README/使用说明/protocol/credentials/release/code-map 已同步增补；
+- 本轮新增日志/存储页/缓存提示功能已同步用户文档、测试用例和人工验收单。
 
 ### 5.2 未实现 / 与规范有差异
 

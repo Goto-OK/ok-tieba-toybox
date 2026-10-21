@@ -601,10 +601,10 @@ def _comments_from_html(payload: str, floor: Floor) -> List[Comment]:
         user_id = user_id or card_uid
         portrait = portrait or card_portrait
         at = node.xpath('.//a[contains(@class,"j_user_card") or contains(@class,"at")]')
-        if not author:
-            author = username
         if not author and at:
             author = at[0].text_content().strip()
+        if not author:
+            author = username
 
         content_nodes = node.xpath('.//*[contains(@class,"lzl_content_main")]')
         content_html = lxml.html.tostring(content_nodes[0], encoding="unicode") if content_nodes else ""

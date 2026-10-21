@@ -56,6 +56,15 @@ python scripts/sync_android.py --check
 | CACHE-04 | 缓存开始日期晚于查询 | 改更早开始日期 | 不复用旧缓存，继续向前翻 |
 | CACHE-05 | 缓存条数不足且流未到底 | 增大条数 | 继续联网，不返回不完整结果 |
 | CACHE-06 | 强制刷新 | 点「刷新资料」 | 绕过用户缓存和原始页缓存 |
+| CACHE-07 | 缓存上限 | 连续按降低箭头 | 只弹一次确认，不重复 |
+| CACHE-08 | 缓存满 | 上限降到很小后跑批量 | 不中断，状态栏提示一次，表格不丢 |
+| STORAGE-01 | 结果与存储 | 看页面 | 最近结果/运行日志/发言缓存/数据位置/危险操作分区 |
+| LOG-01 | 运行日志 | 点查看/打开/删除 | 查看窗口、目录、删除均可用 |
+| LOG-02 | 运行日志 | 抓取后看日志 | 有 thread_start/thread_error/identity_done/done 等事件 |
+| LOG-03 | 运行日志 | 多个日志超 10MB | 只保留最新，总大小受限 |
+| TOPIC-01 | 参与者详情 | 主题流截断 | 继续抓主题按钮完整显示，不裁字 |
+| TOPIC-02 | 继续抓主题 | 已缓存 50 页 | 不重复请求已缓存页 |
+| ID-05 | 查用户/批量 | username 有值但 uid 为空 | 先走 user_json 补 uid |
 | HEADER-01 | 表格查看 | 右键文本表头 | 下拉多选筛选 |
 | HEADER-02 | 表格查看 | 右键日期表头 | 日期范围筛选 |
 | HEADER-03 | 参与者 | 标记表头 | 排序 + 筛选 |
@@ -113,7 +122,7 @@ python scripts/sync_android.py --check
 ```text
 日期：2026-10-22
 版本：1.7.0 + 2026-10 增补（源码）
-自动测试：ruff / mypy / pytest 91 / selftest
+自动测试：ruff / mypy / pytest 92 / selftest
 手工用例：见下方
 失败项：见下方
 ```
@@ -150,7 +159,7 @@ python scripts/sync_android.py --check
 2026-10-22 增补自动检查：
 
 ```text
-pytest 91 / ruff / mypy / selftest 通过
+pytest 92 / ruff / mypy / selftest 通过
 覆盖：身份补全、portrait 反查、昵称 dict/list、导出发言、表头筛选、红绿灯标记写回、每次询问
 ```
 
