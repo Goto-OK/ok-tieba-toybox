@@ -1633,7 +1633,7 @@ class App:
             except (ValueError, IndexError):
                 return
             if key in ("mark", "name", "username", "uid"):
-                self._filter_people_column(key)
+                self._filter_people_column(key, (event.x_root, event.y_root))
             return
         row = self.people_tree.identify_row(event.y)
         if row:
@@ -2317,12 +2317,13 @@ class App:
             return user.get("uid") or "-"
         return ""
 
-    def _filter_people_column(self, column: str) -> None:
+    def _filter_people_column(self, column: str, anchor: Optional[tuple] = None) -> None:
         values = sorted({self._people_column_value(user, column) for user in self.people_users})
         chosen = self._filter_text_dialog(
             {"mark": "标记", "name": "昵称", "username": "用户名", "uid": "用户ID"}.get(column, column),
             values,
             self._people_col_filters.get(column),
+            anchor,
         )
         if chosen is None:
             return
@@ -4754,7 +4755,29 @@ class App:
         "内容", "帖子", "贴吧", "标题", "来源",
     }
 
-    def _filter_text_dialog(self, title: str, values: List[str], selected) -> Optional[set]:
+    def _anchor_point(self, anchor: Optional[tuple]) -> tuple:
+        if anchor:
+            return int(anchor[0]), int(anchor[1])
+        return self.root.winfo_pointerx(), self.root.winfo_pointery()
+
+    def _place_filter_window(self, win, anchor: Optional[tuple], fallback_width: int = 320) -> None:
+        x, y = self._anchor_point(anchor)
+        win.update_idletasks()
+        width = max(fallback_width, win.winfo_width())
+        height = max(120, win.winfo_height())
+        screen_w = win.winfo_screenwidth()
+        screen_h = win.winfo_screenheight()
+        left = x
+        top = y + 6
+        if left + width > screen_w - 8:
+            left = max(8, screen_w - width - 8)
+        if top + height > screen_h - 8:
+            top = max(8, y - height - 6)
+        win.geometry(f"{width}x{height}+{left}+{top}")
+
+    def _filter_text_dialog(
+        self, title: str, values: List[str], selected, anchor: Optional[tuple] = None
+    ) -> Optional[set]:
         win = tk.Toplevel(self.root)
         win.title("筛选：" + title)
         win.configure(bg="#ffffff")
@@ -4767,7 +4790,14 @@ class App:
                  font=("Microsoft YaHei UI", 10, "bold")).pack(anchor="w")
         search = tk.StringVar()
         tk.Entry(frame, textvariable=search, width=38).pack(fill="x", pady=(6, 6))
-        listbox = tk.Listbox(frame, selectmode="extended", width=42, height=14, exportselection=False)
+        tk.Label(
+            frame,
+            text="单击切换选中，可多选",
+            bg="#ffffff",
+            fg="#8a94a6",
+            font=("Microsoft YaHei UI", 8),
+        ).pack(anchor="w", pady=(0, 3))
+        listbox = tk.Listbox(frame, selectmode="multiple", width=42, height=14, exportselection=False)
         listbox.pack(fill="both", expand=True)
         for value in values:
             listbox.insert("end", value)
@@ -4776,7 +4806,12 @@ class App:
             if value in chosen:
                 listbox.selection_set(index)
 
+        def take_selection() -> set:
+            return {str(listbox.get(i)) for i in listbox.curselection()}
+
         def refresh(*_args) -> None:
+            nonlocal chosen
+            chosen = take_selection()
             query = search.get().strip().lower()
             listbox.delete(0, "end")
             for value in values:
@@ -4791,9 +4826,6 @@ class App:
         buttons = tk.Frame(frame, bg="#ffffff")
         buttons.pack(fill="x", pady=(8, 0))
 
-        def take_selection() -> set:
-            return {str(listbox.get(i)) for i in listbox.curselection()}
-
         def apply() -> None:
             result["value"] = take_selection()
             win.destroy()
@@ -4806,10 +4838,13 @@ class App:
         ttk.Button(buttons, text="应用", command=apply, width=8).pack(side="right", padx=(0, 6))
         ttk.Button(buttons, text="清空", command=clear, width=8).pack(side="left")
         ttk.Button(buttons, text="全选", command=lambda: listbox.selection_set(0, "end"), width=8).pack(side="left", padx=(0, 6))
+        self._place_filter_window(win, anchor, 340)
         self.root.wait_window(win)
         return result["value"]
 
-    def _filter_date_dialog(self, title: str, selected) -> Optional[tuple]:
+    def _filter_date_dialog(
+        self, title: str, selected, anchor: Optional[tuple] = None
+    ) -> Optional[tuple]:
         win = tk.Toplevel(self.root)
         win.title("筛选：" + title)
         win.configure(bg="#ffffff")
@@ -4859,16 +4894,19 @@ class App:
         ttk.Button(buttons, text="取消", command=lambda: win.destroy(), width=8).pack(side="right")
         ttk.Button(buttons, text="应用", command=apply, width=8).pack(side="right", padx=(0, 6))
         ttk.Button(buttons, text="清空", command=clear, width=8).pack(side="left")
+        self._place_filter_window(win, anchor, 430)
         self.root.wait_window(win)
         return result["value"]
 
-    def _filter_loaded_tree(self, tree, column: str, title: str, date_column: bool = False) -> None:
+    def _filter_loaded_tree(
+        self, tree, column: str, title: str, date_column: bool = False, anchor: Optional[tuple] = None
+    ) -> None:
         if not tree.get_children():
             return
         chosen: Any
         if date_column:
             current = None
-            chosen = self._filter_date_dialog(title, current)
+            chosen = self._filter_date_dialog(title, current, anchor)
             if chosen is None:
                 return
             start_date, end_date = chosen
@@ -4878,7 +4916,7 @@ class App:
                     tree.delete(iid)
             return
         values = sorted({tree.set(iid, column) for iid in tree.get_children()})
-        chosen = self._filter_text_dialog(title, values, None)
+        chosen = self._filter_text_dialog(title, values, None, anchor)
         if chosen is None:
             return
         for iid in list(tree.get_children()):
@@ -4900,7 +4938,7 @@ class App:
                 title, is_date = spec
             except (ValueError, IndexError, KeyError):
                 return None
-            self._filter_loaded_tree(tree, key, title, is_date)
+            self._filter_loaded_tree(tree, key, title, is_date, (event.x_root, event.y_root))
             return "break"
 
         def left_handler(event):
@@ -4916,7 +4954,7 @@ class App:
                     return None
             except (ValueError, IndexError, KeyError):
                 return None
-            self._filter_loaded_tree(tree, key, spec[0], False)
+            self._filter_loaded_tree(tree, key, spec[0], False, (event.x_root, event.y_root))
             return "break"
 
         tree.bind("<Button-3>", event_handler, add="+")
@@ -5103,17 +5141,17 @@ class App:
         menu.add_separator()
         menu.add_command(label="打开链接", command=open_row)
 
-        def open_filter(index: int) -> None:
+        def open_filter(index: int, anchor: Optional[tuple] = None) -> None:
             if index < 0 or index >= len(headers) or not self._header_filterable(headers[index]):
                 return
             header = headers[index]
             chosen: Any
             if header == "日期":
-                chosen = self._filter_date_dialog(header, filters.get(index))
+                chosen = self._filter_date_dialog(header, filters.get(index), anchor)
             else:
                 values = sorted({str(row[index]) if index < len(row) and row[index] is not None else ""
                                  for row in all_rows})
-                chosen = self._filter_text_dialog(header, values, filters.get(index))
+                chosen = self._filter_text_dialog(header, values, filters.get(index), anchor)
             if chosen is None:
                 return
             if chosen and any(chosen):
@@ -5130,7 +5168,7 @@ class App:
                     index = int(column[1:]) - 1
                 except (ValueError, IndexError):
                     return
-                open_filter(index)
+                open_filter(index, (event.x_root, event.y_root))
                 return
             row = tree.identify_row(event.y)
             if row:
