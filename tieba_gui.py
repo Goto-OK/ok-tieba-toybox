@@ -2272,11 +2272,8 @@ class App:
         if self.mode_var.get() == "guest":
             info += " | 免登录：关注列表可能不完整"
         hit_level, hit_bar = self._profile_hit(profile) if posts else ("", "")
-        hidden_follows = (
-            self._hidden_follows(profile)
-            if self._risk_enabled() and self.mode_var.get() != "guest"
-            else False
-        )
+        hidden_follows = self._hidden_follows(profile) if self._risk_enabled() else False
+        risk_reason = "关注列表隐藏" if self.mode_var.get() != "guest" else "关注列表未加载"
         label = LEVEL_LABEL.get(hit_level, "")
         for key, (traffic_label, traffic_color) in getattr(self, "lookup_traffic_labels", {}).items():
             traffic_label.configure(
@@ -2289,7 +2286,7 @@ class App:
         else:
             traffic_note = "未命中"
         if hidden_follows and self._risk_enabled():
-            traffic_note += " · ⚠ 关注列表隐藏，未命中警告时标黄"
+            traffic_note += f" · ⚠ {risk_reason}，未命中警告时标黄"
         try:
             self.lookup_traffic_text.configure(text=traffic_note)
         except tk.TclError:
@@ -2297,7 +2294,7 @@ class App:
         if hit_level:
             info += f" | 命中{label}：{hit_bar}"
         if hidden_follows and self._risk_enabled():
-            info += " | ⚠ 关注列表隐藏，未命中警告时标黄"
+            info += f" | ⚠ {risk_reason}，未命中警告时标黄"
         note = self._post_source_note(profile)
         if note:
             info += " | " + note
@@ -6188,11 +6185,7 @@ class App:
         hit_bar = ""
         if profile.get("ok"):
             hit_level, hit_bar = self._profile_hit(profile, user.get("bars") or [self._user_bar(user)])
-        hidden = (
-            self._hidden_follows(profile)
-            if profile.get("ok") and self.mode_var.get() != "guest"
-            else False
-        )
+        hidden = self._hidden_follows(profile) if profile.get("ok") else False
         user["mark_level"] = hit_level
         user["hit"] = hit_level
         user["mark_bar"] = hit_bar or ""
@@ -6838,12 +6831,11 @@ class App:
                 if hit_level != "warn":
                     hit_bar = "关注列表隐藏"
                 hit_level = "warn"
-        if self.mode_var.get() == "guest":
-            user["mark_hidden"] = False
         label = LEVEL_LABEL.get(hit_level, "")
         for traffic_key, (traffic_label, traffic_color) in getattr(self, "traffic_labels", {}).items():
             traffic_label.configure(fg=traffic_color if traffic_key == hit_level else "#d1d5db")
-        risk = " · 关注列表隐藏，未命中警告时标黄" if hidden_follows else ""
+        risk_reason = "关注列表隐藏" if self.mode_var.get() != "guest" else "关注列表未加载"
+        risk = f" · {risk_reason}，未命中警告时标黄" if hidden_follows else ""
         try:
             self.traffic_text.configure(
                 text=(
@@ -6886,7 +6878,7 @@ class App:
         if hit_level:
             status += f" · 命中{label}：{hit_bar}"
         if hidden_follows:
-            status += " · ⚠ 关注列表隐藏，未命中警告时标黄"
+            status += f" · ⚠ {risk_reason}，未命中警告时标黄"
         note = self._post_source_note(profile)
         if note:
             status += " · " + note
