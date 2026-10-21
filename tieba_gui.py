@@ -6964,18 +6964,18 @@ class App:
             self.last_threads = self._merge_threads(threads or [])
             self._persist_result(self.last_threads)
             self._auto_filled = False
-            self._set_running(False)
-            identity_missing = int(getattr(self, "_identity_missing", 0) or 0)
-            status = f"完成 · {len(self.last_threads)} 个帖子 / {len(self._aggregate_users())} 位用户"
-            if identity_missing:
-                status += f" · 身份待补全 {identity_missing} 条"
-            self.status_var.set(status)
             try:
                 self._reset_people_filters()
                 self._refresh_people()
                 self._refresh_grid()
             except Exception:  # noqa: BLE001
                 pass
+            self._set_running(False)
+            identity_missing = int(getattr(self, "_identity_missing", 0) or 0)
+            status = f"完成 · {len(self.last_threads)} 个帖子 / {len(self._aggregate_users())} 位用户"
+            if identity_missing:
+                status += f" · 身份待补全 {identity_missing} 条"
+            self.status_var.set(status)
             if output:
                 self.open_btn.configure(state="normal")
                 self._append_log(f"\n完成！共 {count} 个帖子，文件已保存：\n{output}", "ok")
