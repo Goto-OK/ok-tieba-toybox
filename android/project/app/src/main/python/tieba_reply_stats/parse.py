@@ -543,12 +543,28 @@ def _comments_from_html(payload: str, floor: Floor) -> List[Comment]:
                 pid = anchor[0].get("name") or ""
         author = str(data.get("showname") or "").strip()
         username = str(data.get("user_name") or "").strip()
+        user_id = str(data.get("user_id") or data.get("uid") or "").strip()
+        at = node.xpath('.//a[contains(@class,"at")]')
+        # data-field 不一定带用户名，j_user_card 上仍有 username 属性。
+        if at:
+            if not username:
+                username = str(
+                    at[0].get("username")
+                    or at[0].get("data-username")
+                    or at[0].get("user_name")
+                    or ""
+                ).strip()
+            if not user_id:
+                user_id = str(
+                    at[0].get("user_id")
+                    or at[0].get("data-user-id")
+                    or at[0].get("uid")
+                    or ""
+                ).strip()
         if not author:
             author = username
-        if not author:
-            at = node.xpath('.//a[contains(@class,"at")]')
-            if at:
-                author = at[0].text_content().strip()
+        if not author and at:
+            author = at[0].text_content().strip()
 
         content_nodes = node.xpath('.//*[contains(@class,"lzl_content_main")]')
         content_html = lxml.html.tostring(content_nodes[0], encoding="unicode") if content_nodes else ""
@@ -571,7 +587,7 @@ def _comments_from_html(payload: str, floor: Floor) -> List[Comment]:
                 pid=pid,
                 author=author or "匿名用户",
                 author_name=username,
-                author_id=str(data.get("user_id") or data.get("uid") or ""),
+                author_id=user_id,
                 portrait=str(data.get("portrait") or ""),
                 posted_at=parse_datetime(when),
                 content=strip_html(cleaned),

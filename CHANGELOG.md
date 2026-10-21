@@ -35,6 +35,7 @@
 - 表头文本列筛选、日期范围筛选、标记排序+筛选；
 - 导出发言 Excel：汇总/主题帖/回复，标题和链接可点击；
 - 楼中楼保留 user_id/user_name/portrait；
+- 楼中楼 data-field 缺 user_name 时从 j_user_card 的 username 兜底；
 - 无 uid/username 时按昵称解析，无法唯一定位才跳过；
 - 继续未完成按钮按文本自适应宽度；
 - 顶部/表头标记筛选统一用 mark_level。
@@ -45,7 +46,7 @@
 
 ### 验证
 
-- pytest 83 个通过；
+- pytest 84 个通过；
 - ruff、mypy、selftest 通过；
 - 1.7.0 Windows 成品已构建，`--selftest` 通过。
 
