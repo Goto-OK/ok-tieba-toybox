@@ -2443,8 +2443,7 @@ class App:
         forum_tree = self.lookup_forum_tree
         post_tree = self.lookup_post_tree
         for tree in (forum_tree, post_tree):
-            for item in tree.get_children():
-                tree.delete(item)
+            self._clear_loaded_tree(tree)
         self._lookup_forum_names = {}
         self._lookup_post_urls = {}
         self.lookup_cache_label.configure(text="")
@@ -2511,7 +2510,11 @@ class App:
             info += " | 免登录：关注列表可能不完整"
         hit_level, hit_bar = self._profile_hit(profile) if posts else ("", "")
         hidden_follows = self._hidden_follows(profile) if self._risk_enabled() else False
-        risk_reason = "关注列表隐藏" if self.mode_var.get() != "guest" else "关注列表未加载"
+        risk_reason = (
+            "关注列表隐藏"
+            if self.mode_var.get() != "guest" or hidden_follows
+            else "关注列表未加载"
+        )
         label = LEVEL_LABEL.get(hit_level, "")
         for key, (traffic_label, traffic_color) in getattr(self, "lookup_traffic_labels", {}).items():
             traffic_label.configure(
@@ -3027,6 +3030,31 @@ class App:
             save_settings(self.settings)
         self._apply_mode_ui()
 
+    def _make_scrollable_settings_page(self, parent) -> tuple:
+        outer = tk.Frame(parent, bg="#eef1f5")
+        canvas = tk.Canvas(outer, bg="#eef1f5", highlightthickness=0)
+        scrollbar = ttk.Scrollbar(outer, orient="vertical", command=canvas.yview)
+        canvas.configure(yscrollcommand=scrollbar.set)
+        scrollbar.pack(side="right", fill="y")
+        canvas.pack(side="left", fill="both", expand=True)
+        body = tk.Frame(canvas, bg="#eef1f5")
+        window = canvas.create_window((0, 0), window=body, anchor="nw")
+        body.bind(
+            "<Configure>",
+            lambda _event: canvas.configure(scrollregion=canvas.bbox("all")),
+        )
+        canvas.bind(
+            "<Configure>",
+            lambda event: canvas.itemconfigure(window, width=event.width),
+        )
+
+        def on_wheel(event) -> None:
+            canvas.yview_scroll(int(-event.delta / 120), "units")
+
+        canvas.bind("<MouseWheel>", on_wheel)
+        body.bind("<MouseWheel>", on_wheel)
+        return outer, body
+
     def _build_settings_tab(self) -> None:
         wrap = tk.Frame(self.tab_settings, bg="#eef1f5")
         wrap.pack(fill="both", expand=True, padx=6, pady=6)
@@ -3049,13 +3077,13 @@ class App:
         inner = tk.Frame(wrap, bg="#eef1f5")
         inner.pack(side="left", fill="both", expand=True)
         self.settings_inner = inner
-        self.tab_general = tk.Frame(inner, bg="#eef1f5")
+        self.tab_general_page, self.tab_general = self._make_scrollable_settings_page(inner)
         self.tab_appearance = tk.Frame(inner, bg="#eef1f5")
         self.tab_blacklist = tk.Frame(inner, bg="#eef1f5")
         self.tab_storage = tk.Frame(inner, bg="#eef1f5")
         self.tab_about = tk.Frame(inner, bg="#eef1f5")
         self.settings_pages = [
-            self.tab_general,
+            self.tab_general_page,
             self.tab_appearance,
             self.tab_blacklist,
             self.tab_storage,
@@ -4346,7 +4374,7 @@ class App:
         ttk.Button(banner, text="关闭", command=banner.destroy, width=6).pack(side="right", padx=(6, 0))
         self._theme_widget_tree(banner)
 
-    def _apply_settings_to_ui(self) -> None:
+    def _apply_settings_to_ui(self, reset_mode: bool = True) -> None:
         settings = self.settings
         if hasattr(self, "risk_var"):
             self.risk_var.set(bool(settings.get("risk_enabled", True)))
@@ -4414,7 +4442,8 @@ class App:
             post_cache().set_limit_mb(limit)
         for key, var in getattr(self, "setting_vars", {}).items():
             var.set(bool(settings.get(key, True)))
-        self._set_mode("guest")
+        if reset_mode:
+            self._set_mode("guest")
         self._apply_risk_ui()
         self._apply_theme()
         self._apply_table_density()
@@ -4796,14 +4825,11 @@ class App:
         if hasattr(self, "follow_enhance_var"):
             self.follow_enhance_var.set(follow)
         self.mode_var.set("login" if follow else "guest")
-        self.risk_var.set(bool(self.settings.get("risk_enabled", False)))
-        for key, var in getattr(self, "setting_vars", {}).items():
-            var.set(bool(self.settings.get(key, True)))
+        self._apply_settings_to_ui(reset_mode=False)
         for key, editor in getattr(self, "blacklist_editors", {}).items():
             editor.delete("1.0", "end")
             editor.insert("1.0", chr(10).join(self.blacklist.get(key, [])))
         self._apply_mode_ui()
-        self._apply_risk_ui()
         self._refresh_people()
         if getattr(self, "_last_lookup_profile", None):
             self._render_lookup(self._last_lookup_profile)
@@ -5190,10 +5216,10 @@ class App:
     def _refresh_grid(self) -> None:
         for tab in list(self.grid_nb.tabs()):
             self.grid_nb.forget(tab)
+        self._update_grid_selector()
         if not self.last_threads:
             self.grid_hint.configure(text="还没有数据")
             return
-        self._update_grid_selector()
         threads = self._selected_grid_threads()
         all_mode = len(threads) > 1 or self.grid_thread_var.get().startswith("全部")
         include_op = getattr(self, "last_include_op", True)
@@ -5638,30 +5664,71 @@ class App:
         self.root.wait_window(win)
         return result["value"]
 
+    def _loaded_filter_state(self, tree) -> dict:
+        state = getattr(tree, "_loaded_filter_state", None)
+        if state is None:
+            state = {"all": list(tree.get_children()), "filters": {}}
+            setattr(tree, "_loaded_filter_state", state)
+        return state
+
+    def _clear_loaded_tree(self, tree) -> None:
+        state = getattr(tree, "_loaded_filter_state", None)
+        for iid in (state["all"] if state else list(tree.get_children())):
+            try:
+                tree.delete(iid)
+            except tk.TclError:
+                pass
+        if hasattr(tree, "_loaded_filter_state"):
+            delattr(tree, "_loaded_filter_state")
+
+    def _apply_loaded_filters(self, tree) -> None:
+        state = self._loaded_filter_state(tree)
+        filters = state["filters"]
+        for iid in state["all"]:
+            tree.detach(iid)
+        for iid in state["all"]:
+            keep = True
+            for column, selected in filters.items():
+                value = tree.set(iid, column)
+                if isinstance(selected, tuple):
+                    start_date, end_date = selected
+                    day = value[:10]
+                    if (start_date and (not day or day < start_date)) or (
+                        end_date and (not day or day > end_date)
+                    ):
+                        keep = False
+                        break
+                elif selected and value not in selected:
+                    keep = False
+                    break
+            if keep:
+                tree.reattach(iid, "", "end")
+
     def _filter_loaded_tree(
         self, tree, column: str, title: str, date_column: bool = False, anchor: Optional[tuple] = None
     ) -> None:
-        if not tree.get_children():
-            return
+        state = self._loaded_filter_state(tree)
         chosen: Any
         if date_column:
-            current = None
+            current = state["filters"].get(column)
             chosen = self._filter_date_dialog(title, current, anchor)
             if chosen is None:
                 return
-            start_date, end_date = chosen
-            for iid in list(tree.get_children()):
-                value = tree.set(iid, column)[:10]
-                if (start_date and value < start_date) or (end_date and value > end_date):
-                    tree.delete(iid)
-            return
-        values = sorted({tree.set(iid, column) for iid in tree.get_children()})
-        chosen = self._filter_text_dialog(title, values, None, anchor)
-        if chosen is None:
-            return
-        for iid in list(tree.get_children()):
-            if tree.set(iid, column) not in chosen:
-                tree.delete(iid)
+            if chosen[0] or chosen[1]:
+                state["filters"][column] = chosen
+            else:
+                state["filters"].pop(column, None)
+        else:
+            values = sorted({tree.set(iid, column) for iid in state["all"]})
+            current = state["filters"].get(column)
+            chosen = self._filter_text_dialog(title, values, current, anchor)
+            if chosen is None:
+                return
+            if chosen:
+                state["filters"][column] = chosen
+            else:
+                state["filters"].pop(column, None)
+        self._apply_loaded_filters(tree)
 
     def _bind_loaded_filter(self, tree, mapping: Dict[str, Optional[tuple]]) -> None:
         def event_handler(event):
@@ -6787,6 +6854,8 @@ class App:
         if hidden or profile.get("like_forum"):
             count = len(self._merge_forum_lists(profile, bar_name, bar_level))
             if self.mode_var.get() == "guest" and not profile.get("follow_loaded"):
+                if self._hidden_follows(profile):
+                    return f"对方隐藏了完整关注列表，已从 profile 片段补 {count} 个，不完整"
                 return f"未加载公开关注，仅从 profile 片段补 {count} 个，不完整"
             if "BDUSS" in str(profile.get("follow_error") or ""):
                 note = f"未登录，仅从 profile 片段补 {count} 个关注，不完整"
@@ -6799,7 +6868,7 @@ class App:
                 note += "（风险提示：关注列表隐藏，未命中警告时标黄）"
             return note
         if profile.get("followed_private"):
-            return "对方设置了隐私，关注列表不可见（风险提示：关注列表隐藏，未命中警告时标黄）"
+            return "对方隐藏了完整关注列表（隐私设置），不可见（风险提示：关注列表隐藏，未命中警告时标黄）"
         return "没有查到关注列表"
 
     def _export_profile_report(self) -> None:
@@ -7057,8 +7126,7 @@ class App:
         forum_tree = self.profile_forum_tree
         post_tree = self.profile_post_tree
         for tree in (forum_tree, post_tree):
-            for item in tree.get_children():
-                tree.delete(item)
+            self._clear_loaded_tree(tree)
         self._profile_forum_names = {}
         self._profile_post_urls = {}
 
@@ -7178,7 +7246,11 @@ class App:
         label = LEVEL_LABEL.get(hit_level, "")
         for traffic_key, (traffic_label, traffic_color) in getattr(self, "traffic_labels", {}).items():
             traffic_label.configure(fg=traffic_color if traffic_key == hit_level else "#d1d5db")
-        risk_reason = "关注列表隐藏" if self.mode_var.get() != "guest" else "关注列表未加载"
+        risk_reason = (
+            "关注列表隐藏"
+            if self.mode_var.get() != "guest" or hidden_follows
+            else "关注列表未加载"
+        )
         risk = f" · {risk_reason}，未命中警告时标黄" if hidden_follows else ""
         try:
             self.traffic_text.configure(
