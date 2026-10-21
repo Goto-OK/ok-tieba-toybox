@@ -3384,12 +3384,13 @@ class App:
             increment=50,
             width=7,
             textvariable=self.cache_limit_var,
-            command=self._on_cache_limit_changed,
         )
         self.cache_limit_box.pack(side="left")
-        self.cache_limit_box.bind("<FocusOut>", lambda _event: self._on_cache_limit_changed())
-        self.cache_limit_box.bind("<Return>", lambda _event: self._on_cache_limit_changed())
+        self.cache_limit_box.bind("<Return>", lambda _event: self._commit_cache_limit())
         tk.Label(cache_row, text="MB", bg="#eef1f5", fg="#475569").pack(side="left")
+        ttk.Button(cache_row, text="应用上限", command=self._commit_cache_limit, width=9).pack(
+            side="left", padx=(6, 0)
+        )
         ttk.Button(cache_row, text="清除发言缓存", command=self._clear_post_cache, width=14).pack(
             side="right"
         )
@@ -3641,7 +3642,7 @@ class App:
         except Exception:  # noqa: BLE001
             pass
 
-    def _on_cache_limit_changed(self) -> None:
+    def _commit_cache_limit(self) -> None:
         now = time.monotonic()
         if getattr(self, "_cache_limit_busy", False) or now < getattr(
             self, "_cache_limit_guard_until", 0
