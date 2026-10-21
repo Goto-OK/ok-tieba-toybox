@@ -2255,8 +2255,6 @@ class App:
             )
             self._lookup_post_urls[iid] = post.get("url") or ""
         forum_note = self._forum_note(profile)
-        if self.mode_var.get() == "guest":
-            forum_note += "（免登录：关注列表可能不完整）"
         self.lookup_forum_note.configure(text=forum_note)
 
         info = (
@@ -2274,7 +2272,11 @@ class App:
         if self.mode_var.get() == "guest":
             info += " | 免登录：关注列表可能不完整"
         hit_level, hit_bar = self._profile_hit(profile) if posts else ("", "")
-        hidden_follows = self._hidden_follows(profile) if self._risk_enabled() else False
+        hidden_follows = (
+            self._hidden_follows(profile)
+            if self._risk_enabled() and self.mode_var.get() != "guest"
+            else False
+        )
         label = LEVEL_LABEL.get(hit_level, "")
         for key, (traffic_label, traffic_color) in getattr(self, "lookup_traffic_labels", {}).items():
             traffic_label.configure(
@@ -3522,6 +3524,14 @@ class App:
         self._refresh_log_summary()
         self._append_log(f"已删除日志：{deleted} 个", "muted")
 
+    def _center_toplevel(self, win: tk.Toplevel, width: int = 0, height: int = 0) -> None:
+        win.update_idletasks()
+        width = width or win.winfo_reqwidth()
+        height = height or win.winfo_reqheight()
+        x = self.root.winfo_rootx() + max(0, (self.root.winfo_width() - width) // 2)
+        y = self.root.winfo_rooty() + max(0, (self.root.winfo_height() - height) // 3)
+        win.geometry(f"+{x}+{y}")
+
     def _view_logs(self) -> None:
         files = self._log_files()
         if not files:
@@ -3625,16 +3635,29 @@ class App:
             side="left", padx=(6, 0)
         )
         ttk.Button(footer, text="关闭", command=win.destroy, width=8).pack(side="right")
+        self._center_toplevel(win, 820, 560)
         try:
             self._theme_widget_tree(win)
         except Exception:  # noqa: BLE001
             pass
 
     def _on_cache_limit_changed(self) -> None:
-        if getattr(self, "_cache_limit_busy", False):
+        now = time.monotonic()
+        if getattr(self, "_cache_limit_busy", False) or now < getattr(
+            self, "_cache_limit_guard_until", 0
+        ):
+            current = str(int(self.settings.get("post_cache_limit_mb", DEFAULT_LIMIT_MB)))
+            try:
+                if self.cache_limit_var.get() != current:
+                    self.cache_limit_var.set(current)
+            except tk.TclError:
+                pass
             return
         self._cache_limit_busy = True
+        box = getattr(self, "cache_limit_box", None)
         try:
+            if box is not None:
+                box.configure(state="disabled")
             try:
                 value = int(float(self.cache_limit_var.get().strip()))
             except (TypeError, ValueError):
@@ -3656,7 +3679,13 @@ class App:
             post_cache().set_limit_mb(value)
             self._refresh_cache_stats()
         finally:
+            if box is not None:
+                try:
+                    box.configure(state="normal")
+                except tk.TclError:
+                    pass
             self._cache_limit_busy = False
+            self._cache_limit_guard_until = time.monotonic() + 0.35
 
     def _set_cache_stats_timer(self, enabled: bool) -> None:
         timer = getattr(self, "_cache_stats_timer", None)
@@ -6150,7 +6179,11 @@ class App:
         hit_bar = ""
         if profile.get("ok"):
             hit_level, hit_bar = self._profile_hit(profile, user.get("bars") or [self._user_bar(user)])
-        hidden = self._hidden_follows(profile) if profile.get("ok") else False
+        hidden = (
+            self._hidden_follows(profile)
+            if profile.get("ok") and self.mode_var.get() != "guest"
+            else False
+        )
         user["mark_level"] = hit_level
         user["hit"] = hit_level
         user["mark_bar"] = hit_bar or ""
@@ -6428,6 +6461,8 @@ class App:
             return f"共 {len(forums)} 个（完整）"
         if hidden or profile.get("like_forum"):
             count = len(self._merge_forum_lists(profile, bar_name, bar_level))
+            if self.mode_var.get() == "guest" and not profile.get("follow_loaded"):
+                return f"未加载公开关注，仅从 profile 片段补 {count} 个，不完整"
             if "BDUSS" in str(profile.get("follow_error") or ""):
                 note = f"未登录，仅从 profile 片段补 {count} 个关注，不完整"
             else:
@@ -6770,16 +6805,18 @@ class App:
             )
             self._profile_post_urls[iid] = post.get("url") or ""
         forum_note = self._forum_note(profile, self._user_bar(user), level or "")
-        if profile.get("follow_loaded") is False:
+        if self.mode_var.get() != "guest" and profile.get("follow_loaded") is False:
             forum_note += "（未加载公开关注）"
-        elif self.mode_var.get() == "guest":
-            forum_note += "（匿名尝试：公开关注可能失败/不完整）"
         self.profile_forum_note.configure(text=forum_note)
 
-        # 本地标记：默认关闭；免登录只看本帖发言，登录才看关注列表
+        # 本地标记：优先沿用批量结果，避免详情重算把 ⚠ 或等级改掉。
         if not self._risk_enabled():
             hit_level, hit_bar = "", ""
             hidden_follows = False
+        elif user.get("mark_level"):
+            hit_level = str(user.get("mark_level") or "")
+            hit_bar = str(user.get("mark_bar") or "")
+            hidden_follows = bool(user.get("mark_hidden")) and self.mode_var.get() != "guest"
         elif self.mode_var.get() == "guest":
             hit_level, hit_bar = classify([self._user_bar(user)], getattr(self, "blacklist", {}))
             hidden_follows = False
@@ -6792,6 +6829,8 @@ class App:
                 if hit_level != "warn":
                     hit_bar = "关注列表隐藏"
                 hit_level = "warn"
+        if self.mode_var.get() == "guest":
+            user["mark_hidden"] = False
         label = LEVEL_LABEL.get(hit_level, "")
         for traffic_key, (traffic_label, traffic_color) in getattr(self, "traffic_labels", {}).items():
             traffic_label.configure(fg=traffic_color if traffic_key == hit_level else "#d1d5db")
@@ -6811,7 +6850,9 @@ class App:
         if iid is not None:
             try:
                 values = list(self.people_tree.item(iid, "values"))
-                if hit_level:
+                if user.get("mark_level"):
+                    values[0] = self._person_mark_cell(user)
+                elif hit_level:
                     values[0] = f"{marker(hit_level)} {label}" + (" ⚠" if hidden_follows else "")
                 else:
                     values[0] = "⚪"

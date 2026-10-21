@@ -126,7 +126,9 @@ Android 核心同步通过
 - 运行日志支持查看、打开目录、删除，落盘上限 7 个文件/10MB；
 - 落盘日志补充 thread_start/thread_error/identity_done/level_done/done/cancelled/export；
 - 缓存状态在操作后和设置页可见时每 2 秒刷新，统计不再全量解析用户 JSON；
-- 缓存上限弹窗去重，command/FocusOut/Return 不会重复弹出；
+- 缓存上限弹窗去重，command/FocusOut/Return 不会重复弹出；降低期间有 350ms 保护窗口；
+- 游客模式不再显示隐藏关注 ⚠；详情保留批量标记，不再把 ⚠ 擦掉；
+- 游客模式关注说明改为“未加载公开关注，仅 profile 片段”，不再误报“对方隐藏”；
 - 缓存淘汰时状态栏提示一次，不停止批量、不影响表格/结果；
 - 继续抓主题按钮完整显示并分两行布局，继续时复用页缓存；
 - 详情/批量身份解析改为 uid → username → portrait → 昵称；
