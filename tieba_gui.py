@@ -5966,6 +5966,15 @@ class App:
         return chosen_start, chosen_end
 
     def _export_posts_for(self, user, profile, start: str, end: str) -> None:
+        sources = profile.get("post_sources") or {}
+        if sources.get("topic_truncated"):
+            if not messagebox.askokcancel(
+                "主题覆盖未到开始日期",
+                "主题流已达到本次页数上限，导出的主题可能不完整。\n"
+                "仍按现有缓存覆盖导出？",
+                parent=self.root,
+            ):
+                return
         uid = str(user.get("uid") or profile.get("user_id") or "")
         cached = post_cache().get_user(uid) if uid else None
         posts = list(profile.get("recent_posts") or [])
