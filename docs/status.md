@@ -19,7 +19,7 @@
 ```text
 ruff     通过
 mypy     27 个文件通过
-pytest   85 个通过
+pytest   86 个通过
 selftest 通过
 Android 核心同步通过
 ```
@@ -117,6 +117,7 @@ Android 核心同步通过
 - 停止后才显示「继续未完成」，完成后隐藏；
 - 楼中楼解析保留 `user_id/user_name/portrait/showname`；
 - 无 uid/username 时按昵称、portrait 兜底；
+- 昵称搜索 exactMatch/fuzzyMatch 兼容 dict/list；
 - portrait 通过 profile protobuf 反查 uid，无需 Cookie；
 - 无 BDUSS 时展示 profile 片段关注，并标明不完整；
 - 批量状态显示成功/跳过/失败；

@@ -140,8 +140,14 @@ def search_user_by_nickname(fetcher, nickname: str) -> Dict:
         except Exception:  # noqa: BLE001
             break
         data = payload.get("data") or {}
-        items = (data.get("exactMatch") or []) + (data.get("fuzzyMatch") or [])
+        exact = data.get("exactMatch")
+        fuzzy = data.get("fuzzyMatch")
+        exact_items = exact if isinstance(exact, list) else [exact] if isinstance(exact, dict) else []
+        fuzzy_items = fuzzy if isinstance(fuzzy, list) else [fuzzy] if isinstance(fuzzy, dict) else []
+        items = exact_items + fuzzy_items
         for item in items:
+            if not isinstance(item, dict):
+                continue
             names = {
                 str(item.get(key) or "").strip().lower() for key in ("name", "user_nickname", "show_nickname")
             }
