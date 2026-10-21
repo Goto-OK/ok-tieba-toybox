@@ -180,7 +180,9 @@ dist/贴吧回复统计_v1.7.0/
 - 不含 S2 皮肤素材；
 - Authenticode 已签名，自签名证书 `CN=TiebaReplyStats Local Code Signing`；
 - 签名状态 `UnknownError / UntrustedRoot`，不是受信任发布签名；
-- 证书指纹 `FBD45B19CD420407E041F88991C56FEBEA8006F8`。
+- 证书指纹 `FBD45B19CD420407E041F88991C56FEBEA8006F8`；
+- 绿色版压缩包 `dist/贴吧回复统计_v1.7.0_绿色版.zip`，约 18.3MB；
+- 已在临时目录解压并运行 `--selftest` 通过，确认不依赖源码目录。
 
 源码运行：
 

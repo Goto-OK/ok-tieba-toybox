@@ -22,6 +22,7 @@ python tests/selftest.py
 - 检查导出发言、表头筛选、一键红绿灯标记刷新；
 - 更新 `CHANGELOG.md`。
 - `dist/贴吧回复统计_v1.7.0` 已于 2026-10-22 重建；如再次改源码，发布前必须重新构建。
+- 发布压缩包：`dist/贴吧回复统计_v1.7.0_绿色版.zip`；解压后保留完整目录（`_internal` 必需）。
 - 当前 exe 使用本地自签名证书，`UnknownError / UntrustedRoot`，不能替代受信任代码签名证书。
 
 ## 3. 桌面版
