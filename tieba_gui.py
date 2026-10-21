@@ -250,8 +250,6 @@ class App:
         self._apply_risk_ui()
         self._apply_proxy()
         self._restore_last_result()
-        if self.last_threads:
-            self.root.after(500, self._backfill_identities)
         self.root.after(300, self._maybe_onboarding)
 
     # ------------------------------------------------------------------ UI
@@ -6935,6 +6933,8 @@ class App:
         if not filtered:
             messagebox.showinfo("没有发言", "选定范围内没有缓存发言。", parent=self.root)
             return
+        topics = [post for post in filtered if post.get("type") == "主题帖"]
+        replies = [post for post in filtered if post.get("type") == "回复"]
         initial = posts_base(user, profile) + ".xlsx"
         path = filedialog.asksaveasfilename(
             title="导出发言",
@@ -6946,10 +6946,27 @@ class App:
         if not path:
             return
         base = os.path.splitext(path)[0]
+
+        def coverage_text(items, label: str) -> str:
+            dates = []
+            unknown = 0
+            for item in items:
+                day = str(item.get("time") or "").strip()
+                if day:
+                    dates.append(day)
+                else:
+                    unknown += 1
+            if not dates:
+                return f"无{label}"
+            text = f"{min(dates)} ~ {max(dates)}"
+            if unknown:
+                text += f"（含 {unknown} 条未知时间）"
+            return text
+
         try:
             coverage = {
-                "reply": f"{cache_start or '未记录'} ~ {cache_end or '未记录'}",
-                "topic": "缓存内已有主题",
+                "reply": coverage_text(replies, "回复"),
+                "topic": coverage_text(topics, "主题"),
             }
             output = export_user_posts(base, user, filtered, chosen_start, chosen_end, coverage)
         except Exception as error:  # noqa: BLE001
@@ -7257,6 +7274,7 @@ class App:
             ):
                 return
         self.last_threads = threads
+        self._enrich_restored_identities()
         try:
             self._refresh_people()
             self._refresh_grid()
@@ -7264,9 +7282,7 @@ class App:
             pass
         self.status_var.set(f"已恢复 {len(threads)} 个帖子（{len(self._aggregate_users())} 位用户）")
 
-    def _backfill_identities(self) -> None:
-        if getattr(self, "_identity_backfill_running", False) or self.running:
-            return
+    def _enrich_restored_identities(self) -> None:
         missing = sum(
             1
             for thread in self.last_threads
@@ -7275,26 +7291,23 @@ class App:
         )
         if not missing:
             return
-        self._identity_backfill_running = True
-        self.people_hint.configure(text=f"正在补全用户身份（{missing} 条待解析）…")
-
-        def worker():
-            try:
-                fetcher = Fetcher(cookie=self._request_cookie(), delay=0.3, verbose=False)
-                options = CollectOptions(
-                    verbose=True,
-                    log=self._log_from_thread,
-                    should_stop=self.stop_event.is_set,
-                )
-                for thread in self.last_threads:
-                    enrich_identities(thread, fetcher, options, self._log_from_thread)
-                self._post(("identities_ready",))
-            except Exception as error:  # noqa: BLE001
-                self._post(("log", f"身份补全失败：{error}", "err"))
-            finally:
-                self._identity_backfill_running = False
-
-        threading.Thread(target=worker, daemon=True).start()
+        self.status_var.set(f"正在补全恢复数据的用户身份（{missing} 条）…")
+        try:
+            self.root.update_idletasks()
+        except tk.TclError:
+            pass
+        try:
+            fetcher = Fetcher(cookie=self._request_cookie(), delay=0.3, verbose=False)
+            options = CollectOptions(
+                verbose=True,
+                log=self._log_from_thread,
+                should_stop=self.stop_event.is_set,
+            )
+            for thread in self.last_threads:
+                enrich_identities(thread, fetcher, options, self._log_from_thread)
+            self._persist_result(self.last_threads)
+        except Exception as error:  # noqa: BLE001
+            self._append_log(f"恢复数据身份补全失败：{error}", "err")
 
     def _start_from_key(self, _event=None):
         self._on_start()
@@ -7729,15 +7742,6 @@ class App:
                 "muted" if cancelled else "ok",
             )
             self._refresh_cache_stats_if_visible()
-        elif kind == "identities_ready":
-            try:
-                self._refresh_people()
-                self._refresh_grid()
-                self._persist_result(self.last_threads)
-                self.status_var.set("用户身份补全完成")
-                self._append_log("用户身份补全完成。", "ok")
-            except Exception as refresh_error:  # noqa: BLE001
-                self._append_log(f"身份补全后刷新列表失败：{refresh_error}", "err")
         elif kind == "profile_ready":
             _, key, user, profile = message
             self._profile_cache[key] = profile

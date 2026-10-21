@@ -28,6 +28,7 @@ def test_export_posts_sheets_and_links(tmp_path):
         posts,
         "2025-01-01",
         "2025-12-31",
+        {"reply": "2025-01-02 ~ 2025-01-02", "topic": "2025-02-03 ~ 2025-02-03"},
     )
     book = load_workbook(path)
     assert book.sheetnames == ["汇总", "主题帖", "回复"]
@@ -35,3 +36,5 @@ def test_export_posts_sheets_and_links(tmp_path):
     assert book["回复"].max_row == 2
     assert book["主题帖"]["D2"].hyperlink.target == "https://tieba.baidu.com/p/3"
     assert book["回复"]["D2"].hyperlink.target == "https://tieba.baidu.com/p/1?pid=2"
+    assert book["汇总"]["B9"].value == "2025-01-02 ~ 2025-01-02"
+    assert book["汇总"]["B10"].value == "2025-02-03 ~ 2025-02-03"
