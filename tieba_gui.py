@@ -7,6 +7,7 @@
 
 from __future__ import annotations
 
+import ctypes
 import json
 import os
 import queue
@@ -196,6 +197,10 @@ class App:
         self._profile_topic_limit = 50
         self._lookup_normalize_job: Optional[str] = None
         self._emoji_window: Optional[tk.Toplevel] = None
+        self.lookup_entry: Optional[ttk.Entry] = None
+        self.lookup_native_edit: Optional[int] = None
+        self.lookup_native_host: Optional[tk.Frame] = None
+        self.emoji_btn: Optional[tk.Button] = None
         self.blacklist = load_blacklist()
         self.settings = load_settings()
         post_cache().set_limit_mb(int(self.settings.get("post_cache_limit_mb", DEFAULT_LIMIT_MB)))
@@ -1491,7 +1496,7 @@ class App:
         buffer = ctypes.create_unicode_buffer(length + 1)
         user32.GetWindowTextW(edit, buffer, length + 1)
         text = buffer.value.strip()
-        if text:
+        if text and self.lookup_entry is not None:
             self.lookup_entry.insert("insert", text)
         self._hide_emoji_inline()
 
@@ -1507,7 +1512,8 @@ class App:
                 ctypes.windll.user32.SetWindowTextW(edit, "")
             except Exception:  # noqa: BLE001
                 pass
-        self.lookup_entry.focus_set()
+        if self.lookup_entry is not None:
+            self.lookup_entry.focus_set()
 
     def _open_emoji_picker(self) -> None:
         existing = getattr(self, "_emoji_window", None)
@@ -1546,8 +1552,9 @@ class App:
         win.focus_set()
 
     def _insert_emoji(self, char: str, win=None) -> None:
-        self.lookup_entry.insert("insert", char)
-        self.lookup_entry.focus_set()
+        if self.lookup_entry is not None:
+            self.lookup_entry.insert("insert", char)
+            self.lookup_entry.focus_set()
         if win is not None:
             win.destroy()
 
@@ -1727,21 +1734,189 @@ class App:
         self._lookup_normalize_job = None
         if getattr(self, "_normalizing_query", False):
             return
-        raw = self.lookup_query_var.get()
+        raw = self._lookup_text()
         decoded = decode_display(raw)
         if decoded == raw:
             return
-        try:
-            pos = self.lookup_entry.index("insert")
-            new_pos = len(decode_display(raw[:pos]))
-        except (tk.TclError, AttributeError):
-            new_pos = len(decoded)
         self._normalizing_query = True
         try:
-            self.lookup_query_var.set(decoded)
-            self.lookup_entry.icursor(new_pos)
+            if self.lookup_native_edit:
+                self._set_lookup_query_text(decoded)
+            elif self.lookup_entry is not None:
+                try:
+                    pos = self.lookup_entry.index("insert")
+                    new_pos = len(decode_display(raw[:pos]))
+                except (tk.TclError, AttributeError):
+                    new_pos = len(decoded)
+                self.lookup_query_var.set(decoded)
+                self.lookup_entry.icursor(new_pos)
+            else:
+                self.lookup_query_var.set(decoded)
         finally:
             self._normalizing_query = False
+
+    def _build_lookup_fallback_entry(self, parent, query_button) -> None:
+        self.emoji_btn = tk.Button(
+            parent,
+            text="😀",
+            command=self._open_emoji_panel,
+            font=("Segoe UI Emoji", 12),
+            width=3,
+            relief="flat",
+            bg="#eef1f5",
+            activebackground="#dbeafe",
+            cursor="hand2",
+        )
+        self.emoji_btn.pack(side="right", padx=(6, 0))
+        entry = ttk.Entry(
+            parent,
+            textvariable=self.lookup_query_var,
+            width=34,
+            font=("Microsoft YaHei UI", 10),
+        )
+        self.lookup_entry = entry
+        entry.pack(side="left", fill="x", expand=True, padx=(4, 0))
+        entry.bind("<Return>", lambda _event: self._on_lookup())
+        self.lookup_query_var.trace_add("write", self._on_lookup_query_changed)
+
+    def _create_lookup_native_edit(self) -> bool:
+        try:
+            import ctypes
+            from ctypes import wintypes
+
+            user32 = ctypes.WinDLL("user32", use_last_error=True)
+            gdi32 = ctypes.WinDLL("gdi32", use_last_error=True)
+            kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+            user32.CreateWindowExW.restype = wintypes.HWND
+            user32.CreateWindowExW.argtypes = [
+                wintypes.DWORD, wintypes.LPCWSTR, wintypes.LPCWSTR, wintypes.DWORD,
+                ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int,
+                wintypes.HWND, wintypes.HMENU, wintypes.HINSTANCE, wintypes.LPVOID,
+            ]
+            user32.SendMessageW.restype = ctypes.c_ssize_t
+            user32.SendMessageW.argtypes = [
+                wintypes.HWND, wintypes.UINT, wintypes.WPARAM, wintypes.LPARAM
+            ]
+            user32.GetWindowTextLengthW.argtypes = [wintypes.HWND]
+            user32.GetWindowTextW.argtypes = [wintypes.HWND, wintypes.LPWSTR, ctypes.c_int]
+            user32.SetWindowTextW.argtypes = [wintypes.HWND, wintypes.LPCWSTR]
+            user32.MoveWindow.argtypes = [
+                wintypes.HWND, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int, wintypes.BOOL
+            ]
+            gdi32.CreateFontW.restype = wintypes.HFONT
+            kernel32.GetModuleHandleW.restype = wintypes.HMODULE
+            host = tk.Frame(self.lookup_query_bar, bg="#ffffff", height=34)
+            host.pack(side="left", fill="x", expand=True, padx=(4, 0))
+            host.pack_propagate(False)
+            style = 0x40000000 | 0x10000000 | 0x00010000 | 0x00000080
+            edit = user32.CreateWindowExW(
+                0, "EDIT", "", style, 0, 0, 100, 30,
+                wintypes.HWND(host.winfo_id()), None, kernel32.GetModuleHandleW(None), None,
+            )
+            if not edit:
+                host.destroy()
+                return False
+            self.lookup_native_edit = edit
+            self.lookup_native_host = host
+            font = gdi32.CreateFontW(
+                -16, 0, 0, 0, 400, 0, 0, 0, 1, 0, 0, 0, 0, "Microsoft YaHei UI"
+            )
+            self._lookup_native_font = font
+            if font:
+                user32.SendMessageW(edit, 0x0030, font, 1)
+
+            def resize(event) -> None:
+                user32.MoveWindow(edit, 0, 0, max(40, event.width), max(20, event.height), True)
+
+            host.bind("<Configure>", resize)
+            resize(type("E", (), {"width": 500, "height": 30})())
+
+            user32.CallWindowProcW.restype = ctypes.c_ssize_t
+            user32.CallWindowProcW.argtypes = [
+                ctypes.c_void_p, wintypes.HWND, wintypes.UINT, wintypes.WPARAM, wintypes.LPARAM
+            ]
+
+            def on_key(hwnd, msg, wparam, lparam):
+                if msg == 0x0100 and wparam == 0x0D:
+                    self.root.after_idle(self._on_lookup)
+                    return 0
+                return user32.CallWindowProcW(old_proc, hwnd, msg, wparam, lparam)
+
+            proc_type = ctypes.WINFUNCTYPE(
+                ctypes.c_ssize_t, wintypes.HWND, wintypes.UINT, wintypes.WPARAM, wintypes.LPARAM
+            )
+            self._lookup_native_proc = proc_type(on_key)
+            set_ptr = getattr(user32, "SetWindowLongPtrW", user32.SetWindowLongW)
+            set_ptr.restype = ctypes.c_void_p
+            set_ptr.argtypes = [wintypes.HWND, ctypes.c_int, ctypes.c_void_p]
+            old_proc = set_ptr(edit, -4, ctypes.cast(self._lookup_native_proc, ctypes.c_void_p))
+            self._lookup_native_old_proc = old_proc
+            self._lookup_native_user32 = user32
+            return True
+        except Exception:  # noqa: BLE001
+            failed_host: Optional[tk.Frame] = getattr(self, "lookup_native_host", None)
+            if failed_host is not None:
+                try:
+                    failed_host.destroy()
+                except tk.TclError:
+                    pass
+            self.lookup_native_host = None
+            self.lookup_native_edit = None
+            return False
+
+    def _lookup_text(self) -> str:
+        edit = getattr(self, "lookup_native_edit", None)
+        if not edit:
+            return self.lookup_query_var.get()
+        user32 = getattr(self, "_lookup_native_user32", None)
+        if user32 is None:
+            return self.lookup_query_var.get()
+        length = user32.GetWindowTextLengthW(edit)
+        buffer = ctypes.create_unicode_buffer(length + 1)
+        user32.GetWindowTextW(edit, buffer, length + 1)
+        return buffer.value
+
+    def _set_lookup_query_text(self, text: str) -> None:
+        self.lookup_query_var.set(text)
+        edit = getattr(self, "lookup_native_edit", None)
+        user32 = getattr(self, "_lookup_native_user32", None)
+        if edit and user32 is not None:
+            buffer = ctypes.create_unicode_buffer(text)
+            user32.SendMessageW(edit, 0x000C, 0, ctypes.addressof(buffer))
+
+    def _lookup_focus(self) -> None:
+        edit = getattr(self, "lookup_native_edit", None)
+        user32 = getattr(self, "_lookup_native_user32", None)
+        if edit and user32 is not None:
+            user32.SetFocus(edit)
+            return
+        entry = self.lookup_entry
+        if entry is not None:
+            entry.focus_set()
+
+    def _lookup_insert_text(self, text: str) -> None:
+        edit = getattr(self, "lookup_native_edit", None)
+        user32 = getattr(self, "_lookup_native_user32", None)
+        if edit and user32 is not None:
+            buffer = ctypes.create_unicode_buffer(text)
+            user32.SendMessageW(edit, 0x00C2, 1, ctypes.addressof(buffer))
+            return
+        entry = self.lookup_entry
+        if entry is not None:
+            entry.insert("insert", text)
+
+    def _sync_lookup_text_from_native(self) -> None:
+        if not getattr(self, "lookup_native_edit", None):
+            return
+        text = self._lookup_text()
+        if text != self.lookup_query_var.get():
+            self.lookup_query_var.set(text)
+
+    def _poll_native_lookup_text(self) -> None:
+        if not getattr(self, "lookup_native_edit", None):
+            return
+        self._sync_lookup_text_from_native()
+        self.root.after(120, self._poll_native_lookup_text)
 
     def _build_lookup_tab(self) -> None:
         page = self.tab_lookup
@@ -1763,24 +1938,11 @@ class App:
             side="left"
         )
         self.lookup_query_var = tk.StringVar()
-        entry = ttk.Entry(query, textvariable=self.lookup_query_var, width=34, font=("Microsoft YaHei UI", 10))
-        self.lookup_entry = entry
-        entry.pack(side="left", padx=(4, 0))
-        entry.bind("<Return>", lambda _event: self._on_lookup())
-        self.lookup_query_var.trace_add("write", self._on_lookup_query_changed)
-        self.emoji_btn = tk.Button(
-            query,
-            text="😀",
-            command=self._open_emoji_panel,
-            font=("Segoe UI Emoji", 12),
-            width=3,
-            relief="flat",
-            bg="#eef1f5",
-            activebackground="#dbeafe",
-            cursor="hand2",
-        )
-        self.emoji_btn.pack(side="left", padx=(6, 0))
-        tk.Button(
+        self.lookup_entry = None
+        self.lookup_native_edit = None
+        self.lookup_native_host = None
+        self.emoji_btn = None
+        query_button = tk.Button(
             query,
             text="查询",
             command=self._on_lookup,
@@ -1793,7 +1955,13 @@ class App:
             pady=6,
             cursor="hand2",
             font=("Microsoft YaHei UI", 9, "bold"),
-        ).pack(side="left", padx=(8, 0))
+        )
+        query_button.pack(side="right", padx=(8, 0))
+        if os.name == "nt" and self._create_lookup_native_edit():
+            self.lookup_query_var.trace_add("write", self._on_lookup_query_changed)
+            self.root.after(120, self._poll_native_lookup_text)
+        else:
+            self._build_lookup_fallback_entry(query, query_button)
 
         options = tk.Frame(page, bg="#ffffff", padx=12, pady=4)
         options.pack(fill="x")
@@ -2036,6 +2204,7 @@ class App:
         self.lookup_info.configure(text=content)
 
     def _on_lookup(self) -> None:
+        self._sync_lookup_text_from_native()
         self._normalize_lookup_query()
         query = self.lookup_query_var.get().strip()
         if not query:
