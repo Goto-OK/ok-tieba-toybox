@@ -5620,9 +5620,21 @@ class App:
                 return hit[1]
             try:
                 fetcher = Fetcher(cookie=cookie, delay=0.3, verbose=False)
+                uid = user.get("uid") or ""
+                cached_posts = cached_user_posts(uid, count, start_date, end_date, prefer)
+                if cached_posts is not None and not include_follows:
+                    return {
+                        "ok": True,
+                        "recent_posts": cached_posts,
+                        "bar_level": str(user.get("level") or ""),
+                        "follow_loaded": False,
+                        "followed_forums": [],
+                        "hidden_forums": [],
+                        "post_sources": {"cached": True},
+                    }
                 profile = fetch_user_profile(
                     fetcher,
-                    user.get("uid") or "",
+                    uid,
                     user.get("username") or "",
                     user.get("portrait") or "",
                     self._user_bar(user),
@@ -5634,6 +5646,7 @@ class App:
                     topic_max_pages=1,
                     use_cache=False,
                     cache_priority=0,
+                    cached_posts=cached_posts,
                 )
             except Exception as error:  # noqa: BLE001
                 return {"ok": False, "error": str(error)}
