@@ -43,6 +43,7 @@ from tieba_reply_stats.collect import (
     CollectError,
     CollectOptions,
     collect_thread,
+    enrich_identities,
     enrich_user_levels,
     extract_tid,
 )
@@ -244,6 +245,8 @@ class App:
         self._apply_risk_ui()
         self._apply_proxy()
         self._restore_last_result()
+        if self.last_threads:
+            self.root.after(500, self._backfill_identities)
         self.root.after(300, self._maybe_onboarding)
 
     # ------------------------------------------------------------------ UI
@@ -6648,6 +6651,38 @@ class App:
             pass
         self.status_var.set(f"已恢复 {len(threads)} 个帖子（{len(self._aggregate_users())} 位用户）")
 
+    def _backfill_identities(self) -> None:
+        if getattr(self, "_identity_backfill_running", False) or self.running:
+            return
+        missing = sum(
+            1
+            for thread in self.last_threads
+            for item in list(thread.floors) + list(thread.comments)
+            if not item.author_id and (item.author_name or item.portrait)
+        )
+        if not missing:
+            return
+        self._identity_backfill_running = True
+        self.people_hint.configure(text=f"正在补全用户身份（{missing} 条待解析）…")
+
+        def worker():
+            try:
+                fetcher = Fetcher(cookie=self._request_cookie(), delay=0.3, verbose=False)
+                options = CollectOptions(
+                    verbose=True,
+                    log=self._log_from_thread,
+                    should_stop=self.stop_event.is_set,
+                )
+                for thread in self.last_threads:
+                    enrich_identities(thread, fetcher, options, self._log_from_thread)
+                self._post(("identities_ready",))
+            except Exception as error:  # noqa: BLE001
+                self._post(("log", f"身份补全失败：{error}", "err"))
+            finally:
+                self._identity_backfill_running = False
+
+        threading.Thread(target=worker, daemon=True).start()
+
     def _start_from_key(self, _event=None):
         self._on_start()
         return "break"
@@ -6910,6 +6945,7 @@ class App:
             self._persist_result(self.last_threads)
             self._auto_filled = False
             self._set_running(False)
+            self.root.after(500, self._backfill_identities)
             self.status_var.set(f"完成 · {len(self.last_threads)} 个帖子 / {len(self._aggregate_users())} 位用户")
             try:
                 self._reset_people_filters()
@@ -7014,6 +7050,16 @@ class App:
                 ("已停止" if cancelled else "完成") + f"一键红绿灯：刷新 {done} 人。",
                 "muted" if cancelled else "ok",
             )
+        elif kind == "identities_ready":
+            if not self.running:
+                try:
+                    self._refresh_people()
+                    self._refresh_grid()
+                    self._persist_result(self.last_threads)
+                except Exception:  # noqa: BLE001
+                    pass
+                self.status_var.set("用户身份补全完成")
+                self._append_log("用户身份补全完成。", "ok")
         elif kind == "profile_ready":
             _, key, user, profile = message
             self._profile_cache[key] = profile

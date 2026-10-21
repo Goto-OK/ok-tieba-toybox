@@ -117,6 +117,7 @@ Android 核心同步通过
 - 停止后才显示「继续未完成」，完成后隐藏；
 - 楼中楼解析保留 `user_id/user_name/portrait/showname`；
 - 抓取完成后自动补全缺失 uid，写回楼层/楼中楼；
+- 恢复旧结果时后台补全缺失身份，完成后刷新并保存；
 - 无 uid/username 时按昵称、portrait 兜底；
 - 昵称搜索 exactMatch/fuzzyMatch 兼容 dict/list；
 - portrait 通过 profile protobuf 反查 uid，无需 Cookie；
