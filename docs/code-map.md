@@ -21,6 +21,7 @@
 | `page_pb.py` | 匿名 `page` / `floor` protobuf、楼中楼补全 |
 | `pbapi.py` | `page_pc` / `nestedFloor` 补等级 |
 | `profile.py` | 资料、公开关注、隐藏恢复、发言 |
+| `post_cache.py` | 热内存 + 冷 SQLite 发言缓存 |
 | `profile_pb.py` | 客户端 profile protobuf |
 | `userpost_pb.py` | 客户端 userpost protobuf |
 | `follow_probe.py` | 隐藏关注候选探测 |
@@ -68,6 +69,8 @@
 | `tests/test_filters.py` | 筛选、身份、曾用昵称 |
 | `tests/test_compare.py` | 多帖对比 |
 | `tests/test_report.py` | 用户报告 |
+| `tests/test_posts_export.py` | 导出发言三表/超链接 |
+| `tests/test_post_cache.py` | 发言缓存读写 |
 | `tests/test_config_backup.py` | 设置备份 |
 | `tests/test_follow_probe.py` | 候选探测 |
 | `tests/test_floor_depth.py` | 楼中楼深度/去重 |
@@ -75,7 +78,7 @@
 | `tests/test_errors.py` | 错误文案 |
 | `tests/test_version.py` | 版本一致性 |
 
-当前：78 个 pytest 通过，selftest 通过。
+当前：81 个 pytest 通过，selftest 通过。
 
 ## 5. 脚本
 

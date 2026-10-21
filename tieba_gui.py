@@ -18,7 +18,7 @@ import tkinter as tk
 import traceback
 import webbrowser
 from dataclasses import replace
-from datetime import datetime
+from datetime import datetime, timedelta
 from functools import partial
 from tkinter import filedialog, messagebox, simpledialog, ttk
 from typing import Any, Callable, Dict, List, Optional
@@ -56,8 +56,20 @@ from tieba_reply_stats.fetch import CaptchaError, Fetcher, FetchError, ThreadGon
 from tieba_reply_stats.filters import FIELD_OPTIONS, LEVEL_OPTIONS, MARK_OPTIONS, filter_users
 from tieba_reply_stats.follow_probe import candidate_bars, probe_forums
 from tieba_reply_stats.pbapi import fill_thread_levels
-from tieba_reply_stats.profile import fetch_user_profile, resolve_user
-from tieba_reply_stats.report import export_user_report, report_base
+from tieba_reply_stats.post_cache import DEFAULT_LIMIT_MB, MAX_LIMIT_MB, MIN_LIMIT_MB
+from tieba_reply_stats.post_cache import cache as post_cache
+from tieba_reply_stats.profile import (
+    cached_user_posts,
+    clear_post_cache,
+    fetch_user_profile,
+    resolve_user,
+)
+from tieba_reply_stats.report import (
+    export_user_posts,
+    export_user_report,
+    posts_base,
+    report_base,
+)
 from tieba_reply_stats.safe_delete import remove_file as safe_remove_file
 from tieba_reply_stats.safe_delete import remove_tree as safe_remove_tree
 from tieba_reply_stats.settings import APP_DIR, SETTINGS_PATH, load_settings, save_settings
@@ -180,10 +192,12 @@ class App:
         self.last_outputs: List[str] = []
         self.last_threads: list = []
         self._auto_filled = False
+        self._profile_topic_limit = 50
         self._lookup_normalize_job: Optional[str] = None
         self._emoji_window: Optional[tk.Toplevel] = None
         self.blacklist = load_blacklist()
         self.settings = load_settings()
+        post_cache().set_limit_mb(int(self.settings.get("post_cache_limit_mb", DEFAULT_LIMIT_MB)))
         self.palette = resolve_palette(
             str(self.settings.get("theme_mode", "light")),
             str(self.settings.get("accent", "blue")),
@@ -1020,6 +1034,8 @@ class App:
 
         columns = ("mark", "name", "username", "uid", "level", "floor", "comment", "total")
         self.people_columns = columns
+        self._people_col_filters: Dict[str, set] = {}
+        self._people_sort: tuple = ("", False)
         headings = {
             "mark": "标记",
             "name": "昵称",
@@ -1061,7 +1077,10 @@ class App:
         tree_wrap.pack(fill="both", expand=True)
         self.people_tree = ttk.Treeview(tree_wrap, columns=columns, show="headings")
         for col in columns:
-            self.people_tree.heading(col, text=headings[col])
+            mark = "  ▼" if col in ("mark", "name", "username", "uid") else ""
+            self.people_tree.heading(
+                col, text=headings[col] + mark, command=partial(self._sort_people, col)
+            )
             self.people_tree.column(col, width=widths[col], anchor="center" if col != "name" else "w")
         self.people_tree.tag_configure("ban", background=self.palette["danger_bg"])
         self.people_tree.tag_configure("warn", background=self.palette["warning_bg"])
@@ -1114,6 +1133,11 @@ class App:
             font=("Microsoft YaHei UI", 9),
         )
         self.profile_status.pack(side="left", fill="x", expand=True)
+        self.profile_topic_btn = ttk.Button(
+            profile_bar, text="继续抓主题", command=self._continue_profile_topics, width=12
+        )
+        self.profile_topic_btn.pack(side="right", padx=(0, 4))
+        self.profile_topic_btn.pack_forget()
         ttk.Button(profile_bar, text="刷新资料", command=self._reload_profile, width=8).pack(
             side="right"
         )
@@ -1124,6 +1148,9 @@ class App:
         profile_actions.pack(fill="x")
         self.profile_report_btn = ttk.Button(
             profile_actions, text="导出此人报告", command=self._export_profile_report, width=16
+        )
+        self.profile_posts_btn = ttk.Button(
+            profile_actions, text="导出发言", command=self._export_profile_posts, width=10
         )
         self.profile_follow_btn = ttk.Button(
             profile_actions, text="加载公开关注", command=self._reload_profile_follow, width=16
@@ -1168,7 +1195,15 @@ class App:
         self.profile_forum_tree.pack(fill="both", expand=True)
         self.profile_forum_tree.bind("<Double-1>", lambda _event: self._open_profile_forum())
         self._configure_colors(self.profile_forum_tree)
-        self._make_sortable(self.profile_forum_tree, {"bar": "贴吧", "level": "等级", "source": "来源"})
+        self._make_sortable(
+            self.profile_forum_tree,
+            {"bar": "贴吧", "level": "等级", "source": "来源"},
+            {"level"},
+        )
+        self._bind_loaded_filter(
+            self.profile_forum_tree,
+            {"bar": ("贴吧", False), "level": None, "source": ("来源", False)},
+        )
         self._profile_forum_names: Dict[str, str] = {}
 
         tk.Label(
@@ -1197,6 +1232,17 @@ class App:
         self._make_sortable(
             self.profile_post_tree,
             {"time": "日期", "type": "类型", "bar": "贴吧", "title": "标题", "content": "内容"},
+            {"time"},
+        )
+        self._bind_loaded_filter(
+            self.profile_post_tree,
+            {
+                "time": ("日期", True),
+                "type": ("类型", False),
+                "bar": ("贴吧", False),
+                "title": ("标题", False),
+                "content": ("内容", False),
+            },
         )
         self._profile_post_urls: Dict[str, str] = {}
 
@@ -1498,9 +1544,10 @@ class App:
         except tk.TclError:
             pass
 
-    def _make_sortable(self, tree, headers) -> None:
-        """点表头在升序/降序之间切换。"""
+    def _make_sortable(self, tree, headers, sortable=None) -> None:
+        """点表头在升序/降序之间切换；sortable 限定真正可排序的列。"""
         state: Dict[str, Any] = {"column": None, "reverse": False}
+        allowed = set(sortable) if sortable is not None else set(headers)
 
         def sort_by(column: str) -> None:
             if state["column"] == column:
@@ -1529,7 +1576,10 @@ class App:
                 tree.heading(col, text=title + arrow)
 
         for col, title in headers.items():
-            tree.heading(col, text=title, command=lambda c=col: sort_by(c))
+            if col in allowed:
+                tree.heading(col, text=title, command=lambda c=col: sort_by(c))
+            else:
+                tree.heading(col, text=title)
 
     def _selected_person(self):
         selection = self.people_tree.selection()
@@ -1572,6 +1622,16 @@ class App:
             self._copy_text(str(user.get(key) or ""))
 
     def _person_menu(self, event) -> None:
+        if self.people_tree.identify_region(event.x, event.y) == "heading":
+            column = self.people_tree.identify_column(event.x)
+            try:
+                index = int(column[1:]) - 1
+                key = self.people_columns[index]
+            except (ValueError, IndexError):
+                return
+            if key in ("mark", "name", "username", "uid"):
+                self._filter_people_column(key)
+            return
         row = self.people_tree.identify_row(event.y)
         if row:
             self.people_tree.selection_set(row)
@@ -1790,6 +1850,9 @@ class App:
         self.lookup_report_btn = ttk.Button(
             bottom, text="导出此人报告", command=self._export_lookup_report, width=14
         )
+        self.lookup_posts_btn = ttk.Button(
+            bottom, text="导出发言", command=self._export_lookup_posts, width=10
+        )
         self.lookup_probe_btn = ttk.Button(
             bottom, text="探测候选关注", command=self._probe_lookup_forums, width=14
         )
@@ -1831,7 +1894,15 @@ class App:
         self.lookup_forum_tree.pack(fill="both", expand=True)
         self.lookup_forum_tree.bind("<Double-1>", lambda _event: self._open_lookup_forum())
         self._configure_colors(self.lookup_forum_tree)
-        self._make_sortable(self.lookup_forum_tree, {"bar": "贴吧", "level": "等级", "source": "来源"})
+        self._make_sortable(
+            self.lookup_forum_tree,
+            {"bar": "贴吧", "level": "等级", "source": "来源"},
+            {"level"},
+        )
+        self._bind_loaded_filter(
+            self.lookup_forum_tree,
+            {"bar": ("贴吧", False), "level": None, "source": ("来源", False)},
+        )
 
         tk.Label(
             right,
@@ -1866,10 +1937,25 @@ class App:
         self._make_sortable(
             self.lookup_post_tree,
             {"time": "日期", "type": "类型", "bar": "贴吧", "title": "标题", "content": "内容"},
+            {"time"},
+        )
+        self._bind_loaded_filter(
+            self.lookup_post_tree,
+            {
+                "time": ("日期", True),
+                "type": ("类型", False),
+                "bar": ("贴吧", False),
+                "title": ("标题", False),
+                "content": ("内容", False),
+            },
         )
         self._lookup_post_urls: Dict[str, str] = {}
         self._lookup_forum_names: Dict[str, str] = {}
         self._lookup_cache: Dict[str, tuple[float, Dict[str, Any]]] = {}
+        self._lookup_topic_limit = 50
+        self.lookup_topic_btn = ttk.Button(
+            bottom, text="继续抓主题", command=self._continue_lookup_topics, width=12
+        )
         self._lookup_generation = 0
         self.lookup_date_mode_var.trace_add("write", lambda *_: self._on_lookup_date_changed())
         for _var in (self.lookup_count_var, self.lookup_prefer_var):
@@ -1934,7 +2020,7 @@ class App:
         end_date = self.lookup_end_var.get().strip() if date_mode == "指定日期" else ""
         cache_key = (
             f"{query}|{mode}|{count}|{start_date}|{end_date}|"
-            f"{self.lookup_prefer_var.get()}|{self.mode_var.get()}"
+            f"{self.lookup_prefer_var.get()}|{self.mode_var.get()}|{self._lookup_topic_limit}"
         )
         hit = self._lookup_cache.get(cache_key)
         if hit and time.monotonic() - hit[0] < 60:
@@ -1986,6 +2072,7 @@ class App:
                     start_date,
                     end_date,
                     "start" if "最早" in self.lookup_prefer_var.get() else "end",
+                    topic_max_pages=self._lookup_topic_limit,
                 )
                 if generation != self._lookup_generation:
                     return
@@ -2168,11 +2255,36 @@ class App:
             text=(f"{profile.get('username') or ''} · {len(posts)} 条发言" + (f" · {note}" if note else ""))
         )
         self.lookup_report_btn.pack(side="left", padx=(0, 6))
+        self.lookup_posts_btn.pack(side="left", padx=(0, 6))
+        sources = profile.get("post_sources") or {}
+        if sources.get("topic_truncated"):
+            self.lookup_topic_btn.configure(
+                text=f"继续抓主题（已 {sources.get('topic_pages') or 50} 页）"
+            )
+            self.lookup_topic_btn.pack(side="left", padx=(0, 6))
+        else:
+            self.lookup_topic_btn.pack_forget()
         if self._hidden_follows(profile):
             self.lookup_probe_btn.pack(side="left", padx=(6, 0))
             self.lookup_probe_btn.configure(state="normal", text="探测候选关注")
         else:
             self.lookup_probe_btn.pack_forget()
+
+    def _continue_lookup_topics(self) -> None:
+        choice = self._ask_choice(
+            "继续抓主题",
+            "主题流已达到本次上限，继续会追加请求；已缓存的页不会重复抓。",
+            [("再抓 50 页", "more"), ("一直抓到开始日期", "all"), ("停止", None)],
+            default=0,
+        )
+        if choice is None:
+            self.lookup_topic_btn.pack_forget()
+            return
+        self._lookup_topic_limit = (
+            100000 if choice == "all" else int(getattr(self, "_lookup_topic_limit", 50)) + 50
+        )
+        self._lookup_cache.clear()
+        self._on_lookup()
 
     def _open_participants(self) -> None:
         if not self.last_threads:
@@ -2181,6 +2293,42 @@ class App:
         self._refresh_people()
         self.notebook.select(self.tab_posts)
         self.post_nb.select(self.tab_people)
+
+    def _sort_people(self, column: str) -> None:
+        if column not in ("mark", "level", "floor", "comment", "total"):
+            return
+        current, reverse = self._people_sort
+        self._people_sort = (column, (not reverse) if current == column else False)
+        self._people_page = 0
+        self._refresh_people()
+
+    def _people_column_value(self, user, column: str) -> str:
+        if column == "mark":
+            level, _bar = classify(user.get("bars") or [], self.blacklist)
+            return LEVEL_LABEL.get(level, "") if self._risk_enabled() else ""
+        if column == "name":
+            return self._display_name(user)
+        if column == "username":
+            return user.get("username") or "-"
+        if column == "uid":
+            return user.get("uid") or "-"
+        return ""
+
+    def _filter_people_column(self, column: str) -> None:
+        values = sorted({self._people_column_value(user, column) for user in self.people_users})
+        chosen = self._filter_text_dialog(
+            {"mark": "标记", "name": "昵称", "username": "用户名", "uid": "用户ID"}.get(column, column),
+            values,
+            self._people_col_filters.get(column),
+        )
+        if chosen is None:
+            return
+        if chosen:
+            self._people_col_filters[column] = chosen
+        else:
+            self._people_col_filters.pop(column, None)
+        self._people_page = 0
+        self._refresh_people()
 
     def _on_people_filter_changed(self) -> None:
         self._people_page = 0
@@ -2201,6 +2349,8 @@ class App:
             self.people_mark_var.set("全部")
             self.people_min_var.set("")
             self.people_max_var.set("")
+            self._people_col_filters = {}
+            self._people_sort = ("", False)
             self.people_custom_frame.pack_forget()
         finally:
             self._filter_resetting = False
@@ -2247,6 +2397,23 @@ class App:
             min_level=_optional_int(self.people_min_var.get()),
             max_level=_optional_int(self.people_max_var.get()),
         )
+        for column, selected in self._people_col_filters.items():
+            if selected:
+                filtered = [
+                    user for user in filtered
+                    if self._people_column_value(user, column) in selected
+                ]
+        sort_column, sort_reverse = getattr(self, "_people_sort", ("", False))
+        if sort_column:
+            def sort_key(user):
+                if sort_column == "mark":
+                    order = {"警告": 3, "可疑": 2, "安全": 1, "": 0}
+                    value = self._people_column_value(user, sort_column)
+                    return order.get(value, 0)
+                if sort_column == "level":
+                    return int(user.get("level") or 0)
+                return int(user.get(sort_column) or 0)
+            filtered.sort(key=sort_key, reverse=bool(sort_reverse))
         self._profile_cache = {}
         page_size = max(1, int(self.settings.get("page_size", 1000) or 1000))
         pages = max(1, (len(filtered) + page_size - 1) // page_size)
@@ -2328,6 +2495,7 @@ class App:
             user = self.people_users[int(selection[0])]
         except (IndexError, ValueError):
             return
+        self._profile_topic_limit = 50
         self._load_profile(user)
 
     def _open_current_profile(self) -> None:
@@ -3050,6 +3218,41 @@ class App:
             font=("Microsoft YaHei UI", 8),
         ).pack(anchor="w", padx=8, pady=(2, 4))
 
+        cache_box = ttk.LabelFrame(box, text=" 发言缓存 ")
+        cache_box.pack(fill="x", pady=(0, 6))
+        cache_row = tk.Frame(cache_box, bg="#eef1f5")
+        cache_row.pack(fill="x", padx=8, pady=(6, 2))
+        tk.Label(cache_row, text="上限：", bg="#eef1f5", fg="#475569").pack(side="left")
+        self.cache_limit_var = tk.StringVar(
+            value=str(int(self.settings.get("post_cache_limit_mb", DEFAULT_LIMIT_MB)))
+        )
+        self.cache_limit_box = ttk.Spinbox(
+            cache_row,
+            from_=MIN_LIMIT_MB,
+            to=MAX_LIMIT_MB,
+            increment=50,
+            width=7,
+            textvariable=self.cache_limit_var,
+            command=self._on_cache_limit_changed,
+        )
+        self.cache_limit_box.pack(side="left")
+        self.cache_limit_box.bind("<FocusOut>", lambda _event: self._on_cache_limit_changed())
+        self.cache_limit_box.bind("<Return>", lambda _event: self._on_cache_limit_changed())
+        tk.Label(cache_row, text="MB", bg="#eef1f5", fg="#475569").pack(side="left")
+        ttk.Button(cache_row, text="清除发言缓存", command=self._clear_post_cache, width=14).pack(
+            side="right"
+        )
+        self.cache_stats_label = tk.Label(
+            cache_box,
+            text="",
+            bg="#eef1f5",
+            fg="#8a94a6",
+            font=("Microsoft YaHei UI", 8),
+            anchor="w",
+        )
+        self.cache_stats_label.pack(fill="x", padx=8, pady=(2, 4))
+        self._refresh_cache_stats()
+
         maint_box = ttk.LabelFrame(box, text=" 数据位置与维护 ")
         maint_box.pack(fill="x")
         data_row = tk.Frame(maint_box, bg="#eef1f5")
@@ -3113,6 +3316,59 @@ class App:
             fg="#8a94a6",
             font=("Microsoft YaHei UI", 8),
         ).pack(anchor="w", padx=8, pady=(0, 4))
+
+    def _on_cache_limit_changed(self) -> None:
+        try:
+            value = int(float(self.cache_limit_var.get().strip()))
+        except (TypeError, ValueError):
+            value = int(self.settings.get("post_cache_limit_mb", DEFAULT_LIMIT_MB))
+        value = max(MIN_LIMIT_MB, min(MAX_LIMIT_MB, value))
+        old = int(self.settings.get("post_cache_limit_mb", DEFAULT_LIMIT_MB))
+        if value < old:
+            if not messagebox.askokcancel(
+                "降低发言缓存上限",
+                "降低上限会立即清除部分发言缓存，之后查询可能变慢。\n"
+                "不会删除 Excel、本地标记或最近结果。\n\n继续？",
+                parent=self.root,
+            ):
+                self.cache_limit_var.set(str(old))
+                return
+        self.cache_limit_var.set(str(value))
+        self.settings["post_cache_limit_mb"] = value
+        save_settings(self.settings)
+        post_cache().set_limit_mb(value)
+        self._refresh_cache_stats()
+
+    def _refresh_cache_stats(self) -> None:
+        label = getattr(self, "cache_stats_label", None)
+        if label is None:
+            return
+        try:
+            stats = post_cache().stats()
+            label.configure(
+                text=(
+                    f"热内存：{stats['hot_users']} 人 / {stats['hot_bytes'] / 1024 / 1024:.1f} MB；"
+                    f"冷库：{stats['cold_users']} 人 / {stats['cold_posts']} 条 / "
+                    f"{stats['cold_bytes'] / 1024 / 1024:.1f} MB（上限 {stats['limit_mb']} MB）"
+                )
+            )
+        except Exception as error:  # noqa: BLE001
+            label.configure(text=f"缓存状态读取失败：{error}")
+
+    def _clear_post_cache(self) -> None:
+        if not messagebox.askyesno(
+            "清除发言缓存",
+            "清除本次运行的发言缓存？\n不会删除 Excel、本地标记或最近结果。",
+            parent=self.root,
+        ):
+            return
+        clear_post_cache()
+        for name in ("_lookup_cache", "_profile_cache", "_batch_cache"):
+            value = getattr(self, name, None)
+            if isinstance(value, dict):
+                value.clear()
+        self._refresh_cache_stats()
+        self._append_log("发言缓存已清除。", "muted")
 
     def _build_about_tab(self) -> None:
         box = tk.Frame(self.tab_about, bg="#eef1f5", padx=14, pady=10)
@@ -3321,7 +3577,7 @@ class App:
             justify="left",
             anchor="w",
         ).pack(fill="x", pady=(8, 14))
-        result = {"value": None}
+        result: Dict[str, Any] = {"value": None}
         buttons = tk.Frame(frame, bg="#ffffff")
         buttons.pack(fill="x")
 
@@ -3482,6 +3738,8 @@ class App:
         if simpledialog.askstring("确认清空", "输入“清空”后继续：", parent=self.root) != "清空":
             return
         clear_stored_result()
+        clear_post_cache()
+        post_cache().close()
         try:
             for path in stored_old_files():
                 safe_remove_file(path)
@@ -3492,12 +3750,17 @@ class App:
             if os.path.isdir(temp_dir):
                 safe_remove_tree(temp_dir, [temp_dir])
         except (OSError, ValueError) as error:
+            post_cache().reopen()
             messagebox.showerror("清空失败", f"路径校验失败，已停止：{error}", parent=self.root)
             return
+        post_cache().reopen()
         clear_cookie()
         save_blacklist({"safe": [], "warn": [], "ban": []})
         save_settings({})
         self.settings = load_settings()
+        post_cache().set_limit_mb(int(self.settings.get("post_cache_limit_mb", DEFAULT_LIMIT_MB)))
+        if hasattr(self, "cache_limit_var"):
+            self.cache_limit_var.set(str(int(self.settings.get("post_cache_limit_mb", DEFAULT_LIMIT_MB))))
         self.blacklist = {"safe": [], "warn": [], "ban": []}
         self.last_threads = []
         self.last_output = None
@@ -4482,6 +4745,165 @@ class App:
         book.save(path)
         self._append_log(f"对比结果已导出：{path}", "ok")
 
+    _SORT_ONLY_HEADERS = {"日期", "等级", "楼层", "楼中楼", "合计", "所在楼层", "#"}
+    _TEXT_FILTER_HEADERS = {
+        "类型", "标记", "昵称", "回复者", "用户名", "用户ID", "头衔",
+        "内容", "帖子", "贴吧", "标题", "来源",
+    }
+
+    def _filter_text_dialog(self, title: str, values: List[str], selected) -> Optional[set]:
+        win = tk.Toplevel(self.root)
+        win.title("筛选：" + title)
+        win.configure(bg="#ffffff")
+        win.resizable(False, False)
+        win.transient(self.root)
+        win.grab_set()
+        frame = tk.Frame(win, bg="#ffffff", padx=12, pady=10)
+        frame.pack(fill="both", expand=True)
+        tk.Label(frame, text="筛选：" + title, bg="#ffffff", fg="#1f2937",
+                 font=("Microsoft YaHei UI", 10, "bold")).pack(anchor="w")
+        search = tk.StringVar()
+        tk.Entry(frame, textvariable=search, width=38).pack(fill="x", pady=(6, 6))
+        listbox = tk.Listbox(frame, selectmode="extended", width=42, height=14, exportselection=False)
+        listbox.pack(fill="both", expand=True)
+        for value in values:
+            listbox.insert("end", value)
+        chosen = set(str(v) for v in selected) if selected else set(values)
+        for index, value in enumerate(values):
+            if value in chosen:
+                listbox.selection_set(index)
+
+        def refresh(*_args) -> None:
+            query = search.get().strip().lower()
+            listbox.delete(0, "end")
+            for value in values:
+                if not query or query in value.lower():
+                    listbox.insert("end", value)
+            for index, value in enumerate(listbox.get(0, "end")):
+                if value in chosen:
+                    listbox.selection_set(index)
+
+        search.trace_add("write", refresh)
+        result: Dict[str, Any] = {"value": None}
+        buttons = tk.Frame(frame, bg="#ffffff")
+        buttons.pack(fill="x", pady=(8, 0))
+
+        def take_selection() -> set:
+            return {str(listbox.get(i)) for i in listbox.curselection()}
+
+        def apply() -> None:
+            result["value"] = take_selection()
+            win.destroy()
+
+        def clear() -> None:
+            result["value"] = set()
+            win.destroy()
+
+        ttk.Button(buttons, text="取消", command=lambda: win.destroy(), width=8).pack(side="right")
+        ttk.Button(buttons, text="应用", command=apply, width=8).pack(side="right", padx=(0, 6))
+        ttk.Button(buttons, text="清空", command=clear, width=8).pack(side="left")
+        ttk.Button(buttons, text="全选", command=lambda: listbox.selection_set(0, "end"), width=8).pack(side="left", padx=(0, 6))
+        self.root.wait_window(win)
+        return result["value"]
+
+    def _filter_date_dialog(self, title: str, selected) -> Optional[tuple]:
+        win = tk.Toplevel(self.root)
+        win.title("筛选：" + title)
+        win.configure(bg="#ffffff")
+        win.resizable(False, False)
+        win.transient(self.root)
+        win.grab_set()
+        frame = tk.Frame(win, bg="#ffffff", padx=14, pady=12)
+        frame.pack(fill="both", expand=True)
+        tk.Label(frame, text="日期范围（留空表示不限）", bg="#ffffff", fg="#1f2937",
+                 font=("Microsoft YaHei UI", 10, "bold")).pack(anchor="w")
+        start_var = tk.StringVar(value=(selected or ("", ""))[0])
+        end_var = tk.StringVar(value=(selected or ("", ""))[1])
+        row = tk.Frame(frame, bg="#ffffff")
+        row.pack(fill="x", pady=(8, 8))
+        tk.Label(row, text="开始", bg="#ffffff", fg="#475569").pack(side="left")
+        tk.Entry(row, textvariable=start_var, width=12).pack(side="left", padx=(4, 10))
+        tk.Label(row, text="结束", bg="#ffffff", fg="#475569").pack(side="left")
+        tk.Entry(row, textvariable=end_var, width=12).pack(side="left", padx=(4, 0))
+        preset = tk.Frame(frame, bg="#ffffff")
+        preset.pack(fill="x", pady=(0, 8))
+        for label, days in (("全部", 0), ("近7天", 7), ("近30天", 30), ("近90天", 90)):
+            def apply_preset(value=days) -> None:
+                if not value:
+                    start_var.set("")
+                    end_var.set("")
+                    return
+                today = datetime.now()
+                start_var.set((today - timedelta(days=value)).strftime("%Y-%m-%d"))
+                end_var.set(today.strftime("%Y-%m-%d"))
+            ttk.Button(preset, text=label, command=apply_preset, width=7).pack(side="left", padx=(0, 4))
+        result: Dict[str, Any] = {"value": None}
+        buttons = tk.Frame(frame, bg="#ffffff")
+        buttons.pack(fill="x")
+
+        def apply() -> None:
+            for value in (start_var.get().strip(), end_var.get().strip()):
+                if value and not re.fullmatch(r"\d{4}-\d{2}-\d{2}", value):
+                    messagebox.showerror("日期格式", "日期请用 YYYY-MM-DD。", parent=win)
+                    return
+            result["value"] = (start_var.get().strip(), end_var.get().strip())
+            win.destroy()
+
+        def clear() -> None:
+            result["value"] = ("", "")
+            win.destroy()
+
+        ttk.Button(buttons, text="取消", command=lambda: win.destroy(), width=8).pack(side="right")
+        ttk.Button(buttons, text="应用", command=apply, width=8).pack(side="right", padx=(0, 6))
+        ttk.Button(buttons, text="清空", command=clear, width=8).pack(side="left")
+        self.root.wait_window(win)
+        return result["value"]
+
+    def _filter_loaded_tree(self, tree, column: str, title: str, date_column: bool = False) -> None:
+        if not tree.get_children():
+            return
+        chosen: Any
+        if date_column:
+            current = None
+            chosen = self._filter_date_dialog(title, current)
+            if chosen is None:
+                return
+            start_date, end_date = chosen
+            for iid in list(tree.get_children()):
+                value = tree.set(iid, column)[:10]
+                if (start_date and value < start_date) or (end_date and value > end_date):
+                    tree.delete(iid)
+            return
+        values = sorted({tree.set(iid, column) for iid in tree.get_children()})
+        chosen = self._filter_text_dialog(title, values, None)
+        if chosen is None:
+            return
+        for iid in list(tree.get_children()):
+            if tree.set(iid, column) not in chosen:
+                tree.delete(iid)
+
+    def _bind_loaded_filter(self, tree, mapping: Dict[str, Optional[tuple]]) -> None:
+        def event_handler(event) -> None:
+            if tree.identify_region(event.x, event.y) != "heading":
+                return
+            column = tree.identify_column(event.x)
+            keys = list(mapping)
+            try:
+                index = int(column[1:]) - 1
+                key = keys[index]
+                spec = mapping.get(key)
+                if not spec:
+                    return
+                title, is_date = spec
+            except (ValueError, IndexError, KeyError):
+                return
+            self._filter_loaded_tree(tree, key, title, is_date)
+
+        tree.bind("<Button-3>", event_handler, add="+")
+
+    def _header_filterable(self, header: str) -> bool:
+        return header in self._TEXT_FILTER_HEADERS or header == "日期"
+
     def _add_grid_tab(
         self,
         notebook,
@@ -4514,7 +4936,7 @@ class App:
             "内容": 260,
         }
         for index, header in enumerate(headers):
-            tree.heading(columns[index], text=header)
+            tree.heading(columns[index], text=header + ("  ▼" if self._header_filterable(header) else ""))
             width = widths.get(header, 90)
             tree.column(
                 columns[index],
@@ -4547,6 +4969,33 @@ class App:
             state="readonly",
         ).pack(side="left", padx=(8, 0))
         state: Dict[str, Any] = {"page": 0, "column": None, "reverse": False}
+        filters: Dict[int, Any] = {}
+        row_index = {id(row): index for index, row in enumerate(all_rows)}
+
+        def visible_rows():
+            if not filters:
+                return all_rows
+            result = []
+            for row in all_rows:
+                keep = True
+                for index, selected in filters.items():
+                    header = headers[index] if index < len(headers) else ""
+                    value = "" if index >= len(row) or row[index] is None else str(row[index])
+                    if header == "日期":
+                        start_date, end_date = selected
+                        day = value[:10]
+                        if start_date and (not day or day < start_date):
+                            keep = False
+                            break
+                        if end_date and (not day or day > end_date):
+                            keep = False
+                            break
+                    elif selected and value not in selected:
+                        keep = False
+                        break
+                if keep:
+                    result.append(row)
+            return result
 
         def page_size() -> int:
             try:
@@ -4557,17 +5006,19 @@ class App:
         def render() -> None:
             for item in tree.get_children():
                 tree.delete(item)
+            rows = visible_rows()
             size = page_size()
-            pages = max(1, (len(all_rows) + size - 1) // size)
+            pages = max(1, (len(rows) + size - 1) // size)
             state["page"] = min(max(0, state["page"]), pages - 1)
             start_index = state["page"] * size
-            for offset, row in enumerate(all_rows[start_index : start_index + size]):
+            for offset, row in enumerate(rows[start_index : start_index + size]):
                 values = ["" if value is None else value for value in row]
                 tags = ("odd",) if (start_index + offset) % 2 else ()
                 iid = tree.insert("", "end", values=values, tags=tags)
-                index = start_index + offset
+                index = row_index.get(id(row), start_index + offset)
                 tree.links[iid] = all_urls[index] if index < len(all_urls) else ""  # type: ignore[attr-defined]
-            page_label.configure(text=f"第 {state['page'] + 1}/{pages} 页，共 {len(all_rows)} 行")
+            note = f"，筛选后 {len(rows)} 行" if filters else ""
+            page_label.configure(text=f"第 {state['page'] + 1}/{pages} 页，共 {len(rows)} 行{note}")
             for button, target in ((first_btn, 0), (prev_btn, state["page"] - 1), (next_btn, state["page"] + 1), (last_btn, pages - 1)):
                 button.configure(state="normal" if 0 <= target < pages and target != state["page"] else "disabled")
             if pages <= 1:
@@ -4632,6 +5083,31 @@ class App:
         menu.add_command(label="打开链接", command=open_row)
 
         def show_menu(event) -> None:
+            if tree.identify_region(event.x, event.y) == "heading":
+                column = tree.identify_column(event.x)
+                try:
+                    index = int(column[1:]) - 1
+                except (ValueError, IndexError):
+                    return
+                if index < 0 or index >= len(headers) or not self._header_filterable(headers[index]):
+                    return
+                header = headers[index]
+                chosen: Any
+                if header == "日期":
+                    chosen = self._filter_date_dialog(header, filters.get(index))
+                else:
+                    values = sorted({str(row[index]) if index < len(row) and row[index] is not None else ""
+                                     for row in all_rows})
+                    chosen = self._filter_text_dialog(header, values, filters.get(index))
+                if chosen is None:
+                    return
+                if chosen and any(chosen):
+                    filters[index] = chosen
+                else:
+                    filters.pop(index, None)
+                state["page"] = 0
+                render()
+                return
             row = tree.identify_row(event.y)
             if row:
                 tree.selection_set(row)
@@ -4647,14 +5123,26 @@ class App:
             state["reverse"] = reverse
             index = int(column)
 
+            header = headers[index] if index < len(headers) else ""
+            mark_order = {"警告": 3, "可疑": 2, "安全": 1, "": 0, "-": 0}
             def key(row):
                 value = row[index] if index < len(row) else ""
+                if header == "标记":
+                    for key, rank in mark_order.items():
+                        if key and key in str(value):
+                            return (0, rank)
+                    return (0, 0)
                 try:
                     return (0, float(value))
                 except (TypeError, ValueError):
                     return (1, str(value))
 
-            all_rows.sort(key=key, reverse=reverse)
+            paired = list(zip(all_rows, all_urls + [""] * max(0, len(all_rows) - len(all_urls))))
+            paired.sort(key=lambda item: key(item[0]), reverse=reverse)
+            all_rows[:] = [item[0] for item in paired]
+            all_urls[:] = [item[1] for item in paired]
+            row_index.clear()
+            row_index.update({id(row): index for index, row in enumerate(all_rows)})
             state["page"] = 0
             render()
             for position, header in enumerate(headers):
@@ -4663,7 +5151,12 @@ class App:
                     arrow = " ▼" if reverse else " ▲"
                 tree.heading(columns[position], text=header + arrow)
 
+        sortable = {"日期", "标记", "等级", "楼层", "楼中楼", "合计", "所在楼层", "#"}
+
         def sort_by(column: str) -> None:
+            index = int(column)
+            if index >= len(headers) or headers[index] not in sortable:
+                return
             if state["column"] == column:
                 apply_sort(column, not bool(state["reverse"]))
             else:
@@ -5040,6 +5533,9 @@ class App:
                     end_date,
                     prefer,
                     load_follow=include_follows,
+                    topic_max_pages=1,
+                    use_cache=False,
+                    cache_priority=0,
                 )
             except Exception as error:  # noqa: BLE001
                 return {"ok": False, "error": str(error)}
@@ -5136,7 +5632,13 @@ class App:
         if user and self.last_threads:
             self._load_profile(user, force=True)
 
-    def _load_profile(self, user, force: bool = False, force_follow: bool = False) -> None:
+    def _load_profile(
+        self,
+        user,
+        force: bool = False,
+        force_follow: bool = False,
+        topic_max_pages: Optional[int] = None,
+    ) -> None:
         key = user["uid"] or f"name:{user['name']}"
         cached = None if (force or force_follow) else getattr(self, "_profile_cache", {}).get(key)
         if cached and (cached.get("follow_loaded") or not force_follow):
@@ -5149,6 +5651,12 @@ class App:
         count = self._post_count()
         start_date, end_date = self._date_params()
         bar_name = self._user_bar(user)
+        prefer = "start" if "最早" in self.post_prefer_var.get() else "end"
+        topic_limit = int(topic_max_pages or getattr(self, "_profile_topic_limit", 50) or 50)
+        self._profile_topic_limit = topic_limit
+        cached_posts = None
+        if not force and not force_follow:
+            cached_posts = cached_user_posts(user["uid"], count, start_date, end_date, prefer)
 
         def worker():
             try:
@@ -5162,8 +5670,10 @@ class App:
                     count,
                     start_date,
                     end_date,
-                    "start" if "最早" in self.post_prefer_var.get() else "end",
+                    prefer,
                     load_follow=force_follow or self.settings.get("follow_load_mode", "auto") == "auto",
+                    topic_max_pages=topic_limit,
+                    cached_posts=cached_posts,
                 )
             except Exception as error:  # noqa: BLE001
                 profile = {"ok": False, "error": str(error)}
@@ -5175,6 +5685,26 @@ class App:
         user = getattr(self, "_profile_user", None)
         if user:
             self._load_profile(user, force=True, force_follow=True)
+
+    def _continue_profile_topics(self) -> None:
+        user = getattr(self, "_profile_user", None)
+        if not user:
+            return
+        choice = self._ask_choice(
+            "继续抓主题",
+            "主题流已达到本次上限，继续会追加请求；不会重复抓已缓存的页。",
+            [
+                ("再抓 50 页", "more"),
+                ("一直抓到开始日期", "all"),
+                ("停止", None),
+            ],
+            default=0,
+        )
+        if choice is None:
+            self.profile_topic_btn.pack_forget()
+            return
+        limit = 100000 if choice == "all" else int(getattr(self, "_profile_topic_limit", 50)) + 50
+        self._load_profile(user, force=True, topic_max_pages=limit)
 
     def _apply_level_to_threads(self, user, level: str) -> None:
         """把某个人的本吧等级写回楼层/楼中楼数据，刷新和导出时都不会丢。"""
@@ -5323,6 +5853,170 @@ class App:
         }
         self._choose_report_path(user, profile, None)
 
+    def _export_profile_posts(self) -> None:
+        user = getattr(self, "_profile_user", None)
+        profile = getattr(self, "_profile_data", None)
+        if not user or not profile:
+            messagebox.showinfo("还没有资料", "先点开一个参与者。", parent=self.root)
+            return
+        self._export_posts_for(user, profile, *self._date_params())
+
+    def _export_lookup_posts(self) -> None:
+        profile = getattr(self, "_last_lookup_profile", None)
+        if not profile:
+            messagebox.showinfo("还没有资料", "先查询一个用户。", parent=self.root)
+            return
+        user = {
+            "name": profile.get("nickname") or "",
+            "username": profile.get("username") or "",
+            "uid": profile.get("user_id") or "",
+        }
+        start = self.lookup_start_var.get().strip() if self.lookup_date_mode_var.get() == "指定日期" else ""
+        end = self.lookup_end_var.get().strip() if self.lookup_date_mode_var.get() == "指定日期" else ""
+        self._export_posts_for(user, profile, start, end)
+
+    def _post_range_dialog(self, user, start: str, end: str, cache_start: str, cache_end: str):
+        win = tk.Toplevel(self.root)
+        win.title("导出发言")
+        win.configure(bg="#ffffff")
+        win.resizable(False, False)
+        win.transient(self.root)
+        win.grab_set()
+        frame = tk.Frame(win, bg="#ffffff", padx=18, pady=14)
+        frame.pack(fill="both", expand=True)
+        tk.Label(
+            frame,
+            text="导出发言",
+            bg="#ffffff",
+            fg="#1f2937",
+            font=("Microsoft YaHei UI", 12, "bold"),
+        ).pack(anchor="w")
+        tk.Label(
+            frame,
+            text=f"用户：{user.get('name') or user.get('username') or user.get('uid') or ''}",
+            bg="#ffffff",
+            fg="#475569",
+            font=("Microsoft YaHei UI", 9),
+        ).pack(anchor="w", pady=(4, 10))
+        mode = tk.StringVar(value="current")
+        tk.Radiobutton(
+            frame,
+            text=f"当前查询范围：{start or '不限'} ~ {end or '不限'}",
+            value="current",
+            variable=mode,
+            bg="#ffffff",
+            anchor="w",
+        ).pack(fill="x", anchor="w")
+        tk.Radiobutton(
+            frame,
+            text=f"已缓存回复范围：{cache_start or '无'} ~ {cache_end or '无'}（连续）",
+            value="cache",
+            variable=mode,
+            bg="#ffffff",
+            anchor="w",
+        ).pack(fill="x", anchor="w")
+        tk.Radiobutton(
+            frame, text="自定义", value="custom", variable=mode, bg="#ffffff", anchor="w"
+        ).pack(fill="x", anchor="w")
+        custom = tk.Frame(frame, bg="#ffffff")
+        custom.pack(fill="x", padx=(24, 0), pady=(2, 8))
+        tk.Label(custom, text="开始", bg="#ffffff", fg="#475569").pack(side="left")
+        start_var = tk.StringVar(value=cache_start or start)
+        tk.Entry(custom, textvariable=start_var, width=12).pack(side="left", padx=(4, 10))
+        tk.Label(custom, text="结束", bg="#ffffff", fg="#475569").pack(side="left")
+        end_var = tk.StringVar(value=cache_end or end)
+        tk.Entry(custom, textvariable=end_var, width=12).pack(side="left", padx=(4, 0))
+        tk.Label(
+            frame,
+            text="只导出缓存已有发言，不自动联网补抓；内容为接口片段，最多 120 字。",
+            bg="#ffffff",
+            fg="#8a94a6",
+            font=("Microsoft YaHei UI", 8),
+            wraplength=440,
+            justify="left",
+        ).pack(anchor="w", pady=(0, 10))
+        result: Dict[str, Any] = {"value": None}
+        buttons = tk.Frame(frame, bg="#ffffff")
+        buttons.pack(fill="x")
+
+        def finish(value) -> None:
+            result["value"] = value
+            win.destroy()
+
+        ttk.Button(buttons, text="取消", command=lambda: finish(None), width=8).pack(side="right")
+        ttk.Button(buttons, text="导出", command=lambda: finish(mode.get()), width=8).pack(
+            side="right", padx=(0, 8)
+        )
+        self.root.wait_window(win)
+        if not result["value"]:
+            return None
+        if result["value"] == "current":
+            return start, end
+        if result["value"] == "cache":
+            if not cache_start and not cache_end:
+                messagebox.showinfo("没有缓存", "当前用户还没有可导出的发言缓存。", parent=self.root)
+                return None
+            return cache_start, cache_end
+        chosen_start = start_var.get().strip()
+        chosen_end = end_var.get().strip()
+        for value in (chosen_start, chosen_end):
+            if value and not re.fullmatch(r"\d{4}-\d{2}-\d{2}", value):
+                messagebox.showerror("日期格式", "日期请用 YYYY-MM-DD。", parent=self.root)
+                return None
+        return chosen_start, chosen_end
+
+    def _export_posts_for(self, user, profile, start: str, end: str) -> None:
+        uid = str(user.get("uid") or profile.get("user_id") or "")
+        cached = post_cache().get_user(uid) if uid else None
+        posts = list(profile.get("recent_posts") or [])
+        if cached and cached.get("posts"):
+            posts = list(cached["posts"])
+        cache_start = cache_end = ""
+        if cached:
+            oldest = int(cached.get("oldest_ts") or 0)
+            newest = int(cached.get("newest_ts") or 0)
+            if oldest:
+                cache_start = datetime.fromtimestamp(oldest).strftime("%Y-%m-%d")
+            if newest:
+                cache_end = datetime.fromtimestamp(newest).strftime("%Y-%m-%d")
+        chosen = self._post_range_dialog(user, start, end, cache_start, cache_end)
+        if chosen is None:
+            return
+        chosen_start, chosen_end = chosen
+        filtered = []
+        for post in posts:
+            day = str(post.get("time") or "")
+            if chosen_start and day and day < chosen_start:
+                continue
+            if chosen_end and day and day > chosen_end:
+                continue
+            filtered.append(post)
+        if not filtered:
+            messagebox.showinfo("没有发言", "选定范围内没有缓存发言。", parent=self.root)
+            return
+        initial = posts_base(user, profile) + ".xlsx"
+        path = filedialog.asksaveasfilename(
+            title="导出发言",
+            defaultextension=".xlsx",
+            filetypes=[("Excel 工作簿", "*.xlsx")],
+            initialfile=initial,
+            parent=self.root,
+        )
+        if not path:
+            return
+        base = os.path.splitext(path)[0]
+        try:
+            coverage = {
+                "reply": f"{cache_start or '未记录'} ~ {cache_end or '未记录'}",
+                "topic": "缓存内已有主题",
+            }
+            output = export_user_posts(base, user, filtered, chosen_start, chosen_end, coverage)
+        except Exception as error:  # noqa: BLE001
+            messagebox.showerror("导出失败", friendly_error(error), parent=self.root)
+            return
+        self._append_log(f"发言已导出：{output}", "ok")
+        messagebox.showinfo("导出完成", "已生成：" + chr(10) + output, parent=self.root)
+
     def _choose_report_path(self, user, profile, mark) -> None:
         initial = report_base(user, profile) + ".xlsx"
         path = filedialog.asksaveasfilename(
@@ -5395,6 +6089,15 @@ class App:
         posts = profile.get("recent_posts") or []
         combined = self._merge_forum_lists(profile, self._user_bar(user), level or "")
         self.profile_report_btn.pack(side="left", padx=(0, 6))
+        self.profile_posts_btn.pack(side="left", padx=(0, 6))
+        sources = profile.get("post_sources") or {}
+        if sources.get("topic_truncated"):
+            self.profile_topic_btn.configure(
+                text=f"继续抓主题（已 {sources.get('topic_pages') or 50} 页）"
+            )
+            self.profile_topic_btn.pack(side="right", padx=(0, 4))
+        else:
+            self.profile_topic_btn.pack_forget()
         if profile.get("follow_loaded") is False:
             self.profile_follow_btn.pack(side="left", padx=(0, 6))
         else:

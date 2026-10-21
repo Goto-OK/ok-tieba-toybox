@@ -27,6 +27,7 @@ DEFAULTS: Dict[str, Any] = {
     "proxy_url": "",
     "log_enabled": False,
     "page_size": 1000,
+    "post_cache_limit_mb": 200,
     "table_density": "comfortable",  # comfortable / compact
     "theme_mode": "light",  # light / dark / system
     "accent": "blue",  # blue / green / purple / orange / pink / cyan / red
@@ -80,6 +81,7 @@ def load_settings() -> Dict[str, Any]:
         result["batch_concurrency"] = 1
     if result["page_size"] not in (100, 500, 1000, 2000):
         result["page_size"] = 1000
+    result["post_cache_limit_mb"] = max(50, min(2000, int(result.get("post_cache_limit_mb") or 200)))
     return result
 
 
@@ -91,6 +93,7 @@ def save_settings(data: Dict[str, Any]) -> bool:
         payload["batch_concurrency"] = 1
     if payload["page_size"] not in (100, 500, 1000, 2000):
         payload["page_size"] = 1000
+    payload["post_cache_limit_mb"] = max(50, min(2000, int(payload.get("post_cache_limit_mb") or 200)))
     try:
         os.makedirs(APP_DIR, exist_ok=True)
         with open(SETTINGS_PATH, "w", encoding="utf-8") as handle:
