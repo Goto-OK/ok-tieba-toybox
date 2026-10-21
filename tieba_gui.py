@@ -1220,8 +1220,10 @@ class App:
             fg="#475569",
             font=("Microsoft YaHei UI", 9, "bold"),
         ).pack(anchor="w")
+        profile_forum_wrap = tk.Frame(forum_frame, bg="#fbfcfe")
+        profile_forum_wrap.pack(fill="both", expand=True)
         self.profile_forum_tree = ttk.Treeview(
-            forum_frame, columns=("bar", "level", "source"), show="headings", height=12
+            profile_forum_wrap, columns=("bar", "level", "source"), show="headings", height=12
         )
         self.profile_forum_tree.heading("bar", text="贴吧")
         self.profile_forum_tree.heading("level", text="等级")
@@ -1229,7 +1231,12 @@ class App:
         self.profile_forum_tree.column("bar", width=110, anchor="w")
         self.profile_forum_tree.column("level", width=45, anchor="center")
         self.profile_forum_tree.column("source", width=70, anchor="center")
-        self.profile_forum_tree.pack(fill="both", expand=True)
+        profile_forum_yscroll = ttk.Scrollbar(
+            profile_forum_wrap, orient="vertical", command=self.profile_forum_tree.yview
+        )
+        self.profile_forum_tree.configure(yscrollcommand=profile_forum_yscroll.set)
+        self.profile_forum_tree.pack(side="left", fill="both", expand=True)
+        profile_forum_yscroll.pack(side="right", fill="y")
         self.profile_forum_tree.bind("<Double-1>", lambda _event: self._open_profile_forum())
         self._configure_colors(self.profile_forum_tree)
         self._make_sortable(
@@ -1250,8 +1257,10 @@ class App:
             fg="#475569",
             font=("Microsoft YaHei UI", 9, "bold"),
         ).pack(anchor="w")
+        profile_post_wrap = tk.Frame(post_frame, bg="#fbfcfe")
+        profile_post_wrap.pack(fill="both", expand=True)
         self.profile_post_tree = ttk.Treeview(
-            post_frame, columns=("time", "type", "bar", "title", "content"), show="headings", height=12
+            profile_post_wrap, columns=("time", "type", "bar", "title", "content"), show="headings", height=12
         )
         self.profile_post_tree.heading("time", text="日期")
         self.profile_post_tree.heading("type", text="类型")
@@ -1263,7 +1272,12 @@ class App:
         self.profile_post_tree.column("bar", width=100, anchor="w")
         self.profile_post_tree.column("title", width=180, anchor="w")
         self.profile_post_tree.column("content", width=220, anchor="w")
-        self.profile_post_tree.pack(fill="both", expand=True)
+        profile_post_yscroll = ttk.Scrollbar(
+            profile_post_wrap, orient="vertical", command=self.profile_post_tree.yview
+        )
+        self.profile_post_tree.configure(yscrollcommand=profile_post_yscroll.set)
+        self.profile_post_tree.pack(side="left", fill="both", expand=True)
+        profile_post_yscroll.pack(side="right", fill="y")
         self.profile_post_tree.bind("<Double-1>", lambda _event: self._open_profile_post())
         self._configure_colors(self.profile_post_tree)
         self._make_sortable(
@@ -2091,8 +2105,10 @@ class App:
             fg="#475569",
             font=("Microsoft YaHei UI", 9, "bold"),
         ).pack(anchor="w")
+        lookup_forum_wrap = tk.Frame(left, bg="#eef1f5")
+        lookup_forum_wrap.pack(fill="both", expand=True)
         self.lookup_forum_tree = ttk.Treeview(
-            left, columns=("bar", "level", "source"), show="headings", height=14
+            lookup_forum_wrap, columns=("bar", "level", "source"), show="headings", height=14
         )
         self.lookup_forum_tree.heading("bar", text="贴吧")
         self.lookup_forum_tree.heading("level", text="等级")
@@ -2100,7 +2116,12 @@ class App:
         self.lookup_forum_tree.column("bar", width=130, anchor="w")
         self.lookup_forum_tree.column("level", width=50, anchor="center")
         self.lookup_forum_tree.column("source", width=70, anchor="center")
-        self.lookup_forum_tree.pack(fill="both", expand=True)
+        lookup_forum_yscroll = ttk.Scrollbar(
+            lookup_forum_wrap, orient="vertical", command=self.lookup_forum_tree.yview
+        )
+        self.lookup_forum_tree.configure(yscrollcommand=lookup_forum_yscroll.set)
+        self.lookup_forum_tree.pack(side="left", fill="both", expand=True)
+        lookup_forum_yscroll.pack(side="right", fill="y")
         self.lookup_forum_tree.bind("<Double-1>", lambda _event: self._open_lookup_forum())
         self._configure_colors(self.lookup_forum_tree)
         self._make_sortable(
@@ -2136,8 +2157,10 @@ class App:
         self.lookup_post_tree.column("title", width=230, anchor="w")
         self.lookup_post_tree.column("content", width=300, anchor="w")
         post_xscroll = ttk.Scrollbar(post_wrap, orient="horizontal", command=self.lookup_post_tree.xview)
-        self.lookup_post_tree.configure(xscrollcommand=post_xscroll.set)
+        post_yscroll = ttk.Scrollbar(post_wrap, orient="vertical", command=self.lookup_post_tree.yview)
+        self.lookup_post_tree.configure(xscrollcommand=post_xscroll.set, yscrollcommand=post_yscroll.set)
         self.lookup_post_tree.grid(row=0, column=0, sticky="nsew")
+        post_yscroll.grid(row=0, column=1, sticky="ns")
         post_xscroll.grid(row=1, column=0, sticky="ew")
         post_wrap.rowconfigure(0, weight=1)
         post_wrap.columnconfigure(0, weight=1)
@@ -7554,11 +7577,18 @@ class App:
             self._probe_running = False
             button.configure(state="normal", text="探测候选关注")
             profile["probed_forums"] = results
-            self._append_log(f"候选探测完成：确认 {len(results)} 个关注。", "ok")
+            if results:
+                summary = f"候选探测完成：确认 {len(results)} 个关注。"
+                self._append_log(summary, "ok")
+            else:
+                summary = "候选探测完成：没有确认新的关注。"
+                self._append_log(summary, "muted")
             if profile is getattr(self, "_last_lookup_profile", None):
                 self._render_lookup(profile)
+                self.lookup_status.configure(text=summary)
             elif profile is getattr(self, "_profile_data", None):
                 self._render_profile(self._profile_user, profile)
+                self.profile_status.configure(text=summary)
         elif kind == "batch_profile":
             _, index, user, profile = message
             self._batch_done = max(getattr(self, "_batch_done", 0), index + 1)
