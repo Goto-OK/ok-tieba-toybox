@@ -7051,15 +7051,14 @@ class App:
                 "muted" if cancelled else "ok",
             )
         elif kind == "identities_ready":
-            if not self.running:
-                try:
-                    self._refresh_people()
-                    self._refresh_grid()
-                    self._persist_result(self.last_threads)
-                except Exception:  # noqa: BLE001
-                    pass
+            try:
+                self._refresh_people()
+                self._refresh_grid()
+                self._persist_result(self.last_threads)
                 self.status_var.set("用户身份补全完成")
                 self._append_log("用户身份补全完成。", "ok")
+            except Exception as refresh_error:  # noqa: BLE001
+                self._append_log(f"身份补全后刷新列表失败：{refresh_error}", "err")
         elif kind == "profile_ready":
             _, key, user, profile = message
             self._profile_cache[key] = profile
