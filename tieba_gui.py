@@ -1078,9 +1078,12 @@ class App:
         self.people_tree = ttk.Treeview(tree_wrap, columns=columns, show="headings")
         for col in columns:
             mark = "  ▼" if col in ("mark", "name", "username", "uid") else ""
-            self.people_tree.heading(
-                col, text=headings[col] + mark, command=partial(self._sort_people, col)
+            command = (
+                partial(self._filter_people_column, col)
+                if col in ("name", "username", "uid")
+                else partial(self._sort_people, col)
             )
+            self.people_tree.heading(col, text=headings[col] + mark, command=command)
             self.people_tree.column(col, width=widths[col], anchor="center" if col != "name" else "w")
         self.people_tree.tag_configure("ban", background=self.palette["danger_bg"])
         self.people_tree.tag_configure("warn", background=self.palette["warning_bg"])
@@ -4883,9 +4886,9 @@ class App:
                 tree.delete(iid)
 
     def _bind_loaded_filter(self, tree, mapping: Dict[str, Optional[tuple]]) -> None:
-        def event_handler(event) -> None:
+        def event_handler(event):
             if tree.identify_region(event.x, event.y) != "heading":
-                return
+                return None
             column = tree.identify_column(event.x)
             keys = list(mapping)
             try:
@@ -4893,13 +4896,31 @@ class App:
                 key = keys[index]
                 spec = mapping.get(key)
                 if not spec:
-                    return
+                    return None
                 title, is_date = spec
             except (ValueError, IndexError, KeyError):
-                return
+                return None
             self._filter_loaded_tree(tree, key, title, is_date)
+            return "break"
+
+        def left_handler(event):
+            if tree.identify_region(event.x, event.y) != "heading":
+                return None
+            column = tree.identify_column(event.x)
+            keys = list(mapping)
+            try:
+                index = int(column[1:]) - 1
+                key = keys[index]
+                spec = mapping.get(key)
+                if not spec or spec[1]:
+                    return None
+            except (ValueError, IndexError, KeyError):
+                return None
+            self._filter_loaded_tree(tree, key, spec[0], False)
+            return "break"
 
         tree.bind("<Button-3>", event_handler, add="+")
+        tree.bind("<Button-1>", left_handler, add="+")
 
     def _header_filterable(self, header: str) -> bool:
         return header in self._TEXT_FILTER_HEADERS or header == "日期"
@@ -5082,6 +5103,26 @@ class App:
         menu.add_separator()
         menu.add_command(label="打开链接", command=open_row)
 
+        def open_filter(index: int) -> None:
+            if index < 0 or index >= len(headers) or not self._header_filterable(headers[index]):
+                return
+            header = headers[index]
+            chosen: Any
+            if header == "日期":
+                chosen = self._filter_date_dialog(header, filters.get(index))
+            else:
+                values = sorted({str(row[index]) if index < len(row) and row[index] is not None else ""
+                                 for row in all_rows})
+                chosen = self._filter_text_dialog(header, values, filters.get(index))
+            if chosen is None:
+                return
+            if chosen and any(chosen):
+                filters[index] = chosen
+            else:
+                filters.pop(index, None)
+            state["page"] = 0
+            render()
+
         def show_menu(event) -> None:
             if tree.identify_region(event.x, event.y) == "heading":
                 column = tree.identify_column(event.x)
@@ -5089,24 +5130,7 @@ class App:
                     index = int(column[1:]) - 1
                 except (ValueError, IndexError):
                     return
-                if index < 0 or index >= len(headers) or not self._header_filterable(headers[index]):
-                    return
-                header = headers[index]
-                chosen: Any
-                if header == "日期":
-                    chosen = self._filter_date_dialog(header, filters.get(index))
-                else:
-                    values = sorted({str(row[index]) if index < len(row) and row[index] is not None else ""
-                                     for row in all_rows})
-                    chosen = self._filter_text_dialog(header, values, filters.get(index))
-                if chosen is None:
-                    return
-                if chosen and any(chosen):
-                    filters[index] = chosen
-                else:
-                    filters.pop(index, None)
-                state["page"] = 0
-                render()
+                open_filter(index)
                 return
             row = tree.identify_row(event.y)
             if row:
@@ -5162,11 +5186,15 @@ class App:
             else:
                 apply_sort(column, False)
 
-        def make_command(column: str) -> Callable[[], None]:
+        def make_command(index: int) -> Callable[[], None]:
+            column = columns[index]
+            header = headers[index]
+            if self._header_filterable(header) and header not in ("日期", "标记"):
+                return lambda: open_filter(index)
             return lambda: sort_by(column)
 
         for index, header in enumerate(headers):
-            tree.heading(columns[index], command=make_command(columns[index]))
+            tree.heading(columns[index], command=make_command(index))
         if default_sort in headers:
             apply_sort(columns[headers.index(default_sort)], default_reverse)
         else:
@@ -5179,10 +5207,14 @@ class App:
             return True
         if self._risk_enabled() and self.people_mark_var.get() != "全部":
             return True
+        if self.people_min_var.get().strip() or self.people_max_var.get().strip():
+            return True
+        if getattr(self, "_people_col_filters", {}):
+            return True
         return False
 
     def _visible_people(self) -> list:
-        return filter_users(
+        users = filter_users(
             self.people_users,
             keyword=self.people_keyword_var.get(),
             field=self.people_field_var.get(),
@@ -5191,20 +5223,19 @@ class App:
             min_level=_optional_int(self.people_min_var.get()),
             max_level=_optional_int(self.people_max_var.get()),
         )
+        for column, selected in getattr(self, "_people_col_filters", {}).items():
+            if selected:
+                users = [
+                    user for user in users
+                    if self._people_column_value(user, column) in selected
+                ]
+        return users
 
     def _filtered_threads(self) -> list:
         from dataclasses import replace
 
         selected = set()
-        filtered = filter_users(
-            self.people_users,
-            keyword=self.people_keyword_var.get(),
-            field=self.people_field_var.get(),
-            level=self.people_level_var.get(),
-            mark=self.people_mark_var.get() if self._risk_enabled() else "全部",
-            min_level=_optional_int(self.people_min_var.get()),
-            max_level=_optional_int(self.people_max_var.get()),
-        )
+        filtered = self._visible_people()
         for user in filtered:
             for value in (user.get("uid"), user.get("username"), user.get("name")):
                 if value:
@@ -5243,6 +5274,10 @@ class App:
         mark = self.people_mark_var.get()
         if mark and mark != "全部":
             parts.append(f"标记 {mark}")
+        for column, selected in getattr(self, "_people_col_filters", {}).items():
+            if selected:
+                title = {"mark": "标记", "name": "昵称", "username": "用户名", "uid": "用户ID"}.get(column, column)
+                parts.append(f"{title}筛选 {len(selected)} 项")
         return "；".join(parts) or "无"
 
     def _expand_large_threads(self, threads, limit: int = 500_000):
