@@ -61,7 +61,8 @@
 
 - pytest 92 个通过；
 - ruff、mypy、selftest 通过；
-- 1.7.0 Windows 成品已构建，`--selftest` 通过。
+- 1.7.0 Windows 成品已构建，`--selftest` 通过；
+- exe 已用本地自签名证书签名，但证书不受信任，SmartScreen 仍会提示。
 
 ## [1.6.0] - 2026-10-21
 
