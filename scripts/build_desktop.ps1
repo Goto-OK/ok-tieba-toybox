@@ -78,6 +78,9 @@ foreach ($name in @("使用说明.txt", "THIRD_PARTY_NOTICES.md", "启动.bat", 
     $file = Join-Path $Root $name
     if (Test-Path -LiteralPath $file) { Copy-Item -LiteralPath $file -Destination $Output -Force }
 }
+$AssetsOut = Join-Path $Output "assets"
+New-Item -ItemType Directory -Path $AssetsOut -Force | Out-Null
+Copy-Item -LiteralPath (Join-Path $Assets "app.ico") -Destination (Join-Path $AssetsOut "app.ico") -Force
 
 Write-Host "[4/5] 运行 --selftest"
 $env:TIEBA_SELFTEST_OUT = Join-Path $BuildRoot "selftest.xlsx"

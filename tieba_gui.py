@@ -211,6 +211,7 @@ class App:
         self.mode_var = tk.StringVar(value="guest")
 
         self._build_ui()
+        self._apply_window_icon()
         self._apply_theme()
         self._apply_table_density()
         self.notebook.bind("<<NotebookTabChanged>>", self._on_main_tab_changed)
@@ -251,6 +252,20 @@ class App:
         self._apply_proxy()
         self._restore_last_result()
         self.root.after(300, self._maybe_onboarding)
+
+    def _apply_window_icon(self) -> None:
+        for path in (
+            os.path.join(resource_dir(), "assets", "app.ico"),
+            os.path.join(resource_dir(), "app.ico"),
+        ):
+            if not os.path.isfile(path):
+                continue
+            try:
+                self.root.iconbitmap(default=path)
+                self.root.iconbitmap(path)
+                return
+            except tk.TclError:
+                continue
 
     # ------------------------------------------------------------------ UI
     def _build_ui(self) -> None:
