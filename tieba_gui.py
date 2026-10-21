@@ -4281,6 +4281,80 @@ class App:
         ttk.Button(banner, text="关闭", command=banner.destroy, width=6).pack(side="right", padx=(6, 0))
         self._theme_widget_tree(banner)
 
+    def _apply_settings_to_ui(self) -> None:
+        settings = self.settings
+        if hasattr(self, "risk_var"):
+            self.risk_var.set(bool(settings.get("risk_enabled", True)))
+        if hasattr(self, "follow_enhance_var"):
+            self.follow_enhance_var.set(bool(settings.get("follow_enhance", False)))
+        if hasattr(self, "follow_load_mode_var"):
+            self.follow_load_mode_var.set(
+                "手动" if settings.get("follow_load_mode") == "manual" else "自动"
+            )
+        if hasattr(self, "auto_refresh_var"):
+            self.auto_refresh_var.set(bool(settings.get("auto_refresh_old", False)))
+        if hasattr(self, "removed_action_var"):
+            self.removed_action_var.set(
+                {"keep": "保留旧结果", "remove": "移除旧结果", "ask": "每次询问"}.get(
+                    settings.get("removed_thread_action", "keep"), "保留旧结果"
+                )
+            )
+        if hasattr(self, "proxy_mode_var"):
+            self.proxy_mode_var.set(
+                {"system": "跟随系统", "none": "不使用", "custom": "自定义"}.get(
+                    settings.get("proxy_mode", "system"), "跟随系统"
+                )
+            )
+        if hasattr(self, "proxy_url_var"):
+            self.proxy_url_var.set(str(settings.get("proxy_url") or ""))
+        if hasattr(self, "batch_concurrency_var"):
+            self.batch_concurrency_var.set(str(settings.get("batch_concurrency", 1)))
+        if hasattr(self, "settings_start_var"):
+            self.settings_start_var.set(
+                "上次分类" if settings.get("settings_start") == "last" else "常规"
+            )
+        if hasattr(self, "theme_mode_var"):
+            self.theme_mode_var.set(
+                {"light": "浅色", "dark": "深色", "system": "跟随系统"}.get(
+                    settings.get("theme_mode", "light"), "浅色"
+                )
+            )
+        if hasattr(self, "accent_var"):
+            self.accent_var.set(
+                {
+                    "blue": "蓝色",
+                    "green": "绿色",
+                    "purple": "紫色",
+                    "orange": "橘黄",
+                    "pink": "粉色",
+                    "cyan": "青色",
+                    "red": "红色",
+                }.get(settings.get("accent", "blue"), "蓝色")
+            )
+        if hasattr(self, "table_density_var"):
+            self.table_density_var.set(
+                "紧凑" if settings.get("table_density") == "compact" else "舒适"
+            )
+        if hasattr(self, "save_result_var"):
+            self.save_result_var.set(bool(settings.get("save_result", True)))
+        if hasattr(self, "encrypt_var"):
+            self.encrypt_var.set(bool(settings.get("encrypt_result", False)))
+        if hasattr(self, "log_enabled_var"):
+            self.log_enabled_var.set(bool(settings.get("log_enabled", False)))
+        if hasattr(self, "restore_mode_var"):
+            self.restore_mode_var.set("询问" if settings.get("restore_mode") == "ask" else "自动")
+        if hasattr(self, "cache_limit_var"):
+            limit = int(settings.get("post_cache_limit_mb", DEFAULT_LIMIT_MB))
+            self.cache_limit_var.set(str(limit))
+            post_cache().set_limit_mb(limit)
+        for key, var in getattr(self, "setting_vars", {}).items():
+            var.set(bool(settings.get(key, True)))
+        self._set_mode("guest")
+        self._apply_risk_ui()
+        self._apply_theme()
+        self._apply_table_density()
+        self._apply_proxy()
+
     def _restore_defaults(self) -> None:
         if not messagebox.askyesno(
             "恢复默认设置",
@@ -4295,10 +4369,7 @@ class App:
         self.settings["onboarding_seen"] = keep_onboarding
         self.settings["window_geometry"] = keep_geometry
         save_settings(self.settings)
-        self.risk_var.set(True)
-        self.follow_enhance_var.set(False)
-        self._set_mode("guest")
-        self._apply_risk_ui()
+        self._apply_settings_to_ui()
         self._append_log("设置已恢复默认（结果、标记、BDUSS 保留）。", "muted")
 
     def _clear_all_data(self) -> None:
@@ -4333,24 +4404,15 @@ class App:
         self._on_mark_rules_changed()
         save_settings({})
         self.settings = load_settings()
-        post_cache().set_limit_mb(int(self.settings.get("post_cache_limit_mb", DEFAULT_LIMIT_MB)))
-        if hasattr(self, "cache_limit_var"):
-            self.cache_limit_var.set(str(int(self.settings.get("post_cache_limit_mb", DEFAULT_LIMIT_MB))))
         self.blacklist = {"safe": [], "warn": [], "ban": []}
         self.last_threads = []
         self.last_output = None
         self.cookie_var.set("")
-        self.save_result_var.set(True)
-        self.encrypt_var.set(False)
-        self.log_enabled_var.set(False)
-        self.restore_mode_var.set("自动")
-        self.risk_var.set(True)
-        self.follow_enhance_var.set(False)
-        self._set_mode("guest")
-        self._apply_risk_ui()
+        self._apply_settings_to_ui()
         self.open_btn.configure(state="disabled")
         for key, editor in getattr(self, "blacklist_editors", {}).items():
             editor.delete("1.0", "end")
+        self._update_grid_selector()
         self._refresh_people()
         self._refresh_grid()
         self._refresh_old_files_label()
