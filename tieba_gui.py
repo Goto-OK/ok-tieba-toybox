@@ -1548,6 +1548,7 @@ class App:
             )
             button.grid(row=index // 8, column=index % 8, padx=2, pady=2)
         self._theme_widget_tree(win)
+        self._center_toplevel(win)
         win.bind("<Escape>", lambda _event: win.destroy())
         win.focus_set()
 
@@ -1808,9 +1809,9 @@ class App:
             host = tk.Frame(self.lookup_query_bar, bg="#ffffff", height=34)
             host.pack(side="left", fill="x", expand=True, padx=(4, 0))
             host.pack_propagate(False)
-            style = 0x40000000 | 0x10000000 | 0x00010000 | 0x00000080
+            style = 0x40000000 | 0x10000000 | 0x00010000 | 0x00800000 | 0x00000080
             edit = user32.CreateWindowExW(
-                0, "EDIT", "", style, 0, 0, 100, 30,
+                0x00000200, "EDIT", "", style, 0, 0, 100, 30,
                 wintypes.HWND(host.winfo_id()), None, kernel32.GetModuleHandleW(None), None,
             )
             if not edit:
@@ -3696,7 +3697,7 @@ class App:
         width = width or win.winfo_reqwidth()
         height = height or win.winfo_reqheight()
         x = self.root.winfo_rootx() + max(0, (self.root.winfo_width() - width) // 2)
-        y = self.root.winfo_rooty() + max(0, (self.root.winfo_height() - height) // 3)
+        y = self.root.winfo_rooty() + max(0, (self.root.winfo_height() - height) // 2)
         win.geometry(f"+{x}+{y}")
 
     def _view_logs(self) -> None:
@@ -4074,6 +4075,7 @@ class App:
         text.insert("1.0", content)
         text.configure(state="disabled")
         self._theme_widget_tree(win)
+        self._center_toplevel(win, 760, 600)
         win.protocol("WM_DELETE_WINDOW", win.destroy)
         win.focus_set()
 
@@ -4163,7 +4165,7 @@ class App:
         win.update_idletasks()
         width, height = win.winfo_reqwidth(), win.winfo_reqheight()
         x = self.root.winfo_rootx() + max(0, (self.root.winfo_width() - width) // 2)
-        y = self.root.winfo_rooty() + max(0, (self.root.winfo_height() - height) // 3)
+        y = self.root.winfo_rooty() + max(0, (self.root.winfo_height() - height) // 2)
         self._theme_widget_tree(win)
         win.geometry(f"+{x}+{y}")
         self.root.wait_window(win)
@@ -4223,6 +4225,7 @@ class App:
         text.insert("1.0", content or "使用说明文件未找到。")
         text.configure(state="disabled")
         self._theme_widget_tree(win)
+        self._center_toplevel(win, 780, 640)
         win.bind("<Escape>", lambda _event: win.destroy())
         win.protocol("WM_DELETE_WINDOW", win.destroy)
         win.focus_set()
@@ -6768,6 +6771,7 @@ class App:
         ttk.Button(buttons, text="导出", command=lambda: finish(mode.get()), width=8).pack(
             side="right", padx=(0, 8)
         )
+        self._center_toplevel(win)
         self.root.wait_window(win)
         if not result["value"]:
             return None
