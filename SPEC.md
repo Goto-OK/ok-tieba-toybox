@@ -977,8 +977,33 @@ pid 相同：保留官方 feed 版本
 
 #### 7.6.1 接口
 
+主接口：
+
 ```text
 GET https://tb.anova.me/getPostsNew?uid=<id>&page=<n>
+```
+
+备用接口：
+
+```text
+GET https://tb.anova.me/getPosts?uid=<id>&page=<n>
+```
+
+选择规则：
+
+```text
+默认只用 getPostsNew
+getPostsNew 失败或连续空页时，才尝试一次 getPosts
+不使用两个接口相加
+备用接口同样按 pid 去重
+```
+
+实测同一用户：
+
+```text
+getPostsNew：15 条，有 hasNext
+getPosts：8 条，无 hasNext
+getPostsNew 是 getPosts 的超集
 ```
 
 只使用公开返回：
@@ -987,8 +1012,7 @@ GET https://tb.anova.me/getPostsNew?uid=<id>&page=<n>
 标题
 内容
 帖子链接
-昵称/头像
-hasNext
+hasNext（新接口）
 ```
 
 从链接提取：
@@ -1057,7 +1081,7 @@ page 2
 #### 补全后停止条件
 
 ```text
-1. hasNext=0
+1. getPostsNew 的 hasNext=0；备用 getPosts 返回空页
 2. 已满足用户请求的 count（近期/优先最近）
 3. 指定开始日期时，本页补全后的最旧时间已早于开始日期
 4. 用户取消
