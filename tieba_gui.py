@@ -1896,6 +1896,7 @@ class App:
             old_proc = set_ptr(edit, -4, ctypes.cast(self._lookup_native_proc, ctypes.c_void_p))
             self._lookup_native_old_proc = old_proc
             self._lookup_native_user32 = user32
+            self.root.bind_all("<Button-1>", self._release_lookup_native_focus, add="+")
             return True
         except Exception:  # noqa: BLE001
             failed_host: Optional[tk.Frame] = getattr(self, "lookup_native_host", None)
@@ -1937,6 +1938,21 @@ class App:
         entry = self.lookup_entry
         if entry is not None:
             entry.focus_set()
+
+    def _release_lookup_native_focus(self, event) -> None:
+        """Clicking a Tk widget must take Win32 focus back from the child EDIT."""
+        edit = getattr(self, "lookup_native_edit", None)
+        user32 = getattr(self, "_lookup_native_user32", None)
+        if not edit or user32 is None:
+            return
+        widget = getattr(event, "widget", None)
+        if widget is None:
+            return
+        try:
+            widget.focus_set()
+            user32.SetFocus(widget.winfo_id())
+        except (AttributeError, OSError, tk.TclError):
+            pass
 
     def _lookup_insert_text(self, text: str) -> None:
         edit = getattr(self, "lookup_native_edit", None)
