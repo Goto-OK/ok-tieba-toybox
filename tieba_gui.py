@@ -3190,6 +3190,20 @@ class App:
             self._last_settings_index = selection[0]
             self._show_settings_page(selection[0])
 
+    def _focus_local_marks(self) -> None:
+        self.notebook.select(self.tab_settings)
+        self.root.after_idle(self._show_local_marks_page)
+
+    def _show_local_marks_page(self) -> None:
+        self.settings_nav.selection_clear(0, "end")
+        self.settings_nav.selection_set(2)
+        self._last_settings_index = 2
+        self._show_settings_page(2)
+        editor = self.blacklist_editors.get("safe")
+        if editor is not None:
+            editor.focus_set()
+            editor.see("1.0")
+
     def _build_appearance_tab(self) -> None:
         box = tk.Frame(self.tab_appearance, bg="#eef1f5", padx=14, pady=10)
         box.pack(fill="both", expand=True)
@@ -6427,6 +6441,7 @@ class App:
                 "先在「设置 → 本地标记」里填写安全/可疑/警告贴吧，再刷红绿灯。",
                 parent=self.root,
             )
+            self._focus_local_marks()
             return
         if not getattr(self, "people_users", None):
             messagebox.showinfo("还没有数据", "先点「开始统计」抓一个帖子。", parent=self.root)
@@ -6631,6 +6646,7 @@ class App:
             return
         if not self._has_mark_rules():
             self.people_hint.configure(text="没有本地标记规则，请先在设置→本地标记中填写")
+            self._focus_local_marks()
             return
         users = self._visible_people()
         if not users:
