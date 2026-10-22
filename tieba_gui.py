@@ -933,9 +933,21 @@ class App:
         )
         self.post_count_var = tk.StringVar(value="50")
         self.post_count_box = ttk.Spinbox(
-            bar, from_=5, to=1000, increment=10, width=6, textvariable=self.post_count_var
+            bar,
+            from_=5,
+            to=1000,
+            increment=10,
+            width=7,
+            textvariable=self.post_count_var,
+            state="normal",
+            takefocus=True,
         )
         self.post_count_box.pack(side="left")
+        self.post_count_box.bind(
+            "<FocusIn>",
+            lambda _event: self.post_count_box.selection_range(0, "end"),
+            add="+",
+        )
         self.post_date_mode_var = tk.StringVar(value="近期")
         self.post_date_mode_box = ttk.Combobox(
             bar, values=("近期", "指定日期"), textvariable=self.post_date_mode_var, width=9, state="readonly"
@@ -2002,8 +2014,21 @@ class App:
             side="left"
         )
         self.lookup_count_var = tk.StringVar(value="50")
-        ttk.Spinbox(options, from_=5, to=1000, increment=10, width=6, textvariable=self.lookup_count_var).pack(
-            side="left"
+        self.lookup_count_box = ttk.Spinbox(
+            options,
+            from_=5,
+            to=1000,
+            increment=10,
+            width=7,
+            textvariable=self.lookup_count_var,
+            state="normal",
+            takefocus=True,
+        )
+        self.lookup_count_box.pack(side="left")
+        self.lookup_count_box.bind(
+            "<FocusIn>",
+            lambda _event: self.lookup_count_box.selection_range(0, "end"),
+            add="+",
         )
         tk.Label(options, text="  日期：", bg="#ffffff", fg="#475569", font=("Microsoft YaHei UI", 8)).pack(
             side="left"
@@ -2301,6 +2326,7 @@ class App:
         )
         hit = self._lookup_cache.get(cache_key)
         if hit and time.monotonic() - hit[0] < 60:
+            hit[1]["_ui_cache_age_seconds"] = max(0, int(time.monotonic() - hit[0]))
             self._render_lookup(hit[1])
             self.lookup_status.configure(text=f"{hit[1].get('username') or ''} · 缓存结果")
             return
@@ -2437,6 +2463,9 @@ class App:
             age = src.get("cached_age_minutes")
             if age is not None:
                 return f"缓存于 {age} 分钟前（刷新资料可强制更新）"
+        age_seconds = profile.get("_ui_cache_age_seconds")
+        if age_seconds is not None:
+            return f"缓存于 {max(0, int(age_seconds) // 60)} 分钟前（刷新资料可强制更新）"
         return ""
 
     def _set_profile_cache_note(self, text: str) -> None:
@@ -2968,7 +2997,7 @@ class App:
             wraplength=360,
         ).pack(fill="x", padx=14, pady=(14, 8))
         row = tk.Frame(win, bg="#eef1f5")
-        row.pack(fill="x", padx=14, pady=(0, 12))
+        row.pack(side="bottom", fill="x", padx=14, pady=(0, 12))
 
         def choose(go: bool) -> None:
             result["go"] = go
@@ -2982,7 +3011,7 @@ class App:
         win.bind("<Escape>", lambda _event: choose(False))
         self._theme_widget_tree(win)
         win.update_idletasks()
-        width, height = 420, 150
+        width, height = 420, max(140, win.winfo_reqheight() + 16)
         x = self.root.winfo_rootx() + max(0, (self.root.winfo_width() - width) // 2)
         y = self.root.winfo_rooty() + max(0, (self.root.winfo_height() - height) // 2)
         win.geometry(f"{width}x{height}+{x}+{y}")
@@ -3070,6 +3099,11 @@ class App:
         )
 
         def on_wheel(event) -> None:
+            first, last = canvas.yview()
+            if event.delta > 0 and first <= 0.0:
+                return
+            if event.delta < 0 and last >= 1.0:
+                return
             canvas.yview_scroll(int(-event.delta / 120), "units")
 
         canvas.bind("<MouseWheel>", on_wheel)
@@ -3078,6 +3112,9 @@ class App:
 
     def _bind_mousewheel_tree(self, widget, canvas) -> None:
         def on_wheel(event) -> str:
+            first, last = canvas.yview()
+            if (event.delta > 0 and first <= 0.0) or (event.delta < 0 and last >= 1.0):
+                return "break"
             canvas.yview_scroll(int(-event.delta / 120), "units")
             return "break"
 
@@ -6711,6 +6748,9 @@ class App:
         key = user["uid"] or f"name:{user['name']}"
         cached = None if (force or force_follow) else getattr(self, "_profile_cache", {}).get(key)
         if cached and (cached.get("follow_loaded") or not force_follow):
+            stored_at = float(cached.get("_ui_cached_at") or 0)
+            if stored_at:
+                cached["_ui_cache_age_seconds"] = max(0, int(time.time() - stored_at))
             self._render_profile(user, cached)
             return
         self.profile_status.configure(text=f"正在查询 {display_text(user['name'])} …")
@@ -7880,6 +7920,7 @@ class App:
             self._batch_done = max(getattr(self, "_batch_done", 0), index + 1)
             key = user.get("uid") or f"name:{user['name']}"
             if profile and profile.get("ok"):
+                profile["_ui_cached_at"] = time.time()
                 self._profile_cache[key] = profile
                 self._batch_success = getattr(self, "_batch_success", 0) + 1
             elif profile and profile.get("skipped"):
@@ -7933,6 +7974,7 @@ class App:
             self._refresh_cache_stats_if_visible()
         elif kind == "profile_ready":
             _, key, user, profile = message
+            profile["_ui_cached_at"] = time.time()
             self._profile_cache[key] = profile
             selection = self.people_tree.selection()
             if selection:
