@@ -3108,22 +3108,24 @@ class App:
         inner.pack(side="left", fill="both", expand=True)
         self.settings_inner = inner
         self.tab_general_page, self.tab_general = self._make_scrollable_settings_page(inner)
-        self.tab_general_canvas = next(
-            child for child in self.tab_general_page.winfo_children() if isinstance(child, tk.Canvas)
-        )
-        self.tab_appearance = tk.Frame(inner, bg="#eef1f5")
-        self.tab_blacklist = tk.Frame(inner, bg="#eef1f5")
-        self.tab_storage = tk.Frame(inner, bg="#eef1f5")
-        self.tab_about = tk.Frame(inner, bg="#eef1f5")
+        self.tab_appearance_page, self.tab_appearance = self._make_scrollable_settings_page(inner)
+        self.tab_blacklist_page, self.tab_blacklist = self._make_scrollable_settings_page(inner)
+        self.tab_storage_page, self.tab_storage = self._make_scrollable_settings_page(inner)
+        self.tab_about_page, self.tab_about = self._make_scrollable_settings_page(inner)
         self.settings_pages = [
             self.tab_general_page,
-            self.tab_appearance,
-            self.tab_blacklist,
-            self.tab_storage,
-            self.tab_about,
+            self.tab_appearance_page,
+            self.tab_blacklist_page,
+            self.tab_storage_page,
+            self.tab_about_page,
         ]
+        self._settings_canvases = {
+            page: next(
+                child for child in page.winfo_children() if isinstance(child, tk.Canvas)
+            )
+            for page in self.settings_pages
+        }
         self._build_general_tab()
-        self._bind_mousewheel_tree(self.tab_general, self.tab_general_canvas)
         self._build_appearance_tab()
         self._build_storage_tab()
         self._build_about_tab()
@@ -3159,6 +3161,14 @@ class App:
             bar, text="", bg="#eef1f5", fg="#15803d", font=("Microsoft YaHei UI", 9)
         )
         self.settings_hint.pack(side="left", padx=(10, 0))
+        for page, body in (
+            (self.tab_general_page, self.tab_general),
+            (self.tab_appearance_page, self.tab_appearance),
+            (self.tab_blacklist_page, self.tab_blacklist),
+            (self.tab_storage_page, self.tab_storage),
+            (self.tab_about_page, self.tab_about),
+        ):
+            self._bind_mousewheel_tree(body, self._settings_canvases[page])
 
     def _show_settings_page(self, index: int) -> None:
         for position, page in enumerate(self.settings_pages):

@@ -21,17 +21,17 @@ python tests/selftest.py
 - 抓取完成后确认“身份补全”结束、参与者 ID 无待补全；
 - 检查导出发言、表头筛选、一键红绿灯标记刷新；
 - 更新 `CHANGELOG.md`。
-- `dist/贴吧回复统计_v1.7.0` 已于 2026-10-22 重建；如再次改源码，发布前必须重新构建。
-- 发布压缩包：`dist/贴吧回复统计_v1.7.0_绿色版.zip`；解压后保留完整目录（`_internal` 必需）。
+- `dist/贴吧回复统计_v1.7.1` 已于 2026-10-23 重建；如再次改源码，发布前必须重新构建。
+- 发布压缩包：`dist/贴吧回复统计_v1.7.1_绿色版.zip`；解压后保留完整目录（`_internal` 必需）。
 - 当前 exe 使用本地自签名证书，`UnknownError / UntrustedRoot`，不能替代受信任代码签名证书。
 
-## 2.1 1.7.0 发布门禁 / 版本冻结
+## 2.1 1.7.1 发布门禁 / 版本冻结
 
-- 当前候选版本：`1.7.0`；
-- 人工验收开始后，1.7.0 源码和产物冻结；
-- 47 项人工验收通过后，才允许打发布标签并上传绿色包；
-- 验收发现的任何修复都进入 `1.7.1`，不得覆盖已冻结的 1.7.0 包；
-- 修复版本流程：改 `tieba_reply_stats/version.py` → 重建 → 重跑自动测试/相关人工用例 → 发布 1.7.1；
+- 1.7.0 已冻结，不覆盖旧包；
+- 当前候选版本：`1.7.1`，已重建 exe/绿色包；
+- 1.7.1 必须重新跑 47 项人工验收；通过后才允许打正式发布标签；
+- 1.7.1 验收发现的新问题进入 `1.7.2`，不得覆盖已冻结的 1.7.1 包；
+- 修复版本流程：改 `tieba_reply_stats/version.py` → 重建 → 重跑自动测试/相关人工用例 → 发布；
 - 新功能进入 `1.8.0`；
 - 发布前生成并附上 `SHA256SUMS.txt`；
 - 自签名 exe 只能标注“本地自签名”，不得写成“受信任签名”。
@@ -39,9 +39,9 @@ python tests/selftest.py
 ## 3. 桌面版
 
 ```powershell
-./scripts/build_desktop.ps1 -Version 1.7.0
+./scripts/build_desktop.ps1 -Version 1.7.1
 # 若提示“禁止运行脚本”：
-powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build_desktop.ps1 -Version 1.7.0
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build_desktop.ps1 -Version 1.7.1
 ```
 
 脚本会：
