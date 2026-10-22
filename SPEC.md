@@ -203,6 +203,67 @@ user_id > portrait > tieba_uid > username > 昵称
   - 不得把主题抓取结果静默塞进查用户 feed；
 - 如未来增加“合并已抓主题/补全主题首楼”，必须显式标注来源、按 pid 去重、声明不完整。
 
+### 3.4 贴吧ID（tieba_uid）采集与展示
+
+`贴吧ID` 只指 `tieba_uid`；`用户ID` 只指内部 `user_id`。
+
+采集来源，按优先级：
+
+```text
+1. 用户资料响应中的 tieba_uid
+2. 个人主页ID反查接口
+3. 楼层/楼中楼用户数据中若带有 tieba_uid，保留
+```
+
+规则：
+
+- 资料接口字段 120 的返回稳定性「待验证」；拿不到时不得报错；
+- 反查接口的准确路径「待验证」；反查必须返回 user_id/username/portrait 中至少一项；
+- `tieba_uid` 可以为空；为空显示 `-` 或“待补全”；
+- 不得用 `user_id` 填入贴吧ID列；
+- 不得用 nickname 反推 tieba_uid；
+- 不得为了补全贴吧ID，对每个参与者自动发起网络请求；
+- 只在打开详情、查用户、显式刷新时采集并回填；
+- 旧结果没有贴吧ID时保持 `-`，不阻塞加载；
+- 映射缓存只存 `tieba_uid ↔ user_id`，不替代发言缓存；
+- 发言缓存主键仍是 `user_id`。
+
+数字查询：
+
+```text
+默认按 tieba_uid 反查 user_id
+反查失败 → 明确提示
+不自动退回 user_id
+显式选择「用户ID」时才按 user_id 查
+```
+
+贴吧ID展示范围：
+
+```text
+参与者表
+表格查看的回复统计/分帖统计/楼层明细/楼中楼明细
+多帖对比
+查用户资料区
+单用户报告
+Excel：回复统计/分帖统计/楼层明细/楼中楼明细
+导出发言表
+```
+
+所有用户列顺序：
+
+```text
+昵称 → 用户名 → 贴吧ID → 用户ID
+```
+
+缺失、旧数据、未采集：
+
+```text
+显示 -
+不得填 user_id
+不得填 nickname
+不得伪造
+```
+
 ## 4. 表格查看
 
 ### 4.1 模式
@@ -319,7 +380,7 @@ user_id > portrait > tieba_uid > username > 昵称
 - 用户ID列：显示内部 `user_id`；有 uid 显示 uid；身份未补全显示“待补全”；完全没有身份显示“-”；
 - 「打开主页」不得静默失败：
   - 有 username → 用 `un=username`；
-  - 无 username 但有 portrait → 用 `id=portrait`；
+  - 无 username 但有 portrait → 用 `id=portrait`（该 URL 可用性「待验证」）；
   - 只有 tieba_uid → 先反查 username/portrait 再打开；
   - 都没有 → 明确提示“缺少可打开主页的身份”；
 - 显示“当前页 X / 筛选后 Y / 共 Z 人”；
@@ -348,7 +409,7 @@ user_id > portrait > tieba_uid > username > 昵称
 - 顶部筛选和表头筛选一律 AND 取交集；
 - 表头标记只排序，不作为筛选条件；排序值来源是 `user.mark_level`；
 - 空交集显示 0 人，不自动放宽条件；
-- 楼中楼解析必须保留 `data-field` 中的 `user_id`、`user_name`、`portrait`、`showname`；
+- 楼中楼解析必须保留 `data-field` 中的 `user_id`、`user_name`、`portrait`、`showname`；如数据含 `tieba_uid` 也必须保留；
 - 缺少 uid 时按以下顺序兜底，不能因为 username 非空就跳过：
   - 有 username → user_json 反查 uid；
   - 有 portrait → profile protobuf 的 `friend_uid_portrait` 反查 uid，无需 Cookie；
@@ -548,7 +609,8 @@ user_id > portrait > tieba_uid > username > 昵称
   5. 才设置“完成”状态并弹完成提示；
 - 用户看到“完成”时，数据、ID、列表必须已经就绪；
 - 抓取完成后自动补全缺失 uid：
-  - username → user_json；
+  - 有 tieba_uid → 反查 user_id/username/portrait；
+  - 有 username → user_json；
   - 只有 portrait → profile protobuf 反查；
   - 昵称 → 搜索兜底；
   - 结果写回楼层/楼中楼，参与者列表直接有 ID；
@@ -798,6 +860,7 @@ user_id > portrait > tieba_uid > username > 昵称
 - A/B = 列表顺序前两个已勾选；
 - 不套用参与者筛选；
 - 身份按统一优先级；
+- 用户列固定：昵称 → 用户名 → 贴吧ID → 用户ID；
 - 参与帖子有警告时提示，不阻止导出；
 - 导出固定：
   - 参与者对比；
@@ -812,7 +875,7 @@ user_id > portrait > tieba_uid > username > 昵称
   - 参与者详情：跟随当前帖子范围；
   - 查用户：所有已抓帖子；
 - 基本信息：
-  - 昵称、用户名、ID、等级；
+  - 昵称、用户名、贴吧ID、用户ID、等级；
   - 粉丝、关注数、发帖数；
   - 关注增强状态；
   - 软件版本；
