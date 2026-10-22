@@ -1037,7 +1037,48 @@ pid
 ```text
 用 tid 抓主题
 找到 pid 对应楼层/楼中楼
-补 time / bar / post_no / 标题
+补全内部表格所需字段
+```
+
+补全目标不是只补时间，而是生成与官方 feed 同结构的内部记录：
+
+```text
+pid
+tid
+url
+time
+type = 主题帖 / 回复
+bar
+title
+content
+post_no / floor
+author_id
+author_name
+author
+portrait
+tieba_uid（如有）
+source = 第三方
+```
+
+字段优先级：
+
+```text
+主题抓取找到 pid：
+  time / bar / title / type / floor / 作者 → 用主题抓取
+  content → 优先主题抓取；主题为空才用第三方
+  pid / tid / url → 用链接规范化结果
+
+主题抓取找不到 pid：
+  保留第三方 title/content
+  time / bar / floor / type 标“未知”
+  不伪造
+```
+
+身份校验：
+
+```text
+主题楼层的作者必须与目标 user_id/portrait/username 匹配
+不匹配的 pid 不合并
 ```
 
 可行性：
