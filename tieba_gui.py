@@ -619,6 +619,7 @@ class App:
         ttk.Button(self.bduss_frame, text="清除", command=self._clear_bduss, width=7).grid(
             row=0, column=5, padx=(6, 0)
         )
+        self.cookie_var.trace_add("write", self._sync_bduss_from_cookie)
         self.remember_bduss_var = tk.BooleanVar(value=True)
         ttk.Checkbutton(
             self.bduss_frame,
@@ -876,6 +877,15 @@ class App:
             value = self._extract_bduss(self.bduss_var.get())
             return f"BDUSS={value}" if value else ""
         return self.cookie_var.get().strip()
+
+    def _sync_bduss_from_cookie(self, *_args) -> None:
+        """完整 Cookie 变化时，同步提取 BDUSS，便于切换到仅 BDUSS。"""
+        raw = self.cookie_var.get().strip()
+        if not raw:
+            return
+        value = parse_cookie_input(raw).get("BDUSS", "")
+        if value and self.bduss_var.get() != value:
+            self.bduss_var.set(value)
 
     def _sync_login_from_cookie(self) -> None:
         raw = self.cookie_var.get().strip()
