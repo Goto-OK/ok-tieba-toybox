@@ -5,6 +5,11 @@ from __future__ import annotations
 import ctypes
 import json
 import sys
+import threading
+import time
+from ctypes import wintypes
+
+TITLE = "贴吧安全验证"
 
 
 def _center(width: int, height: int) -> tuple[int, int]:
@@ -18,6 +23,36 @@ def _center(width: int, height: int) -> tuple[int, int]:
     except Exception:  # noqa: BLE001
         return 80, 80
     return max(0, (screen_w - width) // 2), max(0, (screen_h - height) // 2)
+
+
+def _child_window_texts() -> list[str]:
+    user32 = ctypes.windll.user32
+    user32.FindWindowW.restype = wintypes.HWND
+    outer = user32.FindWindowW(None, TITLE)
+    if not outer:
+        return []
+    texts: list[str] = []
+
+    @ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
+    def callback(hwnd, _lparam):
+        length = user32.GetWindowTextLengthW(hwnd)
+        if length > 0:
+            buffer = ctypes.create_unicode_buffer(length + 1)
+            user32.GetWindowTextW(hwnd, buffer, length + 1)
+            if buffer.value:
+                texts.append(buffer.value)
+        return True
+
+    user32.EnumChildWindows(outer, callback, 0)
+    return texts
+
+
+def _close_window() -> None:
+    user32 = ctypes.windll.user32
+    user32.FindWindowW.restype = wintypes.HWND
+    outer = user32.FindWindowW(None, TITLE)
+    if outer:
+        user32.PostMessageW(outer, 0x0010, 0, 0)  # WM_CLOSE
 
 
 def main() -> int:
@@ -41,7 +76,7 @@ def main() -> int:
                 pass
 
     window = webview.create_window(
-        "贴吧安全验证",
+        TITLE,
         url,
         width=width,
         height=height,
@@ -50,18 +85,67 @@ def main() -> int:
         on_top=True,
         text_select=False,
     )
+    read_cookies = "--no-cookie" not in sys.argv
     cookies = []
+    state = {"captcha_seen": False, "normal_since": 0.0, "closed": False, "auto": False}
 
     def on_closed() -> None:
         nonlocal cookies
+        state["closed"] = True
+        if not read_cookies or cookies:
+            return
         try:
             cookies = window.get_cookies() or []
         except Exception:  # noqa: BLE001
             cookies = []
 
+    def capture_cookies() -> None:
+        nonlocal cookies
+        if not read_cookies:
+            return
+        try:
+            cookies = window.get_cookies() or []
+        except Exception:  # noqa: BLE001
+            pass
+
+    def monitor() -> None:
+        started = time.monotonic()
+        while not state["closed"]:
+            time.sleep(0.4)
+            if state["closed"]:
+                return
+            texts = _child_window_texts()
+            marker = " ".join(texts).lower()
+            captcha = any(
+                item in marker
+                for item in ("安全验证", "验证码", "wappass", "verify", "captcha")
+            )
+            if captcha:
+                state["captcha_seen"] = True
+                state["normal_since"] = 0.0
+                continue
+            normal = "百度贴吧" in marker or "贴吧" in marker
+            if normal:
+                if state["normal_since"] == 0.0:
+                    state["normal_since"] = time.monotonic()
+                stable = time.monotonic() - state["normal_since"]
+                if stable >= 1.0 and (state["captcha_seen"] or time.monotonic() - started >= 2.0):
+                    state["auto"] = True
+                    capture_cookies()
+                    _close_window()
+                    return
+            if time.monotonic() - started >= 30.0:
+                capture_cookies()
+                _close_window()
+                return
+
     window.events.closed += on_closed
+    threading.Thread(target=monitor, daemon=True).start()
     webview.start(private_mode=True)
-    print("__TIEBA_COOKIES__" + json.dumps(cookies, ensure_ascii=False))
+    print(
+        "__TIEBA_COOKIES__"
+        + json.dumps({"cookies": cookies, "auto": state["auto"]}, ensure_ascii=False)
+    )
     return 0
 
 

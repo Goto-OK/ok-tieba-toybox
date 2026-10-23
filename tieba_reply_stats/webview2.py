@@ -60,12 +60,14 @@ def filter_cookies(cookies, anonymous: bool) -> dict[str, str]:
     return result
 
 
-def _run_window(url: str, timeout: int = 600, center=None):
+def _run_window(url: str, timeout: int = 600, center=None, read_cookies: bool = True):
     if not available():
         raise RuntimeError("WebView2 不可用")
     extra = []
     if center:
         extra = ["--x", str(int(center[0])), "--y", str(int(center[1]))]
+    if not read_cookies:
+        extra.append("--no-cookie")
     if getattr(sys, "frozen", False):
         command = [sys.executable, "--webview2-verify", url, *extra]
     else:
@@ -87,7 +89,7 @@ def _run_window(url: str, timeout: int = 600, center=None):
 
 def open_window(url: str, timeout: int = 600, center=None) -> None:
     """打开内置窗口并等待用户关闭，不读取 Cookie。"""
-    _run_window(url, timeout=timeout, center=center)
+    _run_window(url, timeout=timeout, center=center, read_cookies=False)
 
 
 def open_verification(url: str, timeout: int = 600, center=None):
@@ -99,6 +101,9 @@ def open_verification(url: str, timeout: int = 600, center=None):
             try:
                 data = json.loads(line[len(marker) :])
             except json.JSONDecodeError:
-                return []
-            return data if isinstance(data, list) else []
-    return []
+                return {"cookies": [], "auto": False}
+            if isinstance(data, list):
+                return {"cookies": data, "auto": False}
+            if isinstance(data, dict):
+                return data
+    return {"cookies": [], "auto": False}

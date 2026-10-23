@@ -10258,7 +10258,8 @@ class App:
 
                 def worker():
                     try:
-                        raw_cookies = webview2.open_verification(url, center=center)
+                        result = webview2.open_verification(url, center=center)
+                        raw_cookies = result.get("cookies") if isinstance(result, dict) else result
                         cookies = webview2.filter_cookies(raw_cookies, anonymous=anonymous)
                         if not cookies:
                             raise RuntimeError("没有读取到可用 Cookie")
