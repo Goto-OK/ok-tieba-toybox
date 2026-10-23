@@ -63,7 +63,10 @@ def open_verification(url: str, timeout: int = 600) -> str:
     """打开内置验证窗口，返回可粘贴到完整 Cookie 框的 Cookie 头。"""
     if not available():
         return ""
-    command = [sys.executable, "-m", "tieba_reply_stats.webview2_helper", url]
+    if getattr(sys, "frozen", False):
+        command = [sys.executable, "--webview2-verify", url]
+    else:
+        command = [sys.executable, "-m", "tieba_reply_stats.webview2_helper", url]
     completed = subprocess.run(
         command,
         capture_output=True,

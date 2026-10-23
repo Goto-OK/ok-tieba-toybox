@@ -10211,6 +10211,13 @@ def _acquire_instance():
 
 
 def main() -> int:
+    if "--webview2-verify" in sys.argv:
+        index = sys.argv.index("--webview2-verify")
+        url = sys.argv[index + 1] if index + 1 < len(sys.argv) else ""
+        from tieba_reply_stats.webview2_helper import main as verify_main
+
+        sys.argv = [sys.argv[0], url]
+        return verify_main()
     if "--selftest" in sys.argv:
         return _selftest()
     if hasattr(sys.stdout, "reconfigure"):
