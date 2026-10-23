@@ -24,7 +24,14 @@ import urllib.request
 from datetime import datetime
 from typing import Dict, List, Optional
 
-from .fetch import CAPTCHA_MARKERS, CaptchaError, RateLimitError, _retry_after_seconds, wait_request_gate
+from .fetch import (
+    CAPTCHA_MARKERS,
+    CaptchaError,
+    FetchError,
+    RateLimitError,
+    _retry_after_seconds,
+    wait_request_gate,
+)
 from .models import Comment, Floor, ThreadData, ThreadMeta
 
 PAGE_URL = "https://tiebac.baidu.com/c/f/pb/page?cmd=302001"
@@ -451,6 +458,8 @@ def resume_thread_anon(url: str, thread: ThreadData, fetcher, options) -> Thread
             thread.warnings.append(f"重试第 {pn} 页仍失败：{error}")
             break
         except Exception as error:  # noqa: BLE001
+            if isinstance(error, FetchError) and "已停止" in str(error):
+                raise
             thread.complete = False
             if pn not in thread.failed_pages:
                 thread.failed_pages.append(pn)
@@ -558,6 +567,8 @@ def collect_thread_anon(
                 options.log(f"  第 {pn} 页被拦截，保留已完成页：{error}")
             break
         except Exception as error:  # noqa: BLE001
+            if isinstance(error, FetchError) and "已停止" in str(error):
+                raise
             complete = False
             failed_pages.extend(range(pn, min(total, max_pages) + 1))
             warnings.append(f"第 {pn} 页失败：{error}")
@@ -715,6 +726,8 @@ def fill_comments_anon(
                 thread.warnings.append(f"第 {floor.post_no} 层楼中楼未抓完：{error}")
                 break
             except Exception as error:  # noqa: BLE001
+                if isinstance(error, FetchError) and "已停止" in str(error):
+                    raise
                 thread.complete = False
                 if floor.post_no not in thread.failed_comment_floors:
                     thread.failed_comment_floors.append(floor.post_no)

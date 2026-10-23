@@ -1890,11 +1890,10 @@ class App:
                 parent=self.root,
             )
             return
-        self._supplement_running = True
+        self._set_supplement_running(True)
         self._supplement_stop.clear()
         set_stop_checker(self._supplement_stop.is_set)
         self.retry_incomplete_btn.configure(state="disabled")
-        self.stop_btn.configure(state="normal")
         self.people_hint.configure(text=f"正在重试 {len(targets)} 个帖子的失败部分…")
 
         def worker():
@@ -1950,7 +1949,7 @@ class App:
             self._save_identity_strategy()
         if strategy in ("skip", "detail"):
             return
-        self._supplement_running = True
+        self._set_supplement_running(True)
         self._last_identity_strategy = strategy
         self._tieba_uid_failed = set()
         self._supplement_stop.clear()
@@ -4546,6 +4545,7 @@ class App:
             state="readonly",
         )
         self.accent_combo.pack(side="left")
+        self.accent_combo.configure(postcommand=self._prepare_accent_popup)
         self.accent_var.trace_add("write", lambda *_: self._on_accent_changed())
         note = ttk.LabelFrame(box, text=" 说明 ")
         note.pack(fill="x")
@@ -4566,6 +4566,30 @@ class App:
         self.settings["theme_mode"] = mode
         save_settings(self.settings)
         self._apply_theme()
+
+    def _prepare_accent_popup(self) -> None:
+        """让强调色下拉列表只使用当前主题的选中色，避免残留粉色/橘色行。"""
+        try:
+            popdown = str(
+                self.root.tk.call("ttk::combobox::PopdownWindow", self.accent_combo)
+            )
+            listbox = f"{popdown}.f.l"
+            self.root.tk.call(
+                listbox,
+                "configure",
+                "-background",
+                self.palette["surface"],
+                "-foreground",
+                self.palette["text"],
+                "-selectbackground",
+                self.palette["selection_bg"],
+                "-selectforeground",
+                self.palette["selection_text"],
+                "-activestyle",
+                "none",
+            )
+        except tk.TclError:
+            pass
 
     def _on_accent_changed(self) -> None:
         accent = {
@@ -5574,10 +5598,11 @@ class App:
             return
         self._webview_running = True
         self.status_var.set("正在打开内置验证窗口（测试）…")
+        center = self._webview_center()
 
         def worker():
             try:
-                webview2.open_window("about:blank", center=self._webview_center())
+                webview2.open_window("about:blank", center=center)
                 self._post(("webview_test_done", ""))
             except Exception as error:  # noqa: BLE001
                 self._post(("webview_test_done", str(error)))
@@ -5697,6 +5722,7 @@ class App:
         win.resizable(False, False)
         win.transient(self.root)
         win.grab_set()
+        self._active_choice_window = win
         frame = tk.Frame(win, bg="#ffffff", padx=20, pady=16)
         frame.pack(fill="both", expand=True)
         tk.Label(
@@ -5758,6 +5784,8 @@ class App:
         self._theme_widget_tree(win)
         win.geometry(f"+{x}+{y}")
         self.root.wait_window(win)
+        if getattr(self, "_active_choice_window", None) is win:
+            self._active_choice_window = None
         return result["value"]
 
     def _open_usage_window(self) -> None:
@@ -7904,10 +7932,10 @@ class App:
         return parts
 
     def _export_now(self) -> None:
-        if self.running:
+        if self._network_task_active():
             messagebox.showinfo(
-                "正在抓取",
-                "抓取或身份补全还在进行，完成后才能导出。",
+                "正在处理",
+                "抓取、补全或重试仍在进行，完成后才能导出。",
                 parent=self.root,
             )
             return
@@ -9472,6 +9500,13 @@ class App:
 
     def _on_stop(self) -> None:
         set_requests_paused(False)
+        active_choice = getattr(self, "_active_choice_window", None)
+        if active_choice is not None:
+            try:
+                active_choice.destroy()
+            except tk.TclError:
+                pass
+            self._active_choice_window = None
         if getattr(self, "_supplement_running", False):
             self._supplement_stop.set()
             self.stop_btn.configure(state="disabled")
@@ -9499,7 +9534,7 @@ class App:
             save_settings(self.settings)
         except tk.TclError:
             pass
-        active = self.running or getattr(self, "_batch_running", False)
+        active = self._network_task_active()
         if not active:
             self.root.destroy()
             return
@@ -9521,7 +9556,8 @@ class App:
     def _wait_close(self) -> None:
         worker_alive = bool(self.worker and self.worker.is_alive())
         batch_alive = bool(getattr(self, "_batch_running", False))
-        if worker_alive or batch_alive:
+        supplement_alive = bool(getattr(self, "_supplement_running", False))
+        if worker_alive or batch_alive or supplement_alive:
             self.root.after(100, self._wait_close)
             return
         self._persist_result(self.last_threads)
@@ -10024,9 +10060,7 @@ class App:
                 self._refresh_supplement_rows()
         elif kind == "identity_supplement_done":
             _, done_strategy, manual_timings = message
-            self._supplement_running = False
-            self.stop_btn.configure(state="disabled")
-            set_stop_checker(self.stop_event.is_set)
+            self._set_supplement_running(False)
             self._refresh_people()
             self._refresh_grid()
             timing_enabled = bool(self.identity_timing_var.get())
@@ -10049,9 +10083,7 @@ class App:
                 parent=self.root,
             )
         elif kind == "incomplete_retry_done":
-            self._supplement_running = False
-            self.stop_btn.configure(state="disabled")
-            set_stop_checker(self.stop_event.is_set)
+            self._set_supplement_running(False)
             self._refresh_people()
             self._refresh_grid()
             self.people_hint.configure(text="失败部分重试完成，需要重新导出")
@@ -10061,29 +10093,21 @@ class App:
                 parent=self.root,
             )
         elif kind == "incomplete_retry_stopped":
-            self._supplement_running = False
-            self.stop_btn.configure(state="disabled")
-            set_stop_checker(self.stop_event.is_set)
+            self._set_supplement_running(False)
             self._refresh_people()
             self.people_hint.configure(text="重试已停止，已完成部分已保留")
         elif kind == "incomplete_retry_error":
-            self._supplement_running = False
-            self.stop_btn.configure(state="disabled")
-            set_stop_checker(self.stop_event.is_set)
+            self._set_supplement_running(False)
             self._refresh_people()
             self.people_hint.configure(
                 text=f"重试失败：{friendly_error(RuntimeError(message[1]))}"
             )
         elif kind == "identity_supplement_stopped":
-            self._supplement_running = False
-            self.stop_btn.configure(state="disabled")
-            set_stop_checker(self.stop_event.is_set)
+            self._set_supplement_running(False)
             self._refresh_people()
             self.people_hint.configure(text="补全已停止，已完成部分已保留")
         elif kind == "identity_supplement_error":
-            self._supplement_running = False
-            self.stop_btn.configure(state="disabled")
-            set_stop_checker(self.stop_event.is_set)
+            self._set_supplement_running(False)
             self._refresh_people()
             self.people_hint.configure(text=f"补全失败：{friendly_error(RuntimeError(message[1]))}")
         elif kind == "identity_remember":
@@ -10171,10 +10195,11 @@ class App:
                 url = (getattr(self, "_current_urls", []) or ["https://tieba.baidu.com/"])[0]
                 self._webview_running = True
                 self.status_var.set("正在打开内置验证窗口…")
+                center = self._webview_center()
 
                 def worker():
                     try:
-                        webview2.open_verification(url, center=self._webview_center())
+                        webview2.open_verification(url, center=center)
                         self._post(("embedded_done", ""))
                     except Exception as error:  # noqa: BLE001
                         self._post(("embedded_done", str(error)))
@@ -10274,6 +10299,22 @@ class App:
             self._refresh_log_summary()
             messagebox.showerror("出错了", detail.split("\n\n")[0], parent=self.root)
 
+    def _network_task_active(self) -> bool:
+        return bool(
+            self.running
+            or getattr(self, "_supplement_running", False)
+            or getattr(self, "_batch_running", False)
+        )
+
+    def _set_supplement_running(self, running: bool) -> None:
+        self._supplement_running = running
+        self.start_btn.configure(state="disabled" if running else "normal")
+        if running:
+            self.stop_btn.configure(state="normal")
+        else:
+            self.stop_btn.configure(state="disabled")
+            set_stop_checker(self.stop_event.is_set)
+
     def _set_running(self, running: bool) -> None:
         self.running = running
         if running:
@@ -10291,6 +10332,8 @@ class App:
             self.start_btn.configure(state="normal", bg="#1F4E79")
             self.pause_btn.configure(state="disabled", text="暂停")
             self.stop_btn.configure(state="disabled")
+            self._task_paused = False
+            set_requests_paused(False)
             try:
                 self.progress.stop()
             except tk.TclError:
