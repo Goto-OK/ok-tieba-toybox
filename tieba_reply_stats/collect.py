@@ -477,6 +477,7 @@ def enrich_tieba_uids(
     options: CollectOptions,
     log,
     concurrency: int = 3,
+    progress: Optional[Callable[[int, int], None]] = None,
 ) -> Dict[str, int]:
     """对已抓帖子的唯一用户补 tieba_uid；一次资料请求同时带回身份字段。"""
     from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -530,6 +531,8 @@ def enrich_tieba_uids(
             if profile.get("tieba_uid"):
                 results[uid] = profile
             done += 1
+            if progress is not None:
+                progress(done, len(todo))
             if options.verbose and (done % 10 == 0 or done == len(todo)):
                 log(f"    贴吧ID补全 {done}/{len(todo)}")
 

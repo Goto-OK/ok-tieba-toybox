@@ -8869,6 +8869,9 @@ class App:
                 fetcher,
                 identity_options,
                 self._log_from_thread,
+                progress=lambda done, total: self._post(
+                    ("stage", f"正在补全贴吧ID {done}/{total}…")
+                ),
             )
             self._tieba_uid_missing = int(uid_stats.get("failed") or 0)
             self._write_log("tieba_uid_done", missing=self._tieba_uid_missing, users=len(final_threads))
