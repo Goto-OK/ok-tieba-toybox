@@ -10246,7 +10246,7 @@ class App:
             if webview2.available():
                 choices.append(
                     (
-                        "打开内置验证（匿名 Cookie）"
+                        "打开内置验证（自动读匿名 Cookie）"
                         if mode == "guest"
                         else "打开内置验证（完整 Cookie）",
                         "embedded",
