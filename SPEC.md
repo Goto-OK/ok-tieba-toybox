@@ -1379,13 +1379,21 @@ pid
 #### 7.8.1 输入
 
 ```text
-贴吧ID / 用户名：[..............] [抓取]
+方式：[自动 v]  内容：[..............] [抓取]
+```
+
+方式：
+
+```text
+自动：数字按 tieba_uid，其他按 username
+昵称：先解析成 username/tieba_uid，再查询
 ```
 
 规则：
 
 - 优先 `tieba_uid`；
 - 没有 `tieba_uid` 用 username；
+- 昵称不直接作为唯一定位，必须先解析并确认；
 - 不接受内部 `user_id`；
 - 不发送 Cookie/BDUSS。
 
@@ -1395,17 +1403,21 @@ pid
 
 ```text
 GET https://tb.anova.me/getPostsNew?uid=<tieba_uid>&page=<n>
+GET https://tb.anova.me/getPostsNew?username=<用户名>&page=<n>
+GET https://tb.anova.me/getPostsNew?nickname=<昵称>&page=<n>
 ```
 
 兜底：
 
 ```text
 GET https://tb.anova.me/getPosts?uid=<tieba_uid>&page=<n>
+GET https://tb.anova.me/getPosts?username=<用户名>&page=<n>
 ```
 
 - 默认只用 `getPostsNew`；
-- `getPostsNew` 失败或连续空页时才用 `getPosts`；
+- 新接口异常或返回空页时，才用一次 `getPosts`；
 - 不合并两个接口结果；
+- `getPosts` 没有 `hasNext`，不能用来连续翻页；
 - 两者都按 pid 去重。
 
 #### 7.8.3 翻页

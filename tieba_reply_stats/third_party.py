@@ -31,12 +31,14 @@ def _get(path: str, params: Dict[str, object]) -> Dict:
     return data
 
 
-def _identity(uid: str, username: str) -> Dict[str, str]:
+def _identity(uid: str, username: str, nickname: str = "") -> Dict[str, str]:
     if uid:
         return {"uid": uid}
     if username:
         return {"username": username}
-    raise ValueError("需要贴吧ID或用户名")
+    if nickname:
+        return {"nickname": nickname}
+    raise ValueError("需要贴吧ID、用户名或昵称")
 
 
 def fetch_posts_page(
@@ -45,20 +47,21 @@ def fetch_posts_page(
     page: int = 1,
     *,
     use_old: bool = False,
+    nickname: str = "",
 ) -> Dict:
     """读取一页第三方发言。
 
     返回 ``{"items": [...], "has_next": bool, "source": "new"/"old"}``。
     """
     path = "/getPosts" if use_old else "/getPostsNew"
-    params = _identity(uid.strip(), username.strip())
+    params = _identity(uid.strip(), username.strip(), nickname.strip())
     params["page"] = max(1, int(page))
     try:
         data = _get(path, params)
     except Exception:
         if use_old:
             raise
-        return fetch_posts_page(uid, username, page, use_old=True)
+        return fetch_posts_page(uid, username, page, use_old=True, nickname=nickname)
     posts = data.get("posts")
     if not isinstance(posts, list):
         posts = []
@@ -77,7 +80,9 @@ def fetch_posts_page(
                 "source": "old" if use_old else "new",
             }
         )
-    has_next = bool(data.get("hasNext")) if not use_old else bool(items)
+    if not items and not use_old:
+        return fetch_posts_page(uid, username, page, use_old=True, nickname=nickname)
+    has_next = bool(data.get("hasNext")) if not use_old else False
     return {"items": items, "has_next": has_next, "source": "old" if use_old else "new", "message": str(data.get("msg") or "")}
 
 

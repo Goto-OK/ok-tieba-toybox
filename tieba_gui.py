@@ -3647,9 +3647,18 @@ class App:
         top.pack(fill="x")
         row = tk.Frame(top, bg="#ffffff")
         row.pack(fill="x")
-        tk.Label(row, text="贴吧ID / 用户名：", bg="#ffffff", fg="#475569", font=("Microsoft YaHei UI", 9)).pack(side="left")
+        tk.Label(row, text="方式：", bg="#ffffff", fg="#475569", font=("Microsoft YaHei UI", 9)).pack(side="left")
+        self.love_mode_var = tk.StringVar(value="自动")
+        ttk.Combobox(
+            row,
+            values=("自动", "昵称"),
+            textvariable=self.love_mode_var,
+            width=6,
+            state="readonly",
+        ).pack(side="left", padx=(0, 6))
+        tk.Label(row, text="内容：", bg="#ffffff", fg="#475569", font=("Microsoft YaHei UI", 9)).pack(side="left")
         self.love_query_var = tk.StringVar()
-        self.love_entry = ttk.Entry(row, textvariable=self.love_query_var, width=32)
+        self.love_entry = ttk.Entry(row, textvariable=self.love_query_var, width=30)
         self.love_entry.pack(side="left")
         self.love_auto_var = tk.BooleanVar(value=False)
         ttk.Checkbutton(row, text="自动连续翻页", variable=self.love_auto_var).pack(side="left", padx=(8, 0))
@@ -3763,6 +3772,21 @@ class App:
             self.love_tree.delete(item)
         uid = query if query.isdigit() else ""
         username = "" if uid else query
+        if self.love_mode_var.get() == "昵称":
+            try:
+                info = resolve_user(
+                    Fetcher(cookie={}, delay=0.2, verbose=False),
+                    query,
+                    "昵称",
+                )
+            except Exception as error:  # noqa: BLE001
+                self.love_status.configure(text=f"昵称解析失败：{error}")
+                return
+            if not info.get("uid") and not info.get("username"):
+                self.love_status.configure(text="昵称没有唯一匹配，请改用用户名或贴吧ID")
+                return
+            uid = str(info.get("uid") or "")
+            username = str(info.get("username") or "")
         self._love_identity = (uid, username)
         self._load_love_page()
 
