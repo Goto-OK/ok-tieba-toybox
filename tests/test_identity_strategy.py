@@ -81,7 +81,7 @@ def test_resume_thread_fetches_only_failed_pages(monkeypatch):
         CollectOptions(mode="guest", include_comments=False),
     )
 
-    assert calls == [2]
+    assert calls == [2, 3]
     assert result.complete is True
     assert result.failed_pages == []
     assert any(floor.pid == "p31" for floor in result.floors)

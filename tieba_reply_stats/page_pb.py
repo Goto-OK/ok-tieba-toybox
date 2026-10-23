@@ -421,17 +421,29 @@ def resume_thread_anon(url: str, thread: ThreadData, fetcher, options) -> Thread
     """只补失败页和失败楼中楼，不重抓已完成页。"""
     tid = thread.meta.tid
     seen_floors = {floor.pid for floor in thread.floors}
-    for pn in list(dict.fromkeys(thread.failed_pages)):
+    failed = sorted(set(thread.failed_pages))
+    if failed:
+        first = failed[0]
+        last = options.max_pages or thread.meta.total_page or first
+        pages = list(range(first, max(first, last) + 1))
+    else:
+        pages = []
+    for pn in pages:
         try:
             data = fetch_page(fetcher, tid, pn, options.include_comments, 30, 10, bduss="")
             _merge_page(thread, data, seen_floors)
-            thread.failed_pages.remove(pn)
+            if pn in thread.failed_pages:
+                thread.failed_pages.remove(pn)
         except (CaptchaError, RateLimitError) as error:
             thread.complete = False
+            if pn not in thread.failed_pages:
+                thread.failed_pages.append(pn)
             thread.warnings.append(f"重试第 {pn} 页仍失败：{error}")
             break
         except Exception as error:  # noqa: BLE001
             thread.complete = False
+            if pn not in thread.failed_pages:
+                thread.failed_pages.append(pn)
             thread.warnings.append(f"重试第 {pn} 页失败：{error}")
             break
     if thread.failed_comment_floors and options.include_comments:
