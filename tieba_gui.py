@@ -411,6 +411,9 @@ class App:
             pady=6,
         )
         self.url_text.grid(row=0, column=0, sticky="ew")
+        url_scroll = ttk.Scrollbar(box, orient="vertical", command=self.url_text.yview)
+        url_scroll.grid(row=0, column=1, sticky="ns")
+        self.url_text.configure(yscrollcommand=url_scroll.set)
         self.url_text.bind("<Control-Return>", self._start_from_key)
         tk.Label(
             box,
@@ -3590,8 +3593,17 @@ class App:
             fg="#475569",
             font=("Microsoft YaHei UI", 9),
         ).pack(anchor="w")
-        self.links_text = tk.Text(top, height=6, wrap="none", font=("Consolas", 9))
-        self.links_text.pack(fill="x", pady=(4, 4))
+        links_wrap = tk.Frame(top, bg="#ffffff")
+        links_wrap.pack(fill="x", pady=(4, 4))
+        self.links_text = tk.Text(links_wrap, height=6, wrap="none", font=("Consolas", 9))
+        links_yscroll = ttk.Scrollbar(links_wrap, orient="vertical", command=self.links_text.yview)
+        links_xscroll = ttk.Scrollbar(links_wrap, orient="horizontal", command=self.links_text.xview)
+        self.links_text.configure(yscrollcommand=links_yscroll.set, xscrollcommand=links_xscroll.set)
+        self.links_text.grid(row=0, column=0, sticky="nsew")
+        links_yscroll.grid(row=0, column=1, sticky="ns")
+        links_xscroll.grid(row=1, column=0, sticky="ew")
+        links_wrap.rowconfigure(0, weight=1)
+        links_wrap.columnconfigure(0, weight=1)
         bar = tk.Frame(top, bg="#ffffff")
         bar.pack(fill="x")
         ttk.Button(bar, text="从剪贴板导入", command=self._links_from_clipboard).pack(side="left")
