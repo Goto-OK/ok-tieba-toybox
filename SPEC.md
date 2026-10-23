@@ -748,6 +748,15 @@ failed  → 已尝试失败
 - 身份全缺 → `-`；
 - 已尝试补全但失败 → `-`；
 - 失败后再次手动补全成功，状态改 filled；
+- 以下断点/状态必须写回 `last_result`：
+  - `failed_pages`
+  - `failed_comment_floors`
+  - `complete`
+  - `tieba_uid_failed`
+- 恢复后 `complete=False` 但断点为空：
+  - 不得直接标记完成；
+  - 提示“缺少失败页/楼层断点”；
+  - 等待用户重新抓取或手动处理；
 - 复制 ID 时：
   - `待补充` 复制为空字符串；
   - `-` 复制为空字符串；

@@ -5,6 +5,7 @@ from tieba_reply_stats.collect import CollectOptions, enrich_tieba_uids
 from tieba_reply_stats.export import _tieba_cell
 from tieba_reply_stats.fetch import FetchError, RequestGate
 from tieba_reply_stats.models import Floor, ThreadData, ThreadMeta
+from tieba_reply_stats.storage import thread_from_dict, thread_to_dict
 
 
 class FakeFetcher:
@@ -88,6 +89,42 @@ def test_resume_thread_fetches_only_failed_pages(monkeypatch):
     assert result.complete is True
     assert result.failed_pages == []
     assert any(floor.pid == "p31" for floor in result.floors)
+
+
+def test_resume_without_checkpoint_does_not_mark_complete(monkeypatch):
+    thread = ThreadData(
+        meta=ThreadMeta(tid="1", total_page=3),
+        complete=False,
+        failed_pages=[],
+        failed_comment_floors=[],
+    )
+    called = []
+    monkeypatch.setattr(page_pb, "fetch_page", lambda *a, **k: called.append(1))
+    result = page_pb.resume_thread_anon(
+        "https://tieba.baidu.com/p/1",
+        thread,
+        FakeFetcher(),
+        CollectOptions(mode="guest", include_comments=False),
+    )
+    assert called == []
+    assert result.complete is False
+    assert result.warnings
+
+
+def test_checkpoint_fields_round_trip():
+    thread = ThreadData(
+        meta=ThreadMeta(tid="1"),
+        floors=[Floor(post_no=1, pid="p1", author="a", tieba_uid_failed=True)],
+        complete=False,
+        failed_pages=[2],
+        failed_comment_floors=[1],
+        warnings=["partial"],
+    )
+    restored = thread_from_dict(thread_to_dict(thread))
+    assert restored.complete is False
+    assert restored.failed_pages == [2]
+    assert restored.failed_comment_floors == [1]
+    assert restored.floors[0].tieba_uid_failed is True
 
 
 def test_tieba_cell_distinguishes_pending_and_failed_identity():

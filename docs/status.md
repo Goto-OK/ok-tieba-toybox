@@ -176,6 +176,8 @@ Android 核心同步通过
 - 请求统一经过全局暂停/最小间隔闸门；
 - 验证码弹窗改为“转到登录模式（完整 Cookie）”并打开浏览器；
 - 游客模式记录 failed_pages / failed_comment_floors，新增「重试失败部分」；
+- 断点、帖子 complete、tieba_uid_failed 持久化到最近结果；
+- 恢复后断点为空不误判完成；
 - 限流弹窗可按服务端 Retry-After 或手动暂停后继续当前帖子；
 - 可选 WebView2 验证窗口：安装 pywebview/pythonnet 且系统有 Evergreen Runtime 时启用；
 - 未安装 WebView2 依赖/运行时不强制，继续走完整 Cookie；

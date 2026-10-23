@@ -428,6 +428,9 @@ def resume_thread_anon(url: str, thread: ThreadData, fetcher, options) -> Thread
         pages = list(range(first, max(first, last) + 1))
     else:
         pages = []
+    if not pages and not thread.failed_comment_floors and not thread.complete:
+        thread.warnings.append("缺少失败页/楼层断点，未自动标记完成")
+        return thread
     for pn in pages:
         try:
             data = fetch_page(fetcher, tid, pn, options.include_comments, 30, 10, bduss="")

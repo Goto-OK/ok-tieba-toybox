@@ -42,6 +42,8 @@ def _floor_dict(floor: Floor) -> Dict:
         "author": floor.author,
         "author_name": floor.author_name,
         "author_id": floor.author_id,
+        "tieba_uid": floor.tieba_uid,
+        "tieba_uid_failed": floor.tieba_uid_failed,
         "portrait": floor.portrait,
         "posted_at": _iso(floor.posted_at),
         "content": floor.content,
@@ -61,6 +63,8 @@ def _comment_dict(comment: Comment) -> Dict:
         "author": comment.author,
         "author_name": comment.author_name,
         "author_id": comment.author_id,
+        "tieba_uid": comment.tieba_uid,
+        "tieba_uid_failed": comment.tieba_uid_failed,
         "portrait": comment.portrait,
         "posted_at": _iso(comment.posted_at),
         "content": comment.content,
@@ -88,6 +92,8 @@ def thread_to_dict(thread: ThreadData) -> Dict:
         "fetched_at": _iso(thread.fetched_at),
         "warnings": list(thread.warnings),
         "complete": thread.complete,
+        "failed_pages": list(thread.failed_pages),
+        "failed_comment_floors": list(thread.failed_comment_floors),
     }
 
 
@@ -111,6 +117,7 @@ def thread_from_dict(data: Dict) -> ThreadData:
             author_name=str(item.get("author_name") or ""),
             author_id=str(item.get("author_id") or ""),
             tieba_uid=str(item.get("tieba_uid") or ""),
+            tieba_uid_failed=bool(item.get("tieba_uid_failed")),
             portrait=str(item.get("portrait") or ""),
             posted_at=_dt(str(item.get("posted_at") or "")),
             content=str(item.get("content") or ""),
@@ -131,6 +138,7 @@ def thread_from_dict(data: Dict) -> ThreadData:
             author_name=str(item.get("author_name") or ""),
             author_id=str(item.get("author_id") or ""),
             tieba_uid=str(item.get("tieba_uid") or ""),
+            tieba_uid_failed=bool(item.get("tieba_uid_failed")),
             portrait=str(item.get("portrait") or ""),
             posted_at=_dt(str(item.get("posted_at") or "")),
             content=str(item.get("content") or ""),
@@ -148,6 +156,10 @@ def thread_from_dict(data: Dict) -> ThreadData:
         fetched_at=_dt(str(data.get("fetched_at") or "")) or datetime.now(),
         warnings=[str(item) for item in data.get("warnings") or []],
         complete=bool(data.get("complete", True)),
+        failed_pages=[int(item) for item in data.get("failed_pages") or []],
+        failed_comment_floors=[
+            int(item) for item in data.get("failed_comment_floors") or []
+        ],
     )
 
 
