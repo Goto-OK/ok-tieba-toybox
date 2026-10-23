@@ -8837,7 +8837,6 @@ class App:
                 should_stop=self.stop_event.is_set,
             )
             self._post(("stage", "抓取完成，正在补全身份…"))
-            self._post(("log", "  正在补全用户身份，补全完成后才算抓取完成…", "muted"))
             for thread in completed:
                 enrich_identities(thread, fetcher, identity_options, self._log_from_thread)
             self._identity_missing = sum(
@@ -8863,7 +8862,6 @@ class App:
             final_threads = list(by_tid.values())
 
             self._post(("stage", "身份完成，正在补全贴吧ID…"))
-            self._post(("log", "  正在补全贴吧ID，补全完成后才生成 Excel…", "muted"))
             uid_stats = enrich_tieba_uids(
                 final_threads,
                 fetcher,

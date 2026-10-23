@@ -524,17 +524,13 @@ def enrich_tieba_uids(
             _check_stop(options)
             try:
                 uid, profile = future.result()
-            except Exception as error:  # noqa: BLE001
-                if options.verbose:
-                    log(f"    ! 贴吧ID补全失败：{error}")
+            except Exception:  # noqa: BLE001
                 continue
             if profile.get("tieba_uid"):
                 results[uid] = profile
             done += 1
             if progress is not None:
                 progress(done, len(todo))
-            if options.verbose and (done % 10 == 0 or done == len(todo)):
-                log(f"    贴吧ID补全 {done}/{len(todo)}")
 
     for thread in threads:
         for obj in list(thread.floors) + list(thread.comments):
