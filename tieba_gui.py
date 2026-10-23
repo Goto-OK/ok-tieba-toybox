@@ -25,7 +25,7 @@ from tkinter import filedialog, messagebox, simpledialog, ttk
 from typing import Any, Callable, Dict, List, Optional
 from urllib.parse import quote
 
-from tieba_reply_stats import profile_pb, third_party
+from tieba_reply_stats import profile_pb, third_party, webview2
 from tieba_reply_stats.blacklist import (
     LEVEL_LABEL,
     classify,
@@ -9962,13 +9962,20 @@ class App:
             current_cookie_mode = (
                 self.mode_var.get() == "login" and self.login_method_var.get() == "cookie"
             )
-            choices = [
-                (
-                    "重新粘贴完整 Cookie" if current_cookie_mode else "转到登录模式（完整 Cookie）",
-                    "login",
-                ),
-                ("停止本次", "stop"),
-            ]
+            choices = []
+            if webview2.available():
+                choices.append(("打开内置验证窗口", "embedded"))
+            choices.extend(
+                [
+                    (
+                        "重新粘贴完整 Cookie"
+                        if current_cookie_mode
+                        else "转到登录模式（完整 Cookie）",
+                        "login",
+                    ),
+                    ("停止本次", "stop"),
+                ]
+            )
             choice = self._ask_choice(
                 "被安全验证拦截",
                 "当前请求需要完整 Cookie。\n"
@@ -9989,6 +9996,42 @@ class App:
                 self._append_log(
                     "已切换到登录模式（完整 Cookie）。完成验证后粘贴完整 Cookie，再重新开始。",
                     "err",
+                )
+            elif choice == "embedded":
+                url = (getattr(self, "_current_urls", []) or ["https://tieba.baidu.com/"])[0]
+                self._webview_running = True
+                self.status_var.set("正在打开内置验证窗口…")
+
+                def worker():
+                    try:
+                        cookie = webview2.open_verification(url)
+                        self._post(("embedded_cookie", cookie, ""))
+                    except Exception as error:  # noqa: BLE001
+                        self._post(("embedded_cookie", "", str(error)))
+
+                threading.Thread(target=worker, daemon=True).start()
+            self._refresh_log_summary()
+        elif kind == "embedded_cookie":
+            _, cookie, error = message
+            self._webview_running = False
+            if cookie:
+                self.mode_var.set("login")
+                self.login_method_var.set("cookie")
+                self._on_login_method_changed()
+                self.cookie_var.set(cookie)
+                self.cookie_entry.focus_set()
+                self._append_log("已从内置验证窗口读取完整 Cookie。", "ok")
+                messagebox.showinfo(
+                    "验证完成",
+                    "已读取完整 Cookie。请重新开始统计；已完成的帖子不会重抓。",
+                    parent=self.root,
+                )
+            else:
+                detail = f"\n{error}" if error else ""
+                messagebox.showwarning(
+                    "内置验证未完成",
+                    "没有读取到完整 Cookie。" + detail + "\n请改用“转到登录模式（完整 Cookie）”。",
+                    parent=self.root,
                 )
             self._refresh_log_summary()
         elif kind == "rate_limit_ask":
