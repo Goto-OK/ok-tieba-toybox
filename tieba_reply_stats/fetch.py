@@ -50,6 +50,10 @@ class RequestGate:
         with self._lock:
             self._stop_check = checker
 
+    def has_interval(self) -> bool:
+        with self._lock:
+            return self._interval > 0
+
     def resume(self) -> None:
         with self._lock:
             self._pause_until = 0.0
@@ -379,7 +383,7 @@ class Fetcher:
 
     def _sleep(self) -> None:
         _GATE.wait()
-        if self.delay > 0:
+        if self.delay > 0 and not _GATE.has_interval():
             _GATE.sleep(self.delay + random.uniform(0, self.delay * 0.35))
 
     # ------------------------------------------------------------------ cache
