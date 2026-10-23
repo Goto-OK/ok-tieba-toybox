@@ -208,6 +208,7 @@ class App:
         self.last_threads: list = []
         self._auto_filled = False
         self._identity_choice_queue: "queue.Queue[tuple]" = queue.Queue()
+        self._rate_choice_queue: "queue.Queue[str]" = queue.Queue()
         self._last_stage_times: Dict[str, float] = {}
         self._manual_timing: Dict[str, float] = {}
         self._supplement_stop = threading.Event()
@@ -9221,6 +9222,7 @@ class App:
         configure_gate(float(delay or 0))
         self.stop_event.clear()
         self._identity_choice_queue = queue.Queue()
+        self._rate_choice_queue = queue.Queue()
         self._manual_timing = {}
         self._tieba_uid_failed = set()
         self._user_id_failed = set()
@@ -9352,15 +9354,40 @@ class App:
                 except ValueError:
                     tid = ""
                 self._write_log("thread_start", tid=tid)
-                try:
-                    thread = collect_thread(url, fetcher, options)
-                except (CaptchaError, RateLimitError):
-                    raise
-                except CollectCancelled:
-                    raise
-                except (ThreadGoneError, FetchError, CollectError, ValueError) as error:
-                    self._write_log("thread_error", tid=tid, error=type(error).__name__)
-                    self._post(("log", f"  ✗ 抓取失败：{error}", "err"))
+                rate_attempt = 0
+                thread = None
+                while True:
+                    try:
+                        thread = collect_thread(url, fetcher, options)
+                        break
+                    except RateLimitError as error:
+                        if rate_attempt >= 3:
+                            raise
+                        rate_attempt += 1
+                        self._post(
+                            ("rate_limit_ask", str(error), float(error.retry_after or 0), url)
+                        )
+                        choice = None
+                        while choice is None:
+                            try:
+                                choice = self._rate_choice_queue.get(timeout=0.2)
+                            except queue.Empty:
+                                if self.stop_event.is_set():
+                                    raise CollectCancelled("已停止") from error
+                        if choice == "stop":
+                            raise CollectCancelled("已停止") from error
+                        pause_requests(float(choice))
+                        continue
+                    except CaptchaError:
+                        raise
+                    except CollectCancelled:
+                        raise
+                    except (ThreadGoneError, FetchError, CollectError, ValueError) as error:
+                        self._write_log("thread_error", tid=tid, error=type(error).__name__)
+                        self._post(("log", f"  ✗ 抓取失败：{error}", "err"))
+                        thread = None
+                        break
+                if thread is None:
                     continue
                 completed.append(thread)
                 users = thread.user_stats()
@@ -9887,6 +9914,24 @@ class App:
                     "err",
                 )
             self._refresh_log_summary()
+        elif kind == "rate_limit_ask":
+            _, detail, retry_after, _url = message
+            wait = int(retry_after or 30)
+            self.status_var.set("被限流，等待选择")
+            self._append_log(f"被限流：{detail}", "warn")
+            choice = self._ask_choice(
+                "被限流",
+                f"服务端返回限流，建议至少等待 {wait} 秒。\n"
+                "等待后只继续当前未完成帖子，已完成帖子不会重抓。",
+                [
+                    (f"等待 {wait} 秒后继续", str(wait)),
+                    ("暂停 2 分钟", "120"),
+                    ("暂停 5 分钟", "300"),
+                    ("停止本次", "stop"),
+                ],
+                default=0,
+            )
+            self._rate_choice_queue.put(choice or "stop")
         elif kind == "rate_limit":
             _, detail, retry_after = message
             self._set_running(False)
