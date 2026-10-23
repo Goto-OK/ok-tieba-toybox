@@ -39,6 +39,7 @@ def main() -> int:
                 y = int(sys.argv[index + 1])
             except ValueError:
                 pass
+
     window = webview.create_window(
         "贴吧安全验证",
         url,
@@ -47,6 +48,7 @@ def main() -> int:
         x=x,
         y=y,
         on_top=True,
+        text_select=False,
     )
     cookies = []
 
