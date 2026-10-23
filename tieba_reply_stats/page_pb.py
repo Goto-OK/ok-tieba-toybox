@@ -435,20 +435,31 @@ def resume_thread_anon(url: str, thread: ThreadData, fetcher, options) -> Thread
     """只补失败页和失败楼中楼，不重抓已完成页。"""
     tid = thread.meta.tid
     seen_floors = {floor.pid for floor in thread.floors}
+    if not thread.fetched_pages and thread.floors:
+        thread.fetched_pages = [1]
     failed = sorted(set(thread.failed_pages))
-    if failed:
-        first = failed[0]
-        last = options.max_pages or thread.meta.total_page or first
-        pages = list(range(first, max(first, last) + 1))
-    else:
-        pages = []
-    if not pages and not thread.failed_comment_floors and not thread.complete:
+    if (
+        not thread.complete
+        and not failed
+        and not thread.failed_comment_floors
+        and not thread.fetched_pages
+    ):
         thread.warnings.append("缺少失败页/楼层断点，未自动标记完成")
         return thread
+    last = options.max_pages or thread.meta.total_page or (failed[0] if failed else 1)
+    if thread.fetched_pages:
+        done_pages = set(thread.fetched_pages)
+        pages = [pn for pn in range(2, max(2, last) + 1) if pn not in done_pages]
+    elif failed:
+        pages = list(range(failed[0], max(failed[0], last) + 1))
+    else:
+        pages = []
     for pn in pages:
         try:
             data = fetch_page(fetcher, tid, pn, options.include_comments, 30, 10, bduss="")
             _merge_page(thread, data, seen_floors)
+            if pn not in thread.fetched_pages:
+                thread.fetched_pages.append(pn)
             if pn in thread.failed_pages:
                 thread.failed_pages.remove(pn)
         except (CaptchaError, RateLimitError) as error:
@@ -472,7 +483,12 @@ def resume_thread_anon(url: str, thread: ThreadData, fetcher, options) -> Thread
             options,
             only_floors=set(thread.failed_comment_floors),
         )
-    thread.complete = not thread.failed_pages and not thread.failed_comment_floors
+    required_pages = set(range(1, max(1, last) + 1))
+    thread.complete = (
+        required_pages.issubset(set(thread.fetched_pages))
+        and not thread.failed_pages
+        and not thread.failed_comment_floors
+    )
     return thread
 
 
@@ -552,13 +568,16 @@ def collect_thread_anon(
     total = page.get("total") or 1
     max_pages = options.max_pages or total
     warnings: List[str] = []
+    fetched_pages: List[int] = [1]
     failed_pages: List[int] = []
     complete = True
     for pn in range(2, min(total, max_pages) + 1):
         if options.should_stop and options.should_stop():
             break
         try:
-            add_page(fetch_page(fetcher, tid, pn, options.include_comments, 30, 10, bduss=""))
+            data = fetch_page(fetcher, tid, pn, options.include_comments, 30, 10, bduss="")
+            add_page(data)
+            fetched_pages.append(pn)
         except (CaptchaError, RateLimitError) as error:
             complete = False
             failed_pages.extend(range(pn, min(total, max_pages) + 1))
@@ -583,6 +602,7 @@ def collect_thread_anon(
         comments=comments,
         warnings=warnings,
         complete=complete,
+        fetched_pages=fetched_pages,
         failed_pages=failed_pages,
     )
     fill_comments_anon(thread_data, fetcher, options)

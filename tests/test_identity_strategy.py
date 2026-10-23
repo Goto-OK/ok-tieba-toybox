@@ -4,6 +4,7 @@ from tieba_reply_stats import page_pb, profile_pb, settings
 from tieba_reply_stats.collect import CollectOptions, enrich_tieba_uids
 from tieba_reply_stats.export import _tieba_cell
 from tieba_reply_stats.fetch import FetchError, RequestGate
+from tieba_reply_stats.filters import filter_users
 from tieba_reply_stats.models import Floor, ThreadData, ThreadMeta
 from tieba_reply_stats.storage import thread_from_dict, thread_to_dict
 
@@ -136,6 +137,14 @@ def test_checkpoint_fields_round_trip():
     assert restored.floors[0].user_id_failed is True
 
 
+def test_old_storage_defaults_are_compatible():
+    restored = thread_from_dict({"meta": {"tid": "1"}, "floors": [], "comments": []})
+    assert restored.complete is True
+    assert restored.fetched_pages == []
+    assert restored.failed_pages == []
+    assert restored.failed_comment_floors == []
+
+
 def test_tieba_cell_distinguishes_pending_and_failed_identity():
     assert _tieba_cell({"uid": "1"}) == "待补充"
     assert _tieba_cell({"uid": "1", "tieba_uid_failed": True}) == "-"
@@ -157,6 +166,15 @@ def test_request_gate_stops_while_task_paused():
     gate.set_stop_checker(lambda: True)
     with pytest.raises(FetchError):
         gate.wait()
+
+
+def test_filter_uses_dash_for_failed_tieba_uid():
+    users = [
+        {"name": "a", "uid": "1", "tieba_uid": "", "tieba_uid_failed": True},
+        {"name": "b", "uid": "2", "tieba_uid": ""},
+    ]
+    assert filter_users(users, keyword="-", field="贴吧ID") == [users[0]]
+    assert filter_users(users, keyword="待补充", field="贴吧ID") == [users[1]]
 
 
 def test_identity_defaults():

@@ -65,6 +65,7 @@ from tieba_reply_stats.fetch import (
     configure_gate,
     parse_cookie_input,
     pause_requests,
+    resume_requests,
     set_requests_paused,
     set_stop_checker,
 )
@@ -1890,6 +1891,8 @@ class App:
                 parent=self.root,
             )
             return
+        resume_requests()
+        configure_gate(float(self.delay_var.get() or 0.8))
         self._set_supplement_running(True)
         self._supplement_stop.clear()
         set_stop_checker(self._supplement_stop.is_set)
@@ -1898,7 +1901,7 @@ class App:
 
         def worker():
             try:
-                fetcher = Fetcher(cookie={}, delay=float(self.delay_var.get() or 0.8), verbose=False)
+                fetcher = Fetcher(cookie={}, delay=0, verbose=False)
                 options = CollectOptions(
                     mode="guest",
                     include_comments=self.comments_var.get(),
@@ -1949,6 +1952,8 @@ class App:
             self._save_identity_strategy()
         if strategy in ("skip", "detail"):
             return
+        resume_requests()
+        configure_gate(float(self.delay_var.get() or 0.8))
         self._set_supplement_running(True)
         self._last_identity_strategy = strategy
         self._tieba_uid_failed = set()
@@ -1963,7 +1968,7 @@ class App:
                 began = time.perf_counter()
                 stage_at = began
                 timings: Dict[str, float] = {}
-                fetcher = Fetcher(cookie=self._request_cookie(), delay=0.3, verbose=False)
+                fetcher = Fetcher(cookie=self._request_cookie(), delay=0, verbose=False)
                 options = CollectOptions(
                     verbose=True,
                     log=self._log_from_thread,
@@ -2837,7 +2842,7 @@ class App:
 
         def worker():
             try:
-                fetcher = Fetcher(cookie=self._request_cookie(), delay=0.3, verbose=False)
+                fetcher = Fetcher(cookie=self._request_cookie(), delay=0, verbose=False)
                 info = {}
                 if mode == "昵称":
                     # 先在当前抓到的参与者里找（最可靠，避免昵称搜索接口搜不到）
@@ -3535,7 +3540,6 @@ class App:
                     return int(user.get("level") or 0)
                 return int(user.get(sort_column) or 0)
             filtered.sort(key=sort_key, reverse=bool(sort_reverse))
-        self._profile_cache = {}
         page_size = max(1, int(self.settings.get("page_size", 1000) or 1000))
         pages = max(1, (len(filtered) + page_size - 1) // page_size)
         self._people_page = min(max(0, getattr(self, "_people_page", 0)), pages - 1)
@@ -5599,10 +5603,11 @@ class App:
         self._webview_running = True
         self.status_var.set("正在打开内置验证窗口（测试）…")
         center = self._webview_center()
+        url = (getattr(self, "_current_urls", []) or ["https://tieba.baidu.com/"])[0]
 
         def worker():
             try:
-                webview2.open_window("about:blank", center=center)
+                webview2.open_window(url, center=center)
                 self._post(("webview_test_done", ""))
             except Exception as error:  # noqa: BLE001
                 self._post(("webview_test_done", str(error)))
@@ -8108,7 +8113,7 @@ class App:
 
         def worker():
             try:
-                fetcher = Fetcher(cookie=self._request_cookie(), delay=0.3, verbose=False)
+                fetcher = Fetcher(cookie=self._request_cookie(), delay=0, verbose=False)
                 options = CollectOptions(verbose=True, log=self._log_from_thread)
                 for thread in self.last_threads:
                     filled = fill_thread_levels(thread, fetcher, self._log_from_thread)
@@ -8482,7 +8487,7 @@ class App:
 
         def worker():
             try:
-                fetcher = Fetcher(cookie=self._request_cookie(), delay=0.3, verbose=False)
+                fetcher = Fetcher(cookie=self._request_cookie(), delay=0, verbose=False)
                 uid = str(user.get("uid") or "")
                 username = str(user.get("username") or "")
                 portrait = str(user.get("portrait") or "")
@@ -9288,6 +9293,7 @@ class App:
             ):
                 return
         self.last_threads = threads
+        self._profile_cache.clear()
         try:
             self._refresh_people()
             self._refresh_grid()
@@ -9427,10 +9433,10 @@ class App:
                 return
 
         self._current_urls = list(urls)
+        resume_requests()
         configure_gate(float(delay or 0))
         self.stop_event.clear()
         self._task_paused = False
-        set_requests_paused(False)
         set_stop_checker(self.stop_event.is_set)
         self._identity_choice_queue = queue.Queue()
         self._rate_choice_queue = queue.Queue()
@@ -9499,7 +9505,7 @@ class App:
             self._append_log("已继续抓取。", "muted")
 
     def _on_stop(self) -> None:
-        set_requests_paused(False)
+        resume_requests()
         active_choice = getattr(self, "_active_choice_window", None)
         if active_choice is not None:
             try:
@@ -9549,7 +9555,7 @@ class App:
         self._closing = True
         self.stop_event.set()
         self._supplement_stop.set()
-        set_requests_paused(False)
+        resume_requests()
         self._batch_cancel = True
         self.status_var.set("正在停止…")
         self._append_log("正在停止任务并保存已完成部分…", "muted")
@@ -9584,7 +9590,7 @@ class App:
         stage_at = began
         timings: Dict[str, float] = {}
         try:
-            fetcher = Fetcher(cookie=cookie, delay=delay, verbose=False)
+            fetcher = Fetcher(cookie=cookie, delay=0, verbose=False)
             for index, url in enumerate(urls, start=1):
                 self._post(("log", f"\n[{index}/{len(urls)}] {url}", "title"))
                 try:
@@ -9864,6 +9870,7 @@ class App:
             self.last_threads = self._merge_threads(threads or [])
             self._persist_result(self.last_threads)
             self._auto_filled = False
+            self._profile_cache.clear()
             try:
                 self._reset_people_filters()
                 self._refresh_people()
@@ -10223,7 +10230,7 @@ class App:
             messagebox.showinfo(
                 "测试完成",
                 "内置验证窗口已成功打开并关闭。\n"
-                "本测试不访问百度、不读取 Cookie、不修改登录状态。",
+                "本测试会打开真实帖子页面，但不读取 Cookie、不修改登录状态。",
                 parent=self.root,
             )
         elif kind == "embedded_done":
@@ -10310,11 +10317,15 @@ class App:
 
     def _set_supplement_running(self, running: bool) -> None:
         self._supplement_running = running
-        self.start_btn.configure(state="disabled" if running else "normal")
+        self.start_btn.configure(
+            state="disabled" if running else "normal",
+            text="补全中，稍后开始" if running else "开始统计",
+        )
         if running:
             self.stop_btn.configure(state="normal")
         else:
             self.stop_btn.configure(state="disabled")
+            resume_requests()
             set_stop_checker(self.stop_event.is_set)
 
     def _set_running(self, running: bool) -> None:
@@ -10335,7 +10346,7 @@ class App:
             self.pause_btn.configure(state="disabled", text="暂停")
             self.stop_btn.configure(state="disabled")
             self._task_paused = False
-            set_requests_paused(False)
+            resume_requests()
             try:
                 self.progress.stop()
             except tk.TclError:

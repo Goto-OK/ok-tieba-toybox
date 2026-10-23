@@ -78,7 +78,9 @@ def filter_users(
         username = str(user.get("username") or "")
         uid = str(user.get("uid") or "")
         tieba_uid = str(user.get("tieba_uid") or "")
-        if not tieba_uid and (uid or username or user.get("portrait")):
+        if not tieba_uid and user.get("tieba_uid_failed"):
+            tieba_uid = "-"
+        elif not tieba_uid and (uid or username or user.get("portrait")):
             tieba_uid = "待补充"
         aliases = [str(value or "") for value in user.get("aliases") or []]
         if text:

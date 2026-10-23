@@ -59,6 +59,16 @@ class RequestGate:
         with self._lock:
             self._paused = bool(paused)
 
+    def sleep(self, seconds: float) -> None:
+        remaining = max(0.0, float(seconds or 0))
+        while remaining > 0:
+            checker = self._stop_check
+            if checker is not None and checker():
+                raise FetchError("已停止")
+            step = min(remaining, 0.2)
+            time.sleep(step)
+            remaining -= step
+
     def wait(self) -> None:
         while True:
             checker = self._stop_check
@@ -370,7 +380,7 @@ class Fetcher:
     def _sleep(self) -> None:
         _GATE.wait()
         if self.delay > 0:
-            time.sleep(self.delay + random.uniform(0, self.delay * 0.35))
+            _GATE.sleep(self.delay + random.uniform(0, self.delay * 0.35))
 
     # ------------------------------------------------------------------ cache
     def _cache_path(self, url: str) -> Optional[str]:
@@ -418,7 +428,7 @@ class Fetcher:
                 last_error = error
                 if self.verbose:
                     print(f"    [retry {attempt}/{self.retries}] {error}")
-                time.sleep(min(2**attempt, 8))
+                _GATE.sleep(min(2**attempt, 8))
                 continue
 
             text = self._decode(body, headers)
@@ -427,7 +437,7 @@ class Fetcher:
             if status == 429:
                 retry_after = _retry_after_seconds(headers)
                 if attempt < self.retries:
-                    time.sleep(retry_after or min(2**attempt, 8))
+                    _GATE.sleep(retry_after or min(2**attempt, 8))
                     last_error = RateLimitError("HTTP 429", retry_after)
                     continue
                 raise RateLimitError("请求被限流（HTTP 429）。", retry_after)
@@ -442,7 +452,7 @@ class Fetcher:
                 last_error = FetchError(f"HTTP {status}")
                 if self.verbose:
                     print(f"    [retry {attempt}/{self.retries}] HTTP {status}")
-                time.sleep(min(2**attempt, 8))
+                _GATE.sleep(min(2**attempt, 8))
                 continue
             if status >= 400:
                 raise FetchError(f"HTTP {status}：{url}")
@@ -482,14 +492,14 @@ class Fetcher:
                 raw, status, resp_headers = self._fetch_bytes(url, headers, body)
             except FetchError as error:
                 last_error = error
-                time.sleep(min(2**attempt, 8))
+                _GATE.sleep(min(2**attempt, 8))
                 continue
             response = Response(self._decode(raw, resp_headers), url, status)
             if status in (403, 412) or response.looks_like_captcha():
                 raise CaptchaError("请求被百度安全验证拦截，请更新 Cookie 后重试。")
             if status >= 500:
                 last_error = FetchError(f"HTTP {status}")
-                time.sleep(min(2**attempt, 8))
+                _GATE.sleep(min(2**attempt, 8))
                 continue
             if status >= 400:
                 raise FetchError(f"HTTP {status}：{url}")

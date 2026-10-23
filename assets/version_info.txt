@@ -1,7 +1,7 @@
 VSVersionInfo(
   ffi=FixedFileInfo(
-    filevers=(1, 7, 1, 0),
-    prodvers=(1, 7, 1, 0),
+    filevers=(1, 7, 2, 0),
+    prodvers=(1, 7, 2, 0),
     mask=0x3f,
     flags=0x0,
     OS=0x40004,
@@ -17,11 +17,11 @@ VSVersionInfo(
           [
             StringStruct('CompanyName', ''),
             StringStruct('FileDescription', '贴吧楼层回复统计'),
-            StringStruct('FileVersion', '1.7.1'),
+            StringStruct('FileVersion', '1.7.2'),
             StringStruct('InternalName', 'tieba_stats'),
             StringStruct('OriginalFilename', '贴吧回复统计.exe'),
             StringStruct('ProductName', '贴吧楼层回复统计'),
-            StringStruct('ProductVersion', '1.7.1')
+            StringStruct('ProductVersion', '1.7.2')
           ]
         )
       ]

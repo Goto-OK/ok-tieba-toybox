@@ -94,6 +94,7 @@ def thread_to_dict(thread: ThreadData) -> Dict:
         "fetched_at": _iso(thread.fetched_at),
         "warnings": list(thread.warnings),
         "complete": thread.complete,
+        "fetched_pages": list(thread.fetched_pages),
         "failed_pages": list(thread.failed_pages),
         "failed_comment_floors": list(thread.failed_comment_floors),
     }
@@ -160,6 +161,7 @@ def thread_from_dict(data: Dict) -> ThreadData:
         fetched_at=_dt(str(data.get("fetched_at") or "")) or datetime.now(),
         warnings=[str(item) for item in data.get("warnings") or []],
         complete=bool(data.get("complete", True)),
+        fetched_pages=[int(item) for item in data.get("fetched_pages") or []],
         failed_pages=[int(item) for item in data.get("failed_pages") or []],
         failed_comment_floors=[
             int(item) for item in data.get("failed_comment_floors") or []
