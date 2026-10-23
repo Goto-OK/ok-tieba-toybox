@@ -2584,6 +2584,7 @@ class App:
                         )
                     )
                     return
+                local_cached = cached_user_posts(info["uid"], count, start_date, end_date, prefer)
                 profile = fetch_user_profile(
                     fetcher,
                     info["uid"],
@@ -2595,6 +2596,7 @@ class App:
                     end_date,
                     prefer,
                     topic_max_pages=self._lookup_topic_limit,
+                    cached_posts=local_cached,
                 )
                 if generation != self._lookup_generation:
                     return
