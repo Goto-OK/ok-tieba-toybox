@@ -10192,6 +10192,8 @@ class App:
                     "这是模拟流程，不打开 WebView2、不读取 Cookie、不修改登录状态。",
                     [("结束模拟", "stop")],
                 )
+                self.status_var.set("模拟验证码已结束（未联网）")
+                self._append_log("模拟验证码已结束，未发出请求。", "muted")
                 self._refresh_log_summary()
                 return
             current_cookie_mode = (
