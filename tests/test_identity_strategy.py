@@ -44,6 +44,7 @@ def test_tieba_uid_progress_counts_failures(monkeypatch):
 
 def test_tieba_cell_distinguishes_pending_and_failed_identity():
     assert _tieba_cell({"uid": "1"}) == "待补充"
+    assert _tieba_cell({"uid": "1", "tieba_uid_failed": True}) == "-"
     assert _tieba_cell({"uid": "1", "tieba_uid": "345"}) == "345"
     assert _tieba_cell({}) == "-"
 

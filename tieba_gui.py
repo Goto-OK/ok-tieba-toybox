@@ -1891,6 +1891,7 @@ class App:
                         concurrency=max(1, int(self.identity_concurrency_var.get() or 3)),
                     )
                     self._tieba_uid_failed = set(uid_stats.get("failed_uids") or [])
+                self._apply_tieba_failed_states(self.last_threads)
                 timings["贴吧ID"] = time.perf_counter() - stage_at
                 timings["总耗时"] = time.perf_counter() - began
                 self._manual_timing = dict(timings)
@@ -3304,18 +3305,25 @@ class App:
         if value:
             return value
         uid = str(item.get("uid") or item.get("user_id") or "")
-        if uid and uid in self._tieba_uid_failed:
+        if item.get("tieba_uid_failed") or (uid and uid in self._tieba_uid_failed):
             return "-"
         if uid or item.get("username") or item.get("portrait"):
             return "待补充"
         return "-"
+
+    def _apply_tieba_failed_states(self, threads) -> None:
+        failed = set(getattr(self, "_tieba_uid_failed", set()) or set())
+        for thread in threads or []:
+            for item in list(thread.floors) + list(thread.comments):
+                uid = str(getattr(item, "author_id", "") or "")
+                item.tieba_uid_failed = bool(uid and uid in failed and not item.tieba_uid)
 
     def _tieba_uid_obj_cell(self, item) -> str:
         value = str(getattr(item, "tieba_uid", "") or "")
         if value:
             return value
         uid = str(getattr(item, "author_id", "") or "")
-        if uid and uid in self._tieba_uid_failed:
+        if getattr(item, "tieba_uid_failed", False) or (uid and uid in self._tieba_uid_failed):
             return "-"
         if uid or getattr(item, "author_name", "") or getattr(item, "portrait", ""):
             return "待补充"
@@ -9479,6 +9487,7 @@ class App:
                 self._tieba_uid_missing = missing_tieba
                 self._tieba_uid_failed = set()
             self._last_identity_strategy = strategy
+            self._apply_tieba_failed_states(final_threads)
             self._write_log("tieba_uid_done", missing=self._tieba_uid_missing, users=len(final_threads))
             timings["贴吧ID"] = time.perf_counter() - stage_at
             stage_at = time.perf_counter()

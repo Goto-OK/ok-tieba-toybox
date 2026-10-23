@@ -61,7 +61,11 @@ def export_user_posts(
         (
             "贴吧ID",
             user.get("tieba_uid")
-            or ("待补充" if (user.get("uid") or user.get("username") or user.get("portrait")) else "-"),
+            or (
+                "-"
+                if user.get("tieba_uid_failed")
+                else ("待补充" if (user.get("uid") or user.get("username") or user.get("portrait")) else "-")
+            ),
         ),
         ("用户ID", user.get("uid") or ""),
         ("导出时间", datetime.now().strftime("%Y-%m-%d %H:%M:%S")),
@@ -123,7 +127,15 @@ def export_user_posts(
                     url,
                     user.get("username") or "",
                     user.get("tieba_uid")
-                    or ("待补充" if (user.get("uid") or user.get("username") or user.get("portrait")) else "-"),
+                    or (
+                        "-"
+                        if user.get("tieba_uid_failed")
+                        else (
+                            "待补充"
+                            if (user.get("uid") or user.get("username") or user.get("portrait"))
+                            else "-"
+                        )
+                    ),
                     user.get("uid") or "",
                 ]
             )
@@ -227,7 +239,11 @@ def export_user_report(
             "贴吧 ID",
             user.get("tieba_uid")
             or profile.get("tieba_uid")
-            or ("待补充" if (user.get("uid") or user.get("username") or user.get("portrait")) else "-"),
+            or (
+                "-"
+                if user.get("tieba_uid_failed")
+                else ("待补充" if (user.get("uid") or user.get("username") or user.get("portrait")) else "-")
+            ),
         ),
         ("用户 ID", profile.get("user_id") or user.get("uid") or ""),
         ("等级", user.get("level") or ""),

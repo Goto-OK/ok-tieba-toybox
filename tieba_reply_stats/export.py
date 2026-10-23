@@ -185,6 +185,11 @@ def _tieba_cell(item) -> str:
         )
     if value:
         return value
+    failed = bool(item.get("tieba_uid_failed")) if isinstance(item, dict) else bool(
+        getattr(item, "tieba_uid_failed", False)
+    )
+    if failed:
+        return "-"
     return "待补充" if has_identity else "-"
 
 
