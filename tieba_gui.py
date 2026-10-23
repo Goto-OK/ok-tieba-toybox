@@ -204,6 +204,7 @@ class App:
         self._pending_export = None
         self._identity_choice_queue: "queue.Queue[tuple]" = queue.Queue()
         self._last_stage_times: Dict[str, float] = {}
+        self._manual_timing: Dict[str, float] = {}
         self._profile_topic_limit = 50
         self._lookup_normalize_job: Optional[str] = None
         self._emoji_window: Optional[tk.Toplevel] = None
@@ -385,8 +386,8 @@ class App:
         self.tab_grid = tk.Frame(self.post_nb, bg="#eef1f5")
         self.tab_people = tk.Frame(self.post_nb, bg="#eef1f5")
         self.post_nb.add(self.tab_fetch, text="  抓取  ")
-        self.post_nb.add(self.tab_grid, text="  表格查看  ")
         self.post_nb.add(self.tab_people, text="  参与者  ")
+        self.post_nb.add(self.tab_grid, text="  表格查看  ")
 
         body = tk.Frame(self.tab_fetch, bg="#eef1f5", padx=16, pady=8)
         body.pack(fill="both", expand=True)
@@ -494,6 +495,7 @@ class App:
             textvariable=self.identity_strategy_var,
             width=20,
             state="readonly",
+            exportselection=False,
         )
         self.identity_strategy_box.pack(side="left")
         self.identity_strategy_var.trace_add("write", lambda *_: self._save_identity_strategy())
@@ -1811,7 +1813,9 @@ class App:
         if not missing_uid and not missing_tieba:
             messagebox.showinfo("无需补全", "当前没有可补充的身份。", parent=self.root)
             return
-        strategy, remember = self._ask_identity_strategy(missing_uid, missing_tieba)
+        strategy, remember = self._ask_identity_strategy(
+            missing_uid, missing_tieba, allow_detail=False
+        )
         if remember:
             self.identity_strategy_var.set(
                 {
@@ -1830,6 +1834,9 @@ class App:
 
         def worker():
             try:
+                began = time.perf_counter()
+                stage_at = began
+                timings: Dict[str, float] = {}
                 fetcher = Fetcher(cookie=self._request_cookie(), delay=0.3, verbose=False)
                 options = CollectOptions(
                     verbose=True,
@@ -1838,6 +1845,8 @@ class App:
                 )
                 for thread in self.last_threads:
                     enrich_identities(thread, fetcher, options, self._log_from_thread)
+                timings["用户ID"] = time.perf_counter() - stage_at
+                stage_at = time.perf_counter()
                 if strategy == "full":
                     enrich_tieba_uids(
                         self.last_threads,
@@ -1848,8 +1857,11 @@ class App:
                             ("identity_supplement_progress", done, total)
                         ),
                     )
+                timings["贴吧ID"] = time.perf_counter() - stage_at
+                timings["总耗时"] = time.perf_counter() - began
+                self._manual_timing = dict(timings)
                 self._persist_result(self.last_threads)
-                self._post(("identity_supplement_done", strategy))
+                self._post(("identity_supplement_done", strategy, dict(timings)))
             except Exception as error:  # noqa: BLE001
                 self._post(("identity_supplement_error", str(error)))
 
@@ -5405,11 +5417,11 @@ class App:
         self.root.clipboard_append(chr(10).join(lines))
         self.status_var.set("诊断信息已复制（不含 Cookie/昵称/正文）")
 
-    def _ask_identity_strategy(self, missing_uid: int, missing_tieba: int):
+    def _ask_identity_strategy(self, missing_uid: int, missing_tieba: int, allow_detail: bool = True):
         """返回 (strategy, remember)；关闭 = skip。"""
         result = {"strategy": "skip", "remember": False}
         win = tk.Toplevel(self.root)
-        win.title("抓取完成，选择补全方式")
+        win.title("抓取完成，选择补全方式" if allow_detail else "补全身份")
         win.configure(bg="#ffffff")
         win.resizable(False, False)
         win.transient(self.root)
@@ -5418,7 +5430,7 @@ class App:
         frame.pack(fill="both", expand=True)
         tk.Label(
             frame,
-            text="抓取完成，选择补全方式",
+            text="抓取完成，选择补全方式" if allow_detail else "补全身份",
             bg="#ffffff",
             fg="#1f2937",
             font=("Microsoft YaHei UI", 12, "bold"),
@@ -5431,20 +5443,30 @@ class App:
             font=("Microsoft YaHei UI", 9),
             justify="left",
         ).pack(anchor="w", pady=(6, 10))
-        remember_var = tk.BooleanVar(value=True)
+        remember_var = tk.BooleanVar(
+            value=bool(self.settings.get("identity_remember_choice", True))
+        )
         ttk.Checkbutton(frame, text="记住本次选择", variable=remember_var).pack(anchor="w", pady=(0, 8))
+
+        def remember_state() -> bool:
+            checked = bool(remember_var.get())
+            self.settings["identity_remember_choice"] = checked
+            save_settings(self.settings)
+            return checked
 
         def choose(strategy: str) -> None:
             result["strategy"] = strategy
-            result["remember"] = bool(remember_var.get())
+            result["remember"] = remember_state()
             win.destroy()
 
-        for text, strategy in (
-            ("跳过本次，直接完成", "skip"),
+        choices = [
+            ("跳过本次，直接完成" if allow_detail else "跳过本次", "skip"),
             ("只补用户ID", "user_id"),
             ("补全用户ID + 贴吧ID", "full"),
-            ("详情再补", "detail"),
-        ):
+        ]
+        if allow_detail:
+            choices.append(("详情再补", "detail"))
+        for text, strategy in choices:
             ttk.Button(frame, text=text, command=lambda value=strategy: choose(value)).pack(
                 fill="x", pady=2
             )
@@ -5465,6 +5487,7 @@ class App:
                 parent=win,
                 default=messagebox.NO,
             ):
+                remember_state()
                 result["strategy"] = "skip"
                 result["remember"] = False
                 win.destroy()
@@ -5478,6 +5501,11 @@ class App:
         y = self.root.winfo_rooty() + max(0, (self.root.winfo_height() - height) // 2)
         win.geometry(f"{width}x{height}+{x}+{y}")
         self.root.wait_window(win)
+        self._clear_identity_strategy_selection()
+        try:
+            self.root.focus_set()
+        except tk.TclError:
+            pass
         return result["strategy"], result["remember"]
 
     def _ask_choice(self, title: str, message: str, choices, default: int = 0):
@@ -6095,6 +6123,16 @@ class App:
         self.settings["batch_concurrency"] = max(1, min(3, value))
         save_settings(self.settings)
 
+    def _clear_identity_strategy_selection(self) -> None:
+        box = getattr(self, "identity_strategy_box", None)
+        if box is None:
+            return
+        try:
+            box.selection_clear()
+            box.icursor("end")
+        except tk.TclError:
+            pass
+
     def _save_identity_strategy(self) -> None:
         value = {
             "补全用户ID + 贴吧ID": "full",
@@ -6107,6 +6145,7 @@ class App:
         if hasattr(self, "identity_timing_var"):
             self.settings["identity_timing"] = bool(self.identity_timing_var.get())
         save_settings(self.settings)
+        self._clear_identity_strategy_selection()
 
     def _identity_strategy(self) -> str:
         return {
@@ -7741,6 +7780,7 @@ class App:
             1 for user in all_users if not user.get("tieba_uid") and (user.get("uid") or user.get("username"))
         )
         stage_times = getattr(self, "_last_stage_times", {})
+        manual_times = getattr(self, "_manual_timing", {})
         meta = {
             "软件版本": VERSION,
             "补全策略": {
@@ -7772,6 +7812,21 @@ class App:
                 f"{float(stage_times.get('总耗时') or 0):.1f} 秒"
                 if stage_times.get("总耗时")
                 else "未计时"
+            ),
+            "手动补全耗时": (
+                f"{float(manual_times.get('总耗时') or 0):.1f} 秒"
+                if manual_times.get("总耗时")
+                else "未进行"
+            ),
+            "手动补全用户ID耗时": (
+                f"{float(manual_times.get('用户ID') or 0):.1f} 秒"
+                if manual_times
+                else "未进行"
+            ),
+            "手动补全贴吧ID耗时": (
+                f"{float(manual_times.get('贴吧ID') or 0):.1f} 秒"
+                if manual_times
+                else "未进行"
             ),
             "帖子范围": "当前表格范围" if len(threads) < len(self.last_threads) else "全部帖子",
             "帖子数": str(len(threads)),
@@ -9174,6 +9229,7 @@ class App:
 
         self.stop_event.clear()
         self._identity_choice_queue = queue.Queue()
+        self._manual_timing = {}
         self._write_log("fetch_start", threads=len(urls))
         self._set_running(True)
         self._append_log(f"\n开始统计 {len(urls)} 个帖子，请耐心等待…", "title")
@@ -9508,6 +9564,8 @@ class App:
                 self._reset_people_filters()
                 self._refresh_people()
                 self._refresh_grid()
+                if str(getattr(self, "_last_identity_strategy", "full")) == "detail":
+                    self.post_nb.select(self.tab_people)
             except Exception:  # noqa: BLE001
                 pass
             self._set_running(False)
@@ -9682,13 +9740,18 @@ class App:
             if done % 10 == 0:
                 self._refresh_people()
         elif kind == "identity_supplement_done":
+            _, done_strategy, manual_timings = message
             self._supplement_running = False
             self._refresh_people()
             self._refresh_grid()
-            self.people_hint.configure(text="身份补全完成，需要重新导出")
+            seconds = float(manual_timings.get("总耗时") or 0)
+            self.people_hint.configure(
+                text=f"身份补全完成 · 本次 {seconds:.1f} 秒 · 需要重新导出"
+            )
             messagebox.showinfo(
                 "身份已更新",
-                "身份补全完成。请重新导出 Excel 以包含新的贴吧ID。",
+                f"身份补全完成，本次耗时 {seconds:.1f} 秒。\n"
+                "请重新导出 Excel 以包含新的贴吧ID。",
                 parent=self.root,
             )
         elif kind == "identity_supplement_error":

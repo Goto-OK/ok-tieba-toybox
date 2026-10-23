@@ -25,6 +25,7 @@ DEFAULTS: Dict[str, Any] = {
     "batch_concurrency": 1,
     "identity_strategy": "full",
     "identity_timing": True,
+    "identity_remember_choice": True,
     "lookup_fill_threads": False,
     "lookup_fill_pages": "1",
     "lookup_fill_limit": 50,
