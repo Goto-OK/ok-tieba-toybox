@@ -174,6 +174,20 @@ def _fmt_level(level: str) -> str:
     return f"Lv.{level}"
 
 
+def _tieba_cell(item) -> str:
+    if isinstance(item, dict):
+        value = str(item.get("tieba_uid") or "")
+        has_identity = bool(item.get("uid") or item.get("user_id") or item.get("username") or item.get("portrait"))
+    else:
+        value = str(getattr(item, "tieba_uid", "") or "")
+        has_identity = bool(
+            getattr(item, "author_id", "") or getattr(item, "author_name", "") or getattr(item, "portrait", "")
+        )
+    if value:
+        return value
+    return "待补充" if has_identity else "-"
+
+
 def profile_url(username: str, portrait: str = "") -> str:
     if username:
         return "https://tieba.baidu.com/home/main?un=" + quote(str(username))
@@ -198,7 +212,7 @@ def _user_rows(thread: ThreadData, include_op: bool = True) -> List[list]:
                 rank,
                 item["name"],
                 item["username"] or "-",
-                item.get("tieba_uid") or "-",
+                _tieba_cell(item),
                 item["uid"] or "-",
                 _fmt_level(item["level"]),
                 item["badge"] or "-",
@@ -344,7 +358,7 @@ def _write_thread(
             floor.post_no,
             floor.author,
             floor.author_name or "-",
-            floor.tieba_uid or "-",
+            _tieba_cell(floor),
             floor.author_id or "-",
             _fmt_level(floor.level),
             floor.badge or "-",
@@ -368,7 +382,7 @@ def _write_thread(
             comment.floor_author,
             comment.author,
             comment.author_name or "-",
-            comment.tieba_uid or "-",
+            _tieba_cell(comment),
             comment.author_id or "-",
             _fmt_level(comment.level),
             comment.posted_at,

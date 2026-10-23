@@ -202,6 +202,8 @@ class App:
         self._tieba_uid_cache: Dict[str, str] = {}
         self._tieba_uid_running = False
         self._pending_export = None
+        self._identity_choice_queue: "queue.Queue[tuple]" = queue.Queue()
+        self._last_stage_times: Dict[str, float] = {}
         self._profile_topic_limit = 50
         self._lookup_normalize_job: Optional[str] = None
         self._emoji_window: Optional[tk.Toplevel] = None
@@ -473,6 +475,35 @@ class App:
         ttk.Spinbox(delay_row, from_=1, to=3, width=3, textvariable=self.comment_concurrency_var).pack(
             side="left"
         )
+
+        identity_row = tk.Frame(options)
+        identity_row.grid(row=4, column=0, columnspan=3, sticky="w", pady=(6, 2))
+        tk.Label(identity_row, text="抓取完成后：").pack(side="left")
+        self.identity_strategy_var = tk.StringVar(
+            value={
+                "full": "补全用户ID + 贴吧ID",
+                "ask": "每次询问",
+                "skip": "跳过补全",
+                "user_id": "只补用户ID",
+                "detail": "详情再补",
+            }.get(str(self.settings.get("identity_strategy", "full")), "补全用户ID + 贴吧ID")
+        )
+        self.identity_strategy_box = ttk.Combobox(
+            identity_row,
+            values=("补全用户ID + 贴吧ID", "每次询问", "跳过补全", "只补用户ID", "详情再补"),
+            textvariable=self.identity_strategy_var,
+            width=20,
+            state="readonly",
+        )
+        self.identity_strategy_box.pack(side="left")
+        self.identity_strategy_var.trace_add("write", lambda *_: self._save_identity_strategy())
+        self.identity_timing_var = tk.BooleanVar(value=bool(self.settings.get("identity_timing", True)))
+        ttk.Checkbutton(
+            identity_row,
+            text="阶段计时",
+            variable=self.identity_timing_var,
+            command=self._save_identity_strategy,
+        ).pack(side="left", padx=(10, 0))
 
         # 3. 保存位置
         out_box = ttk.LabelFrame(body, text=" 保存到 ", style="Card.TLabelframe")
@@ -1035,6 +1066,10 @@ class App:
         self._batch_pending: List[Dict[str, Any]] = []
         self._batch_cancel = False
         self._marks_stale = False
+        self.supplement_btn = ttk.Button(
+            bar2, text="补全身份", command=self._supplement_identity_manual, width=10
+        )
+        self.supplement_btn.pack(side="left", padx=(6, 0))
         self.refresh_people_btn = ttk.Button(
             bar2, text="刷新列表", command=self._refresh_people, width=8
         )
@@ -1764,6 +1799,61 @@ class App:
                 self._person_popup.tk_popup(event.x_root, event.y_root)
             finally:
                 self._person_popup.grab_release()
+
+    def _supplement_identity_manual(self) -> None:
+        if getattr(self, "_supplement_running", False) or not getattr(self, "last_threads", None):
+            return
+        users = getattr(self, "people_users", [])
+        missing_uid = sum(
+            1 for user in users if not user.get("uid") and (user.get("username") or user.get("portrait"))
+        )
+        missing_tieba = sum(1 for user in users if user.get("uid") and not user.get("tieba_uid"))
+        if not missing_uid and not missing_tieba:
+            messagebox.showinfo("无需补全", "当前没有可补充的身份。", parent=self.root)
+            return
+        strategy, remember = self._ask_identity_strategy(missing_uid, missing_tieba)
+        if remember:
+            self.identity_strategy_var.set(
+                {
+                    "full": "补全用户ID + 贴吧ID",
+                    "skip": "跳过补全",
+                    "user_id": "只补用户ID",
+                    "detail": "详情再补",
+                }.get(strategy, "每次询问")
+            )
+            self._save_identity_strategy()
+        if strategy in ("skip", "detail"):
+            return
+        self._supplement_running = True
+        self.supplement_btn.configure(state="disabled")
+        self.people_hint.configure(text="正在补全身份…")
+
+        def worker():
+            try:
+                fetcher = Fetcher(cookie=self._request_cookie(), delay=0.3, verbose=False)
+                options = CollectOptions(
+                    verbose=True,
+                    log=self._log_from_thread,
+                    should_stop=lambda: False,
+                )
+                for thread in self.last_threads:
+                    enrich_identities(thread, fetcher, options, self._log_from_thread)
+                if strategy == "full":
+                    enrich_tieba_uids(
+                        self.last_threads,
+                        fetcher,
+                        options,
+                        self._log_from_thread,
+                        progress=lambda done, total: self._post(
+                            ("identity_supplement_progress", done, total)
+                        ),
+                    )
+                self._persist_result(self.last_threads)
+                self._post(("identity_supplement_done", strategy))
+            except Exception as error:  # noqa: BLE001
+                self._post(("identity_supplement_error", str(error)))
+
+        threading.Thread(target=worker, daemon=True).start()
 
     def _auto_fill_levels(self) -> None:
         """切到参与者时，如果还有缺等级的，自动在后台补一次（不用手动点）。"""
@@ -2992,7 +3082,7 @@ class App:
             )
         info = (
             f"昵称 {display_text(profile.get('nickname')) or '未知'} | 用户名 {profile.get('username') or '未知'} | "
-            f"贴吧ID {profile.get('tieba_uid') or '-'} | 用户ID {profile.get('user_id') or '未知'} | "
+            f"贴吧ID {self._tieba_uid_cell(profile)} | 用户ID {profile.get('user_id') or '未知'} | "
             f"发言 {len(posts)} 条 | 关注 {len(combined)} 个{supplement_note}"
         )
         if profile.get("followed_count"):
@@ -3117,7 +3207,7 @@ class App:
         if column == "username":
             return user.get("username") or "-"
         if column == "tieba_uid":
-            return user.get("tieba_uid") or "-"
+            return self._tieba_uid_cell(user)
         if column == "uid":
             return user.get("uid") or "-"
         return ""
@@ -3191,12 +3281,28 @@ class App:
                 return [thread]
         return list(self.last_threads)
 
+    def _tieba_uid_cell(self, item) -> str:
+        value = str(item.get("tieba_uid") or "")
+        if value:
+            return value
+        if item.get("uid") or item.get("user_id") or item.get("username") or item.get("portrait"):
+            return "待补充"
+        return "-"
+
+    def _tieba_uid_obj_cell(self, item) -> str:
+        value = str(getattr(item, "tieba_uid", "") or "")
+        if value:
+            return value
+        if getattr(item, "author_id", "") or getattr(item, "author_name", "") or getattr(item, "portrait", ""):
+            return "待补充"
+        return "-"
+
     def _person_uid_text(self, user) -> str:
         uid = str(user.get("uid") or "")
         if uid:
             return uid
         if user.get("username") or user.get("portrait"):
-            return "待补全"
+            return "待补充"
         return "-"
 
     def _person_mark_cell(self, user) -> str:
@@ -3219,7 +3325,7 @@ class App:
                 return
             values[0] = self._person_mark_cell(user)
             values[2] = str(user.get("username") or "-")
-            values[3] = str(user.get("tieba_uid") or "-")
+            values[3] = self._tieba_uid_cell(user)
             values[4] = self._person_uid_text(user)
             level = str(user.get("level") or "")
             if level:
@@ -3304,7 +3410,7 @@ class App:
                     self._person_mark_cell(user),
                     self._display_name(user),
                     user["username"] or "-",
-                    user.get("tieba_uid") or "-",
+                    self._tieba_uid_cell(user),
                     self._person_uid_text(user),
                     f"Lv.{user['level']}" if user["level"] else "-",
                     user["floor"],
@@ -3326,12 +3432,18 @@ class App:
         self.people_hint.configure(
             text=f"v{VERSION} · 当前 {len(filtered)} / 共 {len(users)} 人 · 有等级 {with_level}{mode_note}{warning_note}{stale_note}"
         )
+        if hasattr(self, "supplement_btn"):
+            missing_identity = any(
+                (not user.get("uid") and (user.get("username") or user.get("portrait")))
+                or (user.get("uid") and not user.get("tieba_uid"))
+                for user in self.people_users
+            )
+            self.supplement_btn.configure(state="normal" if missing_identity else "disabled")
         self.profile_status.configure(text="选择左边一个人查看详情")
         self._set_profile_cache_note("")
         for tree in (self.profile_forum_tree, self.profile_post_tree):
             for item in tree.get_children():
                 tree.delete(item)
-        self._auto_fill_tieba_uids()
 
     def _people_go(self, value) -> None:
         users = getattr(self, "people_users", [])
@@ -5293,6 +5405,81 @@ class App:
         self.root.clipboard_append(chr(10).join(lines))
         self.status_var.set("诊断信息已复制（不含 Cookie/昵称/正文）")
 
+    def _ask_identity_strategy(self, missing_uid: int, missing_tieba: int):
+        """返回 (strategy, remember)；关闭 = skip。"""
+        result = {"strategy": "skip", "remember": False}
+        win = tk.Toplevel(self.root)
+        win.title("抓取完成，选择补全方式")
+        win.configure(bg="#ffffff")
+        win.resizable(False, False)
+        win.transient(self.root)
+        win.grab_set()
+        frame = tk.Frame(win, bg="#ffffff", padx=20, pady=16)
+        frame.pack(fill="both", expand=True)
+        tk.Label(
+            frame,
+            text="抓取完成，选择补全方式",
+            bg="#ffffff",
+            fg="#1f2937",
+            font=("Microsoft YaHei UI", 12, "bold"),
+        ).pack(anchor="w")
+        tk.Label(
+            frame,
+            text=f"缺用户ID：{missing_uid} 人\n缺贴吧ID：{missing_tieba} 人",
+            bg="#ffffff",
+            fg="#475569",
+            font=("Microsoft YaHei UI", 9),
+            justify="left",
+        ).pack(anchor="w", pady=(6, 10))
+        remember_var = tk.BooleanVar(value=True)
+        ttk.Checkbutton(frame, text="记住本次选择", variable=remember_var).pack(anchor="w", pady=(0, 8))
+
+        def choose(strategy: str) -> None:
+            result["strategy"] = strategy
+            result["remember"] = bool(remember_var.get())
+            win.destroy()
+
+        for text, strategy in (
+            ("跳过本次，直接完成", "skip"),
+            ("只补用户ID", "user_id"),
+            ("补全用户ID + 贴吧ID", "full"),
+            ("详情再补", "detail"),
+        ):
+            ttk.Button(frame, text=text, command=lambda value=strategy: choose(value)).pack(
+                fill="x", pady=2
+            )
+        tk.Label(
+            frame,
+            text="关闭窗口或按 Esc = 跳过本次补全，会先二次确认，不记住选择。",
+            bg="#ffffff",
+            fg="#8a94a6",
+            font=("Microsoft YaHei UI", 8),
+            wraplength=420,
+            justify="left",
+        ).pack(anchor="w", pady=(8, 0))
+
+        def on_close() -> None:
+            if messagebox.askyesno(
+                "跳过本次补全？",
+                "关闭将跳过本次补全，并使用现有数据保存/导出。\n不记住本次选择。",
+                parent=win,
+                default=messagebox.NO,
+            ):
+                result["strategy"] = "skip"
+                result["remember"] = False
+                win.destroy()
+
+        win.protocol("WM_DELETE_WINDOW", on_close)
+        win.bind("<Escape>", lambda _event: on_close())
+        win.update_idletasks()
+        width = 460
+        height = max(320, win.winfo_reqheight() + 16)
+        x = self.root.winfo_rootx() + max(0, (self.root.winfo_width() - width) // 2)
+        y = self.root.winfo_rooty() + max(0, (self.root.winfo_height() - height) // 2)
+        win.geometry(f"{width}x{height}+{x}+{y}")
+        self.root.wait_window(win)
+        return result["strategy"], result["remember"]
+
     def _ask_choice(self, title: str, message: str, choices, default: int = 0):
         """带明确按钮文案的模态选择框；choices=[(label,value),...]，None 表示取消。"""
         win = tk.Toplevel(self.root)
@@ -5463,6 +5650,17 @@ class App:
             )
         if hasattr(self, "auto_refresh_var"):
             self.auto_refresh_var.set(bool(settings.get("auto_refresh_old", False)))
+        if hasattr(self, "identity_strategy_var"):
+            self.identity_strategy_var.set(
+                {
+                    "full": "补全用户ID + 贴吧ID",
+                    "ask": "每次询问",
+                    "skip": "跳过补全",
+                    "user_id": "只补用户ID",
+                    "detail": "详情再补",
+                }.get(str(settings.get("identity_strategy", "full")), "补全用户ID + 贴吧ID")
+            )
+            self.identity_timing_var.set(bool(settings.get("identity_timing", True)))
         if hasattr(self, "lookup_fill_var"):
             self.lookup_fill_var.set(bool(settings.get("lookup_fill_threads", False)))
             self.lookup_fill_pages_var.set(
@@ -5896,6 +6094,28 @@ class App:
             value = 1
         self.settings["batch_concurrency"] = max(1, min(3, value))
         save_settings(self.settings)
+
+    def _save_identity_strategy(self) -> None:
+        value = {
+            "补全用户ID + 贴吧ID": "full",
+            "每次询问": "ask",
+            "跳过补全": "skip",
+            "只补用户ID": "user_id",
+            "详情再补": "detail",
+        }.get(self.identity_strategy_var.get(), "full")
+        self.settings["identity_strategy"] = value
+        if hasattr(self, "identity_timing_var"):
+            self.settings["identity_timing"] = bool(self.identity_timing_var.get())
+        save_settings(self.settings)
+
+    def _identity_strategy(self) -> str:
+        return {
+            "补全用户ID + 贴吧ID": "full",
+            "每次询问": "ask",
+            "跳过补全": "skip",
+            "只补用户ID": "user_id",
+            "详情再补": "detail",
+        }.get(getattr(self, "identity_strategy_var", tk.StringVar(value="")).get(), "full")
 
     def _on_lookup_fill_changed(self) -> None:
         enabled = bool(self.lookup_fill_var.get())
@@ -6465,7 +6685,7 @@ class App:
                     index,
                     self._display_name(item),
                     display_text(item["username"]),
-                    item.get("tieba_uid") or "-",
+                    self._tieba_uid_cell(item),
                     item["uid"],
                     item["level"],
                     display_text(item["badge"]),
@@ -6483,7 +6703,7 @@ class App:
                     index,
                     self._display_name(item),
                     display_text(item["username"]),
-                    item.get("tieba_uid") or "-",
+                    self._tieba_uid_cell(item),
                     item["uid"],
                     item["level"],
                     display_text(item["badge"]),
@@ -6514,7 +6734,7 @@ class App:
                             f"{thread_index}. {title}",
                             self._display_name(item),
                             display_text(item["username"]),
-                            item.get("tieba_uid") or "-",
+                            self._tieba_uid_cell(item),
                             item["uid"],
                             item["level"],
                             display_text(item["badge"]),
@@ -6548,7 +6768,7 @@ class App:
                         floor.post_no,
                         display_text(floor.author),
                         display_text(floor.author_name),
-                        floor.tieba_uid or "-",
+                        self._tieba_uid_obj_cell(floor),
                         floor.author_id,
                         floor.level,
                         display_text(floor.badge),
@@ -6564,7 +6784,7 @@ class App:
                         comment.floor_no,
                         display_text(comment.author),
                         display_text(comment.author_name),
-                        comment.tieba_uid or "-",
+                        self._tieba_uid_obj_cell(comment),
                         comment.author_id,
                         comment.level,
                         display_text(comment.content),
@@ -7434,8 +7654,6 @@ class App:
 
     def _wait_for_tieba_uid_export(self, callback) -> bool:
         if not getattr(self, "_tieba_uid_running", False):
-            self._auto_fill_tieba_uids()
-        if not getattr(self, "_tieba_uid_running", False):
             return True
         choice = self._ask_choice(
             "贴吧ID补全中",
@@ -7518,8 +7736,43 @@ class App:
         warnings = [f"{thread.meta.title or thread.meta.tid}：{len(thread.warnings)} 条"
                     for thread in threads if thread.warnings]
         empty = [thread.meta.title or thread.meta.tid for thread in threads if not (thread.floors or thread.comments)]
+        all_users = list(getattr(self, "people_users", []))
+        pending_tieba = sum(
+            1 for user in all_users if not user.get("tieba_uid") and (user.get("uid") or user.get("username"))
+        )
+        stage_times = getattr(self, "_last_stage_times", {})
         meta = {
             "软件版本": VERSION,
+            "补全策略": {
+                "full": "补全用户ID + 贴吧ID",
+                "ask": "每次询问",
+                "skip": "跳过补全",
+                "user_id": "只补用户ID",
+                "detail": "详情再补",
+            }.get(
+                str(getattr(self, "_last_identity_strategy", self.settings.get("identity_strategy", "full"))),
+                "补全用户ID + 贴吧ID",
+            ),
+            "补全状态": (
+                "跳过"
+                if str(
+                    getattr(
+                        self,
+                        "_last_identity_strategy",
+                        self.settings.get("identity_strategy", "full"),
+                    )
+                )
+                in ("skip", "detail")
+                else ("部分" if pending_tieba or getattr(self, "_tieba_uid_missing", 0) else "完成")
+            ),
+            "补全用户ID失败": str(int(getattr(self, "_identity_missing", 0) or 0)),
+            "补全贴吧ID失败": str(int(getattr(self, "_tieba_uid_missing", 0) or 0)),
+            "待补充贴吧ID用户": str(pending_tieba),
+            "总耗时": (
+                f"{float(stage_times.get('总耗时') or 0):.1f} 秒"
+                if stage_times.get("总耗时")
+                else "未计时"
+            ),
             "帖子范围": "当前表格范围" if len(threads) < len(self.last_threads) else "全部帖子",
             "帖子数": str(len(threads)),
             "用户范围": scope_user,
@@ -8497,6 +8750,7 @@ class App:
         if level:
             self._apply_level_to_threads(user, level)
         profile_tieba = str(profile.get("tieba_uid") or "")
+        had_tieba = bool(user.get("tieba_uid"))
         if profile_tieba:
             user["tieba_uid"] = profile_tieba
             iid = user.get("_iid")
@@ -8507,6 +8761,8 @@ class App:
                     self.people_tree.item(iid, values=values)
                 except tk.TclError:
                     pass
+            if not had_tieba and getattr(self, "last_output", None):
+                self._append_log("身份已更新，需要重新导出 Excel。", "muted")
         if level and not user.get("level"):
             user["level"] = level
             iid = user.get("_iid")
@@ -8652,7 +8908,7 @@ class App:
                 pass
 
         status = (
-            f"{display_text(user['name'])} | {user['username'] or '-'} | 贴吧ID {user.get('tieba_uid') or '-'} | "
+            f"{display_text(user['name'])} | {user['username'] or '-'} | 贴吧ID {self._tieba_uid_cell(user)} | "
             f"用户ID {user['uid'] or '-'} | Lv.{level or '-'} | 发言 {len(posts)} | 关注 {len(combined)}"
         )
         if profile.get("fans") is not None:
@@ -8765,13 +9021,15 @@ class App:
                 return
         self.last_threads = threads
         self._tieba_uid_tried = set()
-        self._enrich_restored_identities()
         try:
             self._refresh_people()
             self._refresh_grid()
         except Exception:  # noqa: BLE001
             pass
-        self.status_var.set(f"已恢复 {len(threads)} 个帖子（{len(self._aggregate_users())} 位用户）")
+        self.status_var.set(
+            f"已恢复 {len(threads)} 个帖子（{len(self._aggregate_users())} 位用户）；"
+            "缺失身份可点「补全身份」"
+        )
 
     def _enrich_restored_identities(self) -> None:
         missing = sum(
@@ -8914,13 +9172,24 @@ class App:
         self.last_include_op = include_op
 
         self.stop_event.clear()
+        self._identity_choice_queue = queue.Queue()
         self._write_log("fetch_start", threads=len(urls))
         self._set_running(True)
         self._append_log(f"\n开始统计 {len(urls)} 个帖子，请耐心等待…", "title")
         base_threads = list(self.last_threads)
         self.worker = threading.Thread(
             target=self._run_worker,
-            args=(urls, output, options, cookie, delay, include_op, export, base_threads),
+            args=(
+                urls,
+                output,
+                options,
+                cookie,
+                delay,
+                include_op,
+                export,
+                base_threads,
+                self._identity_strategy(),
+            ),
             daemon=True,
         )
         self.worker.start()
@@ -8977,8 +9246,22 @@ class App:
         self.root.destroy()
 
     # ------------------------------------------------------------- worker
-    def _run_worker(self, urls, output, options, cookie, delay, include_op, export=True, base_threads=None) -> None:
+    def _run_worker(
+        self,
+        urls,
+        output,
+        options,
+        cookie,
+        delay,
+        include_op,
+        export=True,
+        base_threads=None,
+        identity_strategy="full",
+    ) -> None:
         completed = []
+        began = time.perf_counter()
+        stage_at = began
+        timings: Dict[str, float] = {}
         try:
             fetcher = Fetcher(cookie=cookie, delay=delay, verbose=False)
             for index, url in enumerate(urls, start=1):
@@ -9021,62 +9304,121 @@ class App:
                 for warning in thread.warnings[:3]:
                     self._post(("log", f"    ! {warning}", "muted"))
 
+            timings["抓取"] = time.perf_counter() - stage_at
+            stage_at = time.perf_counter()
             if not completed:
                 self._post(
                     ("error", "没有抓到任何帖子。\n\n可能原因：帖子被删、链接不对，或者被安全验证拦截。")
                 )
                 return
 
-            # 补全身份属于抓取完成的一部分：补完才允许界面进入“完成”。
-            identity_options = CollectOptions(
-                verbose=True,
-                log=self._log_from_thread,
-                should_stop=self.stop_event.is_set,
-            )
-            self._post(("stage", "抓取完成，正在补全身份…"))
-            for thread in completed:
-                enrich_identities(thread, fetcher, identity_options, self._log_from_thread)
-            self._identity_missing = sum(
-                1
-                for thread in completed
-                for item in list(thread.floors) + list(thread.comments)
-                if not item.author_id and (item.author_name or item.portrait)
-            )
-            self._write_log(
-                "identity_done",
-                missing=self._identity_missing,
-                users=sum(len(thread.user_stats()) for thread in completed),
-            )
-            if self._identity_missing:
-                self._post(
-                    ("log", f"  ⚠ 仍有 {self._identity_missing} 条身份待补全（不影响已抓内容）", "err")
-                )
-
             final_threads = []
             by_tid = {str(thread.meta.tid): thread for thread in (base_threads or [])}
             for thread in completed:
                 by_tid[str(thread.meta.tid)] = thread
             final_threads = list(by_tid.values())
+            timings["合并"] = time.perf_counter() - stage_at
+            stage_at = time.perf_counter()
 
-            self._post(("stage", "身份完成，正在补全贴吧ID…"))
-            uid_stats = enrich_tieba_uids(
-                final_threads,
-                fetcher,
-                identity_options,
-                self._log_from_thread,
-                progress=lambda done, total: self._post(
-                    ("stage", f"正在补全贴吧ID {done}/{total}…")
-                ),
+            identity_options = CollectOptions(
+                verbose=True,
+                log=self._log_from_thread,
+                should_stop=self.stop_event.is_set,
             )
-            self._tieba_uid_missing = int(uid_stats.get("failed") or 0)
+            missing_uid = 0
+            missing_tieba = 0
+            seen_users: Dict[str, Dict[str, object]] = {}
+            for thread in final_threads:
+                for item in list(thread.floors) + list(thread.comments):
+                    uid = str(getattr(item, "author_id", "") or "")
+                    key = (
+                        f"uid:{uid}"
+                        if uid
+                        else (
+                            f"un:{item.author_name}"
+                            if item.author_name
+                            else (f"pt:{item.portrait}" if item.portrait else f"nm:{item.author}")
+                        )
+                    )
+                    info = seen_users.setdefault(key, {"uid": uid, "tieba": ""})
+                    if getattr(item, "tieba_uid", ""):
+                        info["tieba"] = item.tieba_uid
+            for info in seen_users.values():
+                if not info["uid"]:
+                    missing_uid += 1
+                elif not info["tieba"]:
+                    missing_tieba += 1
+
+            strategy = identity_strategy
+            if strategy == "ask" and (missing_uid or missing_tieba):
+                self._post(("identity_ask", missing_uid, missing_tieba))
+                choice = None
+                remember = False
+                while choice is None:
+                    try:
+                        choice, remember = self._identity_choice_queue.get(timeout=0.2)
+                    except queue.Empty:
+                        if self.stop_event.is_set():
+                            choice, remember = "skip", False
+                strategy = choice
+                if remember:
+                    self._post(("identity_remember", strategy))
+            elif strategy == "ask":
+                strategy = "skip"
+
+            if strategy in ("full", "user_id"):
+                self._post(("stage", "抓取完成，正在补全身份…"))
+                for thread in final_threads:
+                    enrich_identities(thread, fetcher, identity_options, self._log_from_thread)
+                self._identity_missing = sum(
+                    1
+                    for thread in final_threads
+                    for item in list(thread.floors) + list(thread.comments)
+                    if not item.author_id and (item.author_name or item.portrait)
+                )
+            else:
+                self._identity_missing = missing_uid
+            self._write_log(
+                "identity_done",
+                missing=self._identity_missing,
+                users=sum(len(thread.user_stats()) for thread in final_threads),
+            )
+            if self._identity_missing:
+                self._post(
+                    ("log", f"  ⚠ 仍有 {self._identity_missing} 条身份待补充（不影响已抓内容）", "err")
+                )
+
+            timings["用户ID"] = time.perf_counter() - stage_at
+            stage_at = time.perf_counter()
+            if strategy == "full":
+                self._post(("stage", "身份完成，正在补全贴吧ID…"))
+                uid_stats = enrich_tieba_uids(
+                    final_threads,
+                    fetcher,
+                    identity_options,
+                    self._log_from_thread,
+                    progress=lambda done, total: self._post(
+                        ("stage", f"正在补全贴吧ID {done}/{total}…")
+                    ),
+                )
+                self._tieba_uid_missing = int(uid_stats.get("failed") or 0)
+            else:
+                self._tieba_uid_missing = missing_tieba
+            self._last_identity_strategy = strategy
             self._write_log("tieba_uid_done", missing=self._tieba_uid_missing, users=len(final_threads))
+            timings["贴吧ID"] = time.perf_counter() - stage_at
+            stage_at = time.perf_counter()
             self._post(("stage", "正在保存结果…"))
             self._persist_result(final_threads)
             self._write_log("save", threads=len(final_threads), stage="identity")
+            timings["保存"] = time.perf_counter() - stage_at
+            stage_at = time.perf_counter()
 
             if export:
                 self._post(("stage", "正在生成 Excel…"))
                 export_workbook(output, final_threads, include_op=include_op)
+                timings["导出"] = time.perf_counter() - stage_at
+                stage_at = time.perf_counter()
                 self._write_log("export", ok=True, threads=len(final_threads))
                 self._write_log(
                     "done",
@@ -9084,15 +9426,18 @@ class App:
                     users=sum(len(thread.user_stats()) for thread in final_threads),
                     exported=True,
                 )
-                self._post(("done", output, len(final_threads), list(final_threads)))
+                timings["总耗时"] = time.perf_counter() - began
+                self._post(("done", output, len(final_threads), list(final_threads), dict(timings)))
             else:
+                timings["导出"] = 0.0
+                timings["总耗时"] = time.perf_counter() - began
                 self._write_log(
                     "done",
                     threads=len(final_threads),
                     users=sum(len(thread.user_stats()) for thread in final_threads),
                     exported=False,
                 )
-                self._post(("done", None, len(final_threads), list(final_threads)))
+                self._post(("done", None, len(final_threads), list(final_threads), dict(timings)))
         except CaptchaError as error:
             self._write_log("error", error="CaptchaError")
             self._post(("captcha", str(error)))
@@ -9146,7 +9491,11 @@ class App:
         elif kind == "stage":
             self.status_var.set(message[1])
         elif kind == "done":
-            _, output, count, threads = message
+            _, output, count, threads, timings = message
+            self._last_stage_times = dict(timings)
+            for key in ("抓取", "合并", "用户ID", "贴吧ID", "保存", "导出", "总耗时"):
+                if key in timings:
+                    self._append_log(f"  {key}耗时：{timings[key]:.1f} 秒", "muted")
             self.last_output = output
             self.last_threads = self._merge_threads(threads or [])
             self._persist_result(self.last_threads)
@@ -9163,6 +9512,7 @@ class App:
             self._set_running(False)
             identity_missing = int(getattr(self, "_identity_missing", 0) or 0)
             tieba_missing = int(getattr(self, "_tieba_uid_missing", 0) or 0)
+            total_seconds = float(timings.get("总耗时") or 0)
             status = f"完成 · {len(self.last_threads)} 个帖子 / {len(self._aggregate_users())} 位用户"
             if identity_missing:
                 status += f" · 身份待补全 {identity_missing} 条"
@@ -9177,6 +9527,7 @@ class App:
                 messagebox.showinfo(
                     "全部完成",
                     f"统计完成，共 {count} 个帖子。\n\n文件已保存到：\n{output}\n\n"
+                    + f"总耗时：{total_seconds:.1f} 秒。\n\n"
                     + (f"贴吧ID失败 {tieba_missing} 人。\n\n" if tieba_missing else "")
                     + "切到「参与者」选项卡可以点开每个人，查看他的发言和关注的贴吧。",
                     parent=self.root,
@@ -9188,7 +9539,8 @@ class App:
                 messagebox.showinfo(
                     "全部完成",
                     f"统计完成，共 {count} 个帖子。\n\n按设置没有导出 Excel，可以切到「参与者」看结果，"
-                    "或点「导出 Excel」现在生成。"
+                    "或点「导出 Excel」现在生成。\n\n"
+                    + f"总耗时：{total_seconds:.1f} 秒。"
                     + (f"\n\n贴吧ID失败 {tieba_missing} 人。" if tieba_missing else ""),
                     parent=self.root,
                 )
@@ -9303,6 +9655,47 @@ class App:
             self._enriching = False
             self.people_hint.configure(text="补全失败")
             self._append_log(f"补全等级失败：{message[1]}", "err")
+        elif kind == "identity_ask":
+            _, missing_uid, missing_tieba = message
+            strategy, remember = self._ask_identity_strategy(missing_uid, missing_tieba)
+            if remember:
+                label = {
+                    "full": "补全用户ID + 贴吧ID",
+                    "skip": "跳过补全",
+                    "user_id": "只补用户ID",
+                    "detail": "详情再补",
+                }.get(strategy, "每次询问")
+                self.identity_strategy_var.set(label)
+                self._save_identity_strategy()
+            self._identity_choice_queue.put((strategy, remember))
+        elif kind == "identity_supplement_progress":
+            _, done, total = message
+            self.people_hint.configure(text=f"正在补全身份 {done}/{total}…")
+            if done % 10 == 0:
+                self._refresh_people()
+        elif kind == "identity_supplement_done":
+            self._supplement_running = False
+            self._refresh_people()
+            self._refresh_grid()
+            self.people_hint.configure(text="身份补全完成，需要重新导出")
+            messagebox.showinfo(
+                "身份已更新",
+                "身份补全完成。请重新导出 Excel 以包含新的贴吧ID。",
+                parent=self.root,
+            )
+        elif kind == "identity_supplement_error":
+            self._supplement_running = False
+            self._refresh_people()
+            self.people_hint.configure(text=f"补全失败：{friendly_error(RuntimeError(message[1]))}")
+        elif kind == "identity_remember":
+            label = {
+                "full": "补全用户ID + 贴吧ID",
+                "skip": "跳过补全",
+                "user_id": "只补用户ID",
+                "detail": "详情再补",
+            }.get(message[1], "每次询问")
+            self.identity_strategy_var.set(label)
+            self._save_identity_strategy()
         elif kind == "levels_filled":
             self._auto_filling = False
             self._refresh_people()

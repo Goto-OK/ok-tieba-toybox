@@ -58,7 +58,11 @@ def export_user_posts(
     info = [
         ("昵称", user.get("name") or ""),
         ("用户名", user.get("username") or ""),
-        ("贴吧ID", user.get("tieba_uid") or ""),
+        (
+            "贴吧ID",
+            user.get("tieba_uid")
+            or ("待补充" if (user.get("uid") or user.get("username") or user.get("portrait")) else "-"),
+        ),
         ("用户ID", user.get("uid") or ""),
         ("导出时间", datetime.now().strftime("%Y-%m-%d %H:%M:%S")),
         ("日期范围", f"{start_date or '不限'} ~ {end_date or '不限'}"),
@@ -118,7 +122,8 @@ def export_user_posts(
                     post.get("content") or "",
                     url,
                     user.get("username") or "",
-                    user.get("tieba_uid") or "",
+                    user.get("tieba_uid")
+                    or ("待补充" if (user.get("uid") or user.get("username") or user.get("portrait")) else "-"),
                     user.get("uid") or "",
                 ]
             )
@@ -218,7 +223,12 @@ def export_user_report(
     info = [
         ("昵称", profile.get("nickname") or user.get("name") or ""),
         ("用户名", profile.get("username") or user.get("username") or ""),
-        ("贴吧 ID", user.get("tieba_uid") or profile.get("tieba_uid") or ""),
+        (
+            "贴吧 ID",
+            user.get("tieba_uid")
+            or profile.get("tieba_uid")
+            or ("待补充" if (user.get("uid") or user.get("username") or user.get("portrait")) else "-"),
+        ),
         ("用户 ID", profile.get("user_id") or user.get("uid") or ""),
         ("等级", user.get("level") or ""),
         ("粉丝", profile.get("fans") if profile.get("fans") is not None else ""),

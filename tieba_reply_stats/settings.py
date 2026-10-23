@@ -23,6 +23,8 @@ DEFAULTS: Dict[str, Any] = {
     "auto_refresh_old": False,
     "removed_thread_action": "keep",  # keep / remove / ask
     "batch_concurrency": 1,
+    "identity_strategy": "full",
+    "identity_timing": True,
     "lookup_fill_threads": False,
     "lookup_fill_pages": "1",
     "lookup_fill_limit": 50,
@@ -52,6 +54,7 @@ _CHOICES = {
     "theme_mode": ("light", "dark", "system"),
     "accent": ("blue", "green", "purple", "orange", "pink", "cyan", "red"),
     "lookup_fill_pages": ("1", "full"),
+    "identity_strategy": ("full", "ask", "skip", "user_id", "detail"),
 }
 
 
