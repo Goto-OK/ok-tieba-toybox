@@ -8763,6 +8763,7 @@ class App:
                     pass
             if not had_tieba and getattr(self, "last_output", None):
                 self._append_log("身份已更新，需要重新导出 Excel。", "muted")
+                self.profile_status.configure(text="身份已更新，需要重新导出")
         if level and not user.get("level"):
             user["level"] = level
             iid = user.get("_iid")
@@ -9513,11 +9514,18 @@ class App:
             identity_missing = int(getattr(self, "_identity_missing", 0) or 0)
             tieba_missing = int(getattr(self, "_tieba_uid_missing", 0) or 0)
             total_seconds = float(timings.get("总耗时") or 0)
+            missing_label = (
+                "待补充" if str(getattr(self, "_last_identity_strategy", "full")) in ("skip", "detail", "user_id") else "失败"
+            )
             status = f"完成 · {len(self.last_threads)} 个帖子 / {len(self._aggregate_users())} 位用户"
+            last_strategy = str(getattr(self, "_last_identity_strategy", "full"))
             if identity_missing:
-                status += f" · 身份待补全 {identity_missing} 条"
+                status += f" · 身份待补充 {identity_missing} 条"
             if tieba_missing:
-                status += f" · 贴吧ID失败 {tieba_missing} 人"
+                if last_strategy in ("skip", "detail", "user_id"):
+                    status += f" · 贴吧ID待补充 {tieba_missing} 人"
+                else:
+                    status += f" · 贴吧ID失败 {tieba_missing} 人"
             self.status_var.set(status)
             self._refresh_cache_stats_if_visible()
             self._refresh_log_summary()
@@ -9528,7 +9536,7 @@ class App:
                     "全部完成",
                     f"统计完成，共 {count} 个帖子。\n\n文件已保存到：\n{output}\n\n"
                     + f"总耗时：{total_seconds:.1f} 秒。\n\n"
-                    + (f"贴吧ID失败 {tieba_missing} 人。\n\n" if tieba_missing else "")
+                    + (f"贴吧ID{missing_label} {tieba_missing} 人。\n\n" if tieba_missing else "")
                     + "切到「参与者」选项卡可以点开每个人，查看他的发言和关注的贴吧。",
                     parent=self.root,
                 )
@@ -9541,7 +9549,7 @@ class App:
                     f"统计完成，共 {count} 个帖子。\n\n按设置没有导出 Excel，可以切到「参与者」看结果，"
                     "或点「导出 Excel」现在生成。\n\n"
                     + f"总耗时：{total_seconds:.1f} 秒。"
-                    + (f"\n\n贴吧ID失败 {tieba_missing} 人。" if tieba_missing else ""),
+                    + (f"\n\n贴吧ID{missing_label} {tieba_missing} 人。" if tieba_missing else ""),
                     parent=self.root,
                 )
         elif kind == "cancelled_partial":
