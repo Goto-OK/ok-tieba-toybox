@@ -3676,8 +3676,12 @@ class App:
                 f"{'还有更多' if self._love_has_next else '已到末页'}；数据来自恋文（第三方）"
             )
         )
-        if self.love_auto_var.get() and self._love_has_next and not self._love_stop.is_set():
+        if self.love_auto_var.get() and self._love_has_next and self._love_page < 100 and not self._love_stop.is_set():
             self.root.after(120, self._next_love)
+        elif self._love_page >= 100 and self._love_has_next:
+            self.love_status.configure(
+                text=f"第 {self._love_page} 页 / 自动补全已到 100 页上限，可手动继续；数据来自恋文（第三方）"
+            )
 
     def _export_love(self) -> None:
         if not self._love_rows:
