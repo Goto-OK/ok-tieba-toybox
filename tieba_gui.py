@@ -259,6 +259,7 @@ class App:
         self.root.after(120, self._poll_queue)
         self.root.protocol("WM_DELETE_WINDOW", self._on_close)
         self.root.bind("<F1>", lambda _event: self._open_usage_window())
+        self.root.bind("<Control-Shift-C>", self._simulate_captcha)
         self.root.bind("<Escape>", self._on_escape)
 
         saved = load_cookie()
@@ -5587,6 +5588,19 @@ class App:
             return max(0, x), max(0, y)
         except tk.TclError:
             return 0, 0
+
+    def _simulate_captcha(self, _event=None) -> None:
+        """隐藏测试入口：不发网络请求，只走验证码处理流程。"""
+        if self._network_task_active() or getattr(self, "_active_choice_window", None):
+            return
+        self._append_log("模拟验证码：未发出网络请求，仅测试界面流程。", "muted")
+        self._set_running(True)
+        self.root.after(
+            20,
+            lambda: self._handle_message(
+                ("captcha", "模拟验证码：未发出网络请求，仅用于测试界面流程。")
+            ),
+        )
 
     def _test_embedded_verification(self) -> None:
         if getattr(self, "_webview_running", False):

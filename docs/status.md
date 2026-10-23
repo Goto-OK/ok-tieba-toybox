@@ -177,6 +177,8 @@ Android 核心同步通过
 - 验证码弹窗改为“转到登录模式（完整 Cookie）”并打开浏览器；
 - 游客模式记录 failed_pages / failed_comment_floors，新增「重试失败部分」；
 - 断点、帖子 complete、tieba_uid_failed、user_id_failed 持久化到最近结果；
+- 隐藏测试入口 Ctrl+Shift+C 模拟验证码，不联网；
+- Tk 弹窗/停止竞态自动化测试；
 - 手动补全/重试与抓取任务互斥；游客 protobuf 走 Fetcher 代理；
 - WebView2 窗口按主窗口中心定位；
 - 恢复后断点为空不误判完成；
