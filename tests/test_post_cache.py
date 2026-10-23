@@ -66,21 +66,21 @@ def test_cached_user_posts_rejects_earlier_start():
     assert cached_user_posts("u3", 1, "2025-01-01", "") is None
 
 
-def test_cached_user_posts_rejects_broader_start():
+def test_cached_user_posts_allows_no_start_query():
     cache = post_cache.cache()
     cache.clear()
     cache.put_user(
         "u6",
         {
             "posts": [_post("2025-02-01", 1738368000)],
-            "start_date": "2025-02-01",
-            "end_date": "",
+            "coverage_start": "2025-02-01",
+            "coverage_end": "2025-02-01",
             "replies_exhausted": True,
             "topic_exhausted": True,
         },
         priority=post_cache.PRIORITY_LOW,
     )
-    assert cached_user_posts("u6", 1, "", "") is None
+    assert cached_user_posts("u6", 1, "", "") is not None
 
 
 def test_cached_user_posts_rejects_larger_count_without_complete_feeds():

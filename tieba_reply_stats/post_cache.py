@@ -36,7 +36,7 @@ def _json_size(value: Any) -> int:
 class PostCache:
     def __init__(self) -> None:
         self._lock = threading.RLock()
-        self._hot_pages: "OrderedDict[Tuple[str, str, int], tuple[float, Dict]]" = OrderedDict()
+        self._hot_pages: "OrderedDict[Tuple[str, str, int, str], tuple[float, Dict]]" = OrderedDict()
         self._hot_users: "OrderedDict[str, tuple[float, Dict]]" = OrderedDict()
         self._hot_bytes = 0
         self._conn: Optional[sqlite3.Connection] = None
@@ -63,10 +63,11 @@ class PostCache:
                 user_key TEXT NOT NULL,
                 kind TEXT NOT NULL,
                 page INTEGER NOT NULL,
+                variant TEXT NOT NULL DEFAULT '',
                 payload TEXT NOT NULL,
                 updated REAL NOT NULL,
                 priority INTEGER NOT NULL DEFAULT 1,
-                PRIMARY KEY(user_key, kind, page)
+                PRIMARY KEY(user_key, kind, page, variant)
             );
             CREATE INDEX IF NOT EXISTS idx_pages_updated ON pages(updated);
             CREATE TABLE IF NOT EXISTS users(
@@ -162,10 +163,10 @@ class PostCache:
 
     # ---------- raw pages ----------
 
-    def get_page(self, user_key: str, kind: str, page: int) -> Optional[Dict]:
+    def get_page(self, user_key: str, kind: str, page: int, variant: str = "") -> Optional[Dict]:
         if not user_key:
             return None
-        key = (user_key, kind, page)
+        key = (user_key, kind, page, variant)
         with self._lock:
             hit = self._hot_pages.pop(key, None)
             if hit is not None:
@@ -174,8 +175,8 @@ class PostCache:
             if self._conn is None:
                 return None
             row = self._conn.execute(
-                "SELECT payload, updated FROM pages WHERE user_key=? AND kind=? AND page=?",
-                (user_key, kind, page),
+                "SELECT payload, updated FROM pages WHERE user_key=? AND kind=? AND page=? AND variant=?",
+                (user_key, kind, page, variant),
             ).fetchone()
             if not row:
                 return None
@@ -188,12 +189,20 @@ class PostCache:
             self._trim_hot()
             return payload
 
-    def put_page(self, user_key: str, kind: str, page: int, payload: Dict, priority: int = PRIORITY_HIGH) -> None:
+    def put_page(
+        self,
+        user_key: str,
+        kind: str,
+        page: int,
+        payload: Dict,
+        priority: int = PRIORITY_HIGH,
+        variant: str = "",
+    ) -> None:
         if not user_key or not payload:
             return
         now = time.time()
         with self._lock:
-            key = (user_key, kind, page)
+            key = (user_key, kind, page, variant)
             old = self._hot_pages.pop(key, None)
             if old:
                 self._hot_bytes -= _json_size(old[1])
@@ -203,8 +212,9 @@ class PostCache:
                 self._trim_hot()
             if self._conn is not None:
                 self._conn.execute(
-                    "INSERT OR REPLACE INTO pages(user_key,kind,page,payload,updated,priority) VALUES(?,?,?,?,?,?)",
-                    (user_key, kind, page, json.dumps(payload, ensure_ascii=False), now, priority),
+                    "INSERT OR REPLACE INTO pages(user_key,kind,page,variant,payload,updated,priority) "
+                    "VALUES(?,?,?,?,?,?,?)",
+                    (user_key, kind, page, variant, json.dumps(payload, ensure_ascii=False), now, priority),
                 )
                 self._conn.commit()
             self._enforce_limit()

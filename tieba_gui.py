@@ -25,6 +25,7 @@ from tkinter import filedialog, messagebox, simpledialog, ttk
 from typing import Any, Callable, Dict, List, Optional
 from urllib.parse import quote
 
+from tieba_reply_stats import third_party
 from tieba_reply_stats.blacklist import (
     LEVEL_LABEL,
     classify,
@@ -57,6 +58,8 @@ from tieba_reply_stats.export import export_workbook
 from tieba_reply_stats.fetch import CaptchaError, Fetcher, FetchError, ThreadGoneError, parse_cookie_input
 from tieba_reply_stats.filters import FIELD_OPTIONS, LEVEL_OPTIONS, filter_users
 from tieba_reply_stats.follow_probe import candidate_bars, probe_forums
+from tieba_reply_stats.link_parser import parse_links
+from tieba_reply_stats.lookup_supplement import fetch_feed_thread_supplements, merge_current_threads
 from tieba_reply_stats.pbapi import fill_thread_levels
 from tieba_reply_stats.post_cache import DEFAULT_LIMIT_MB, MAX_LIMIT_MB, MIN_LIMIT_MB
 from tieba_reply_stats.post_cache import cache as post_cache
@@ -359,8 +362,12 @@ class App:
         self.tab_posts = tk.Frame(self.notebook, bg="#eef1f5")
         self.tab_lookup = tk.Frame(self.notebook, bg="#eef1f5")
         self.tab_settings = tk.Frame(self.notebook, bg="#eef1f5")
+        self.tab_links = tk.Frame(self.notebook, bg="#eef1f5")
+        self.tab_love = tk.Frame(self.notebook, bg="#eef1f5")
         self.notebook.add(self.tab_posts, text="  帖子统计  ")
         self.notebook.add(self.tab_lookup, text="  查用户  ")
+        self.notebook.add(self.tab_links, text="  链接解析  ")
+        self.notebook.add(self.tab_love, text="  恋文增强（第三方）  ")
         self.notebook.add(self.tab_settings, text="  设置  ")
 
         self.post_nb = ttk.Notebook(self.tab_posts, style="Sub.TNotebook")
@@ -652,6 +659,8 @@ class App:
         self._build_grid_tab()
         self._build_people_tab()
         self._build_lookup_tab()
+        self._build_links_tab()
+        self._build_love_tab()
         self._build_settings_tab()
 
         self.url_text.focus_set()
@@ -885,6 +894,7 @@ class App:
                         "name": item["name"],
                         "username": item["username"],
                         "uid": item["uid"],
+                        "tieba_uid": item.get("tieba_uid") or "",
                         "portrait": item["portrait"],
                         "level": item["level"],
                         "badge": item["badge"],
@@ -905,6 +915,8 @@ class App:
                     bucket["username"] = item["username"]
                 if not bucket["portrait"] and item["portrait"]:
                     bucket["portrait"] = item["portrait"]
+                if not bucket["tieba_uid"] and item.get("tieba_uid"):
+                    bucket["tieba_uid"] = item["tieba_uid"]
                 if not bucket["level"] and item["level"]:
                     bucket["level"] = item["level"]
                 if not bucket["badge"] and item["badge"]:
@@ -1081,7 +1093,7 @@ class App:
         paned.add(left, weight=3)
         paned.add(right, weight=2)
 
-        columns = ("mark", "name", "username", "uid", "level", "floor", "comment", "total")
+        columns = ("mark", "name", "username", "tieba_uid", "uid", "level", "floor", "comment", "total")
         self.people_columns = columns
         self._people_col_filters: Dict[str, set] = {}
         self._people_sort: tuple = ("", False)
@@ -1089,6 +1101,7 @@ class App:
             "mark": "标记",
             "name": "昵称",
             "username": "用户名",
+            "tieba_uid": "贴吧ID",
             "uid": "用户ID",
             "level": "等级",
             "floor": "楼层",
@@ -1100,6 +1113,7 @@ class App:
             "mark": 50,
             "name": 135,
             "username": 80,
+            "tieba_uid": 85,
             "uid": 80,
             "level": 50,
             "floor": 45,
@@ -1127,10 +1141,10 @@ class App:
         tree_wrap.pack(fill="both", expand=True)
         self.people_tree = ttk.Treeview(tree_wrap, columns=columns, show="headings")
         for col in columns:
-            mark = "  ▼" if col in ("name", "username", "uid") else ""
+            mark = "  ▼" if col in ("name", "username", "tieba_uid", "uid") else ""
             command = (
                 partial(self._filter_people_column, col)
-                if col in ("name", "username", "uid")
+                if col in ("name", "username", "tieba_uid", "uid")
                 else partial(self._sort_people, col)
             )
             self.people_tree.heading(col, text=headings[col] + mark, command=command)
@@ -1156,6 +1170,7 @@ class App:
         self._person_popup.add_command(
             label="复制用户名", command=lambda: self._copy_person_field("username")
         )
+        self._person_popup.add_command(label="复制贴吧ID", command=lambda: self._copy_person_field("tieba_uid"))
         self._person_popup.add_command(label="复制用户ID", command=lambda: self._copy_person_field("uid"))
         self._person_popup.add_separator()
         self._person_popup.add_command(label="浏览器打开主页", command=self._open_current_profile)
@@ -1250,14 +1265,16 @@ class App:
         profile_forum_wrap = tk.Frame(forum_frame, bg="#fbfcfe")
         profile_forum_wrap.pack(fill="both", expand=True)
         self.profile_forum_tree = ttk.Treeview(
-            profile_forum_wrap, columns=("bar", "level", "source"), show="headings", height=12
+            profile_forum_wrap, columns=("bar", "level", "level_source", "source"), show="headings", height=12
         )
         self.profile_forum_tree.heading("bar", text="贴吧")
         self.profile_forum_tree.heading("level", text="等级")
-        self.profile_forum_tree.heading("source", text="来源")
-        self.profile_forum_tree.column("bar", width=110, anchor="w")
+        self.profile_forum_tree.heading("level_source", text="等级来源")
+        self.profile_forum_tree.heading("source", text="关注来源")
+        self.profile_forum_tree.column("bar", width=100, anchor="w")
         self.profile_forum_tree.column("level", width=45, anchor="center")
-        self.profile_forum_tree.column("source", width=70, anchor="center")
+        self.profile_forum_tree.column("level_source", width=90, anchor="center")
+        self.profile_forum_tree.column("source", width=80, anchor="center")
         profile_forum_yscroll = ttk.Scrollbar(
             profile_forum_wrap, orient="vertical", command=self.profile_forum_tree.yview
         )
@@ -1268,12 +1285,12 @@ class App:
         self._configure_colors(self.profile_forum_tree)
         self._make_sortable(
             self.profile_forum_tree,
-            {"bar": "贴吧", "level": "等级", "source": "来源"},
+            {"bar": "贴吧", "level": "等级", "level_source": "等级来源", "source": "关注来源"},
             {"level"},
         )
         self._bind_loaded_filter(
             self.profile_forum_tree,
-            {"bar": ("贴吧", False), "level": None, "source": ("来源", False)},
+            {"bar": ("贴吧", False), "level": None, "level_source": ("等级来源", False), "source": ("关注来源", False)},
         )
         self._profile_forum_names: Dict[str, str] = {}
 
@@ -1287,18 +1304,21 @@ class App:
         profile_post_wrap = tk.Frame(post_frame, bg="#fbfcfe")
         profile_post_wrap.pack(fill="both", expand=True)
         self.profile_post_tree = ttk.Treeview(
-            profile_post_wrap, columns=("time", "type", "bar", "title", "content"), show="headings", height=12
+            profile_post_wrap, columns=("time", "type", "bar", "title", "content", "source"), show="headings", height=12
         )
         self.profile_post_tree.heading("time", text="日期")
         self.profile_post_tree.heading("type", text="类型")
         self.profile_post_tree.heading("bar", text="贴吧")
         self.profile_post_tree.heading("title", text="标题")
         self.profile_post_tree.heading("content", text="内容")
+        self.profile_post_tree.heading("source", text="数据来源")
         self.profile_post_tree.column("time", width=75, anchor="center")
         self.profile_post_tree.column("type", width=52, anchor="center")
         self.profile_post_tree.column("bar", width=100, anchor="w")
         self.profile_post_tree.column("title", width=180, anchor="w")
         self.profile_post_tree.column("content", width=220, anchor="w")
+        self.profile_post_tree.column("source", width=95, anchor="center")
+        self.profile_post_tree["displaycolumns"] = ("time", "type", "bar", "title", "content")
         profile_post_yscroll = ttk.Scrollbar(
             profile_post_wrap, orient="vertical", command=self.profile_post_tree.yview
         )
@@ -1699,7 +1719,13 @@ class App:
         self._copy_text(
             "\t".join(
                 str(item)
-                for item in (user.get("name", ""), user.get("username", ""), user.get("uid", ""), level)
+                for item in (
+                    user.get("name", ""),
+                    user.get("username", ""),
+                    user.get("tieba_uid", ""),
+                    user.get("uid", ""),
+                    level,
+                )
             )
         )
 
@@ -1718,7 +1744,7 @@ class App:
                 key = self.people_columns[index]
             except (ValueError, IndexError):
                 return
-            if key in ("mark", "name", "username", "uid"):
+            if key in ("mark", "name", "username", "tieba_uid", "uid"):
                 self._filter_people_column(key, (event.x_root, event.y_root))
             return
         row = self.people_tree.identify_row(event.y)
@@ -1989,9 +2015,9 @@ class App:
         self.lookup_mode_var = tk.StringVar(value="用户名")
         ttk.Combobox(
             query,
-            values=("用户名", "用户ID", "昵称"),
+            values=("用户名", "贴吧ID", "昵称", "用户ID"),
             textvariable=self.lookup_mode_var,
-            width=8,
+            width=10,
             state="readonly",
         ).pack(side="left")
         tk.Label(query, text="  内容：", bg="#ffffff", fg="#475569", font=("Microsoft YaHei UI", 9)).pack(
@@ -2091,7 +2117,7 @@ class App:
         self.lookup_summary = summary
         self.lookup_info = tk.Label(
             summary,
-            text="输入用户名 / 用户ID / 昵称，点「查询」查看资料、关注和发言。",
+            text="查询方式：用户名 / 贴吧ID / 昵称 / 用户ID。贴吧ID是个人主页显示的ID。",
             anchor="w",
             bg="#eef1f5",
             fg="#64748b",
@@ -2178,14 +2204,16 @@ class App:
         lookup_forum_wrap = tk.Frame(left, bg="#eef1f5")
         lookup_forum_wrap.pack(fill="both", expand=True)
         self.lookup_forum_tree = ttk.Treeview(
-            lookup_forum_wrap, columns=("bar", "level", "source"), show="headings", height=14
+            lookup_forum_wrap, columns=("bar", "level", "level_source", "source"), show="headings", height=14
         )
         self.lookup_forum_tree.heading("bar", text="贴吧")
         self.lookup_forum_tree.heading("level", text="等级")
-        self.lookup_forum_tree.heading("source", text="来源")
-        self.lookup_forum_tree.column("bar", width=130, anchor="w")
+        self.lookup_forum_tree.heading("level_source", text="等级来源")
+        self.lookup_forum_tree.heading("source", text="关注来源")
+        self.lookup_forum_tree.column("bar", width=120, anchor="w")
         self.lookup_forum_tree.column("level", width=50, anchor="center")
-        self.lookup_forum_tree.column("source", width=70, anchor="center")
+        self.lookup_forum_tree.column("level_source", width=90, anchor="center")
+        self.lookup_forum_tree.column("source", width=80, anchor="center")
         lookup_forum_yscroll = ttk.Scrollbar(
             lookup_forum_wrap, orient="vertical", command=self.lookup_forum_tree.yview
         )
@@ -2196,12 +2224,12 @@ class App:
         self._configure_colors(self.lookup_forum_tree)
         self._make_sortable(
             self.lookup_forum_tree,
-            {"bar": "贴吧", "level": "等级", "source": "来源"},
+            {"bar": "贴吧", "level": "等级", "level_source": "等级来源", "source": "关注来源"},
             {"level"},
         )
         self._bind_loaded_filter(
             self.lookup_forum_tree,
-            {"bar": ("贴吧", False), "level": None, "source": ("来源", False)},
+            {"bar": ("贴吧", False), "level": None, "level_source": ("等级来源", False), "source": ("关注来源", False)},
         )
 
         tk.Label(
@@ -2214,18 +2242,21 @@ class App:
         post_wrap = tk.Frame(right, bg="#eef1f5")
         post_wrap.pack(fill="both", expand=True)
         self.lookup_post_tree = ttk.Treeview(
-            post_wrap, columns=("time", "type", "bar", "title", "content"), show="headings", height=14
+            post_wrap, columns=("time", "type", "bar", "title", "content", "source"), show="headings", height=14
         )
         self.lookup_post_tree.heading("time", text="日期")
         self.lookup_post_tree.heading("type", text="类型")
         self.lookup_post_tree.heading("bar", text="贴吧")
         self.lookup_post_tree.heading("title", text="标题")
         self.lookup_post_tree.heading("content", text="内容")
+        self.lookup_post_tree.heading("source", text="数据来源")
         self.lookup_post_tree.column("time", width=90, anchor="center")
         self.lookup_post_tree.column("type", width=55, anchor="center")
         self.lookup_post_tree.column("bar", width=100, anchor="w")
         self.lookup_post_tree.column("title", width=230, anchor="w")
         self.lookup_post_tree.column("content", width=300, anchor="w")
+        self.lookup_post_tree.column("source", width=100, anchor="center")
+        self.lookup_post_tree["displaycolumns"] = ("time", "type", "bar", "title", "content")
         post_xscroll = ttk.Scrollbar(post_wrap, orient="horizontal", command=self.lookup_post_tree.xview)
         post_yscroll = ttk.Scrollbar(post_wrap, orient="vertical", command=self.lookup_post_tree.yview)
         self.lookup_post_tree.configure(xscrollcommand=post_xscroll.set, yscrollcommand=post_yscroll.set)
@@ -2306,6 +2337,72 @@ class App:
         self._reset_lookup_traffic()
         self.lookup_info.configure(text=content)
 
+    def _supplement_lookup(self, fetcher, profile, count, start_date, end_date):
+        original = list(profile.get("recent_posts") or [])
+        merged = original
+        current_added = 0
+        retrace_added = 0
+        failed = 0
+        current_tids = set()
+        try:
+            current = merge_current_threads(merged, getattr(self, "last_threads", []), profile)
+            current_added = len(current["posts"])
+            merged = merged + current["posts"]
+            current_tids = {str(t.meta.tid) for t in getattr(self, "last_threads", [])}
+        except Exception:  # noqa: BLE001
+            current_added = 0
+        if self.settings.get("lookup_fill_threads", False):
+            try:
+                full = bool(self.settings.get("lookup_fill_all", False))
+                limit = 0 if full else max(1, int(self.settings.get("lookup_fill_limit", 50) or 50))
+                retrace = fetch_feed_thread_supplements(
+                    fetcher,
+                    merged,
+                    profile,
+                    limit=limit,
+                    full=full,
+                    include_comments=bool(self.settings.get("lookup_fill_comments", False)),
+                    current_tids=current_tids,
+                    log=None,
+                )
+                retrace_added = len(retrace["posts"])
+                failed = int(retrace.get("failed") or 0)
+                merged = merged + retrace["posts"]
+            except Exception:  # noqa: BLE001
+                failed += 1
+        seen = set()
+        filtered = []
+        start = datetime.strptime(start_date, "%Y-%m-%d").date() if start_date else None
+        end = datetime.strptime(end_date, "%Y-%m-%d").date() if end_date else None
+        for post in merged:
+            pid = str(post.get("pid") or "")
+            if pid and pid in seen:
+                continue
+            if pid:
+                seen.add(pid)
+            day = None
+            try:
+                day = datetime.strptime(str(post.get("time") or "")[:10], "%Y-%m-%d").date()
+            except ValueError:
+                pass
+            if start and day and day < start:
+                continue
+            if end and day and day > end:
+                continue
+            filtered.append(post)
+        filtered.sort(key=lambda item: int(item.get("ts") or 0), reverse=True)
+        shown = filtered[:count]
+        profile["recent_posts"] = shown
+        profile["_supplement"] = {
+            "official": len(original),
+            "current": current_added,
+            "retrace": retrace_added,
+            "failed": failed,
+            "total": len(filtered),
+            "shown": len(shown),
+        }
+        return profile
+
     def _on_lookup(self) -> None:
         self._sync_lookup_text_from_native()
         self._normalize_lookup_query()
@@ -2320,6 +2417,8 @@ class App:
         self._lookup_generation = getattr(self, "_lookup_generation", 0) + 1
         generation = self._lookup_generation
         mode = self.lookup_mode_var.get()
+        if mode == "用户名" and query.isdigit():
+            mode = "贴吧ID"
         try:
             count = int(self.lookup_count_var.get())
         except ValueError:
@@ -2338,7 +2437,10 @@ class App:
         )
         cache_key = (
             f"{query}|{mode}|{count}|{start_date}|{end_date}|"
-            f"{prefer}|{self.mode_var.get()}|{self._lookup_topic_limit}"
+            f"{prefer}|{self.mode_var.get()}|{self._lookup_topic_limit}|"
+            f"{self.settings.get('lookup_fill_threads')}|{self.settings.get('lookup_fill_pages')}|"
+            f"{self.settings.get('lookup_fill_limit')}|{self.settings.get('lookup_fill_all')}|"
+            f"{self.settings.get('lookup_fill_comments')}"
         )
         hit = self._lookup_cache.get(cache_key)
         if hit and time.monotonic() - hit[0] < 60:
@@ -2378,7 +2480,7 @@ class App:
                         (
                             "lookup_ready",
                             None,
-                            f"按「{mode}」没有找到这个人（昵称可能不唯一，试试用户名或用户ID）",
+                            f"按「{mode}」没有找到这个人（昵称不唯一；贴吧ID不是内部用户ID）",
                         )
                     )
                     return
@@ -2397,6 +2499,11 @@ class App:
                 if generation != self._lookup_generation:
                     return
                 profile["nickname"] = profile.get("nickname") or info.get("nickname") or ""
+                profile["tieba_uid"] = profile.get("tieba_uid") or info.get("tieba_uid") or ""
+                if profile.get("ok"):
+                    profile = self._supplement_lookup(
+                        fetcher, profile, count, start_date, end_date
+                    )
                 if profile.get("ok"):
                     if len(self._lookup_cache) >= 200:
                         self._lookup_cache.clear()
@@ -2502,6 +2609,69 @@ class App:
         else:
             self.lookup_cache_row.pack_forget()
 
+    def _request_love_levels(self, profile, forums, tree, names, kind) -> None:
+        if not self.settings.get("love_level_enabled", False):
+            return
+        uid = str(profile.get("tieba_uid") or "")
+        username = str(profile.get("username") or "")
+        if not uid and not username:
+            return
+        missing = [forum for forum in forums if not int(forum.get("level") or 0)]
+        if not missing:
+            return
+        cache = getattr(self, "_level_cache", None)
+        if cache is None:
+            cache = {}
+            self._level_cache = cache
+        pending = [forum for forum in missing if (uid or username, forum.get("name")) not in cache]
+        pending = pending[:50]
+        if not pending:
+            return
+
+        def worker():
+            results = {}
+            for forum in pending:
+                name = str(forum.get("name") or "")
+                if not name:
+                    continue
+                try:
+                    data = third_party.fetch_level(uid, name, username)
+                except Exception:  # noqa: BLE001
+                    data = None
+                if data and data.get("level"):
+                    results[name] = data
+                    cache[(uid or username, name)] = data
+            if results:
+                self._post(("levels_ready", kind, profile, forums, results))
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _apply_level_results(self, kind, profile, forums, results) -> None:
+        by_name = {str(forum.get("name") or ""): forum for forum in forums}
+        for name, data in results.items():
+            forum = by_name.get(name)
+            if forum is None:
+                continue
+            forum["level"] = int(data.get("level") or 0)
+            forum["level_source"] = "恋文（第三方）"
+            forum["third_party_level"] = True
+            for key in ("followed_forums", "hidden_forums", "like_forum", "probed_forums"):
+                for saved in profile.get(key) or []:
+                    if str(saved.get("name") or "") == name:
+                        saved["level"] = forum["level"]
+                        saved["level_source"] = "恋文（第三方）"
+        tree = self.lookup_forum_tree if kind == "lookup" else self.profile_forum_tree
+        names = self._lookup_forum_names if kind == "lookup" else self._profile_forum_names
+        for iid, name in list(names.items()):
+            forum = by_name.get(name)
+            if not forum:
+                continue
+            try:
+                tree.set(iid, "level", f"Lv.{forum['level']}" if forum.get("level") else "-")
+                tree.set(iid, "level_source", forum.get("level_source") or "-")
+            except tk.TclError:
+                pass
+
     def _render_lookup(self, profile) -> None:
         forum_tree = self.lookup_forum_tree
         post_tree = self.lookup_post_tree
@@ -2523,6 +2693,12 @@ class App:
 
         combined = self._merge_forum_lists(profile)
         posts = profile.get("recent_posts") or []
+        has_supplement = any(str(post.get("source") or "") not in ("", "官方") for post in posts)
+        post_tree["displaycolumns"] = (
+            ("time", "type", "bar", "title", "content", "source")
+            if has_supplement
+            else ("time", "type", "bar", "title", "content")
+        )
 
         for index, forum in enumerate(combined):
             iid = str(index)
@@ -2533,11 +2709,13 @@ class App:
                 values=(
                     forum["name"],
                     f"Lv.{forum['level']}" if forum.get("level") else "-",
+                    forum.get("level_source") or "-",
                     forum.get("source") or "",
                 ),
                 tags=self._row_tags(forum["name"], "forum"),
             )
             self._lookup_forum_names[iid] = forum["name"]
+        self._request_love_levels(profile, combined, forum_tree, self._lookup_forum_names, "lookup")
         for index, post in enumerate(posts):
             iid = str(index)
             post_tree.insert(
@@ -2550,6 +2728,7 @@ class App:
                     post.get("bar") or "",
                     post.get("title") or "",
                     post.get("content") or "",
+                    post.get("source") or "官方",
                 ),
                 tags=self._row_tags(post.get("bar"), "posts"),
             )
@@ -2557,9 +2736,18 @@ class App:
         forum_note = self._forum_note(profile)
         self.lookup_forum_note.configure(text=forum_note)
 
+        supplement = profile.get("_supplement") or {}
+        supplement_note = ""
+        if supplement:
+            supplement_note = (
+                f" | 官方 {supplement.get('official', 0)} / 当前已抓主题 {supplement.get('current', 0)}"
+                f" / 回抓主题 {supplement.get('retrace', 0)} / 失败 {supplement.get('failed', 0)}"
+                f" / 合计 {supplement.get('total', len(posts))} / 显示 {supplement.get('shown', len(posts))}"
+            )
         info = (
             f"昵称 {display_text(profile.get('nickname')) or '未知'} | 用户名 {profile.get('username') or '未知'} | "
-            f"ID {profile.get('user_id') or '未知'} | 发言 {len(posts)} 条 | 关注 {len(combined)} 个"
+            f"贴吧ID {profile.get('tieba_uid') or '-'} | 用户ID {profile.get('user_id') or '未知'} | "
+            f"发言 {len(posts)} 条 | 关注 {len(combined)} 个{supplement_note}"
         )
         if profile.get("followed_count"):
             info += f"（对方填 {profile['followed_count']}）"
@@ -2682,6 +2870,8 @@ class App:
             return self._display_name(user)
         if column == "username":
             return user.get("username") or "-"
+        if column == "tieba_uid":
+            return user.get("tieba_uid") or "-"
         if column == "uid":
             return user.get("uid") or "-"
         return ""
@@ -2691,7 +2881,7 @@ class App:
             return
         values = sorted({self._people_column_value(user, column) for user in self.people_users})
         chosen = self._filter_text_dialog(
-            {"mark": "标记", "name": "昵称", "username": "用户名", "uid": "用户ID"}.get(column, column),
+            {"mark": "标记", "name": "昵称", "username": "用户名", "tieba_uid": "贴吧ID", "uid": "用户ID"}.get(column, column),
             values,
             self._people_col_filters.get(column),
             anchor,
@@ -2783,10 +2973,11 @@ class App:
                 return
             values[0] = self._person_mark_cell(user)
             values[2] = str(user.get("username") or "-")
-            values[3] = self._person_uid_text(user)
+            values[3] = str(user.get("tieba_uid") or "-")
+            values[4] = self._person_uid_text(user)
             level = str(user.get("level") or "")
             if level:
-                values[4] = f"Lv.{level}"
+                values[5] = f"Lv.{level}"
             self.people_tree.item(
                 iid,
                 values=values,
@@ -2867,6 +3058,7 @@ class App:
                     self._person_mark_cell(user),
                     self._display_name(user),
                     user["username"] or "-",
+                    user.get("tieba_uid") or "-",
                     self._person_uid_text(user),
                     f"Lv.{user['level']}" if user["level"] else "-",
                     user["floor"],
@@ -2947,8 +3139,13 @@ class App:
         except (IndexError, ValueError):
             return
         username = user.get("username") or ""
+        portrait = str(user.get("portrait") or "").split("?")[0]
         if username:
             webbrowser.open("https://tieba.baidu.com/home/main?un=" + quote(username))
+        elif portrait:
+            webbrowser.open("https://tieba.baidu.com/home/main?id=" + quote(portrait))
+        else:
+            messagebox.showinfo("无法打开主页", "这个用户缺少用户名和头像标识。", parent=self.root)
 
     # ------------------------------------------------------------- risk marks
     def _risk_enabled(self) -> bool:
@@ -3138,6 +3335,393 @@ class App:
         for child in widget.winfo_children():
             self._bind_mousewheel_tree(child, canvas)
 
+    def _build_links_tab(self) -> None:
+        page = self.tab_links
+        top = tk.Frame(page, bg="#ffffff", padx=12, pady=8)
+        top.pack(fill="x")
+        tk.Label(
+            top,
+            text="每行一个帖子链接（支持主题 / 楼层 / 楼中楼）",
+            bg="#ffffff",
+            fg="#475569",
+            font=("Microsoft YaHei UI", 9),
+        ).pack(anchor="w")
+        self.links_text = tk.Text(top, height=6, wrap="none", font=("Consolas", 9))
+        self.links_text.pack(fill="x", pady=(4, 4))
+        bar = tk.Frame(top, bg="#ffffff")
+        bar.pack(fill="x")
+        ttk.Button(bar, text="从剪贴板导入", command=self._links_from_clipboard).pack(side="left")
+        ttk.Button(bar, text="开始解析", command=self._start_links).pack(side="left", padx=(8, 0))
+        ttk.Button(bar, text="停止", command=self._stop_links).pack(side="left", padx=(8, 0))
+        ttk.Button(bar, text="导出 Excel", command=self._export_links).pack(side="left", padx=(8, 0))
+        self.links_status = tk.Label(
+            bar, text="", bg="#ffffff", fg="#64748b", font=("Microsoft YaHei UI", 9)
+        )
+        self.links_status.pack(side="right")
+
+        wrap = tk.Frame(page, bg="#eef1f5")
+        wrap.pack(fill="both", expand=True, padx=12, pady=(0, 8))
+        self.links_tree = ttk.Treeview(
+            wrap,
+            columns=("time", "type", "bar", "title", "content", "floor", "link"),
+            show="headings",
+            height=18,
+        )
+        for key, title, width in (
+            ("time", "日期", 120),
+            ("type", "类型", 60),
+            ("bar", "贴吧", 100),
+            ("title", "标题", 220),
+            ("content", "内容", 300),
+            ("floor", "楼层", 60),
+            ("link", "链接", 260),
+        ):
+            self.links_tree.heading(key, text=title)
+            self.links_tree.column(key, width=width, anchor="center" if key in ("time", "type", "floor") else "w")
+        yscroll = ttk.Scrollbar(wrap, orient="vertical", command=self.links_tree.yview)
+        xscroll = ttk.Scrollbar(wrap, orient="horizontal", command=self.links_tree.xview)
+        self.links_tree.configure(yscrollcommand=yscroll.set, xscrollcommand=xscroll.set)
+        self.links_tree.grid(row=0, column=0, sticky="nsew")
+        yscroll.grid(row=0, column=1, sticky="ns")
+        xscroll.grid(row=1, column=0, sticky="ew")
+        wrap.rowconfigure(0, weight=1)
+        wrap.columnconfigure(0, weight=1)
+        self._links_rows: List[Dict] = []
+        self._links_errors: List[Dict] = []
+        self._links_stop = threading.Event()
+        self._links_running = False
+
+    def _links_from_clipboard(self) -> None:
+        try:
+            text = self.root.clipboard_get()
+        except tk.TclError:
+            return
+        self.links_text.delete("1.0", "end")
+        self.links_text.insert("1.0", text)
+
+    def _stop_links(self) -> None:
+        self._links_stop.set()
+        self.links_status.configure(text="正在停止…")
+
+    def _start_links(self) -> None:
+        if self._links_running:
+            return
+        raw = self.links_text.get("1.0", "end").strip()
+        if not raw:
+            self.links_status.configure(text="请先粘贴链接")
+            return
+        self._links_running = True
+        self._links_stop.clear()
+        self._links_rows = []
+        self._links_errors = []
+        for item in self.links_tree.get_children():
+            self.links_tree.delete(item)
+        self.links_status.configure(text="解析中…")
+
+        def worker():
+            try:
+                fetcher = Fetcher(cookie={}, delay=0.3, verbose=False)
+                result = parse_links(
+                    raw,
+                    fetcher,
+                    should_stop=self._links_stop.is_set,
+                )
+                self._post(("links_ready", result, ""))
+            except Exception as error:  # noqa: BLE001
+                self._post(("links_ready", None, str(error)))
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _render_links(self, result: Dict, error: str) -> None:
+        self._links_running = False
+        if result is None:
+            self.links_status.configure(text=f"失败：{error}")
+            return
+        self._links_rows = list(result.get("rows") or [])
+        self._links_errors = list(result.get("errors") or [])
+        for row in self._links_rows:
+            self.links_tree.insert(
+                "",
+                "end",
+                values=(
+                    row.get("time") or "",
+                    row.get("type") or "",
+                    row.get("bar") or "",
+                    row.get("title") or "",
+                    row.get("content") or "",
+                    row.get("floor") or "",
+                    row.get("url") or "",
+                ),
+            )
+        extra = f" / 失败 {len(self._links_errors)}" if self._links_errors else ""
+        self.links_status.configure(
+            text=f"链接 {result.get('links', 0)} / 主题 {result.get('threads', 0)} / 成功 {len(self._links_rows)}{extra}"
+        )
+
+    def _export_links(self) -> None:
+        if not self._links_rows:
+            self.links_status.configure(text="没有可导出的结果")
+            return
+        path = filedialog.asksaveasfilename(
+            parent=self.root,
+            title="导出链接解析",
+            defaultextension=".xlsx",
+            initialfile="链接解析.xlsx",
+            filetypes=[("Excel 表格", "*.xlsx")],
+        )
+        if not path:
+            return
+        try:
+            from openpyxl import Workbook
+
+            wb = Workbook()
+            ws = wb.active
+            ws.title = "链接解析"
+            headers = ["日期", "类型", "贴吧", "标题", "内容", "楼层", "链接"]
+            ws.append(headers)
+            for row in self._links_rows:
+                ws.append(
+                    [
+                        row.get("time") or "",
+                        row.get("type") or "",
+                        row.get("bar") or "",
+                        row.get("title") or "",
+                        row.get("content") or "",
+                        row.get("floor") or "",
+                        row.get("url") or "",
+                    ]
+                )
+            ws2 = wb.create_sheet("说明")
+            ws2.append(["链接数", len(self._links_rows) + len(self._links_errors)])
+            ws2.append(["成功", len(self._links_rows)])
+            ws2.append(["失败", len(self._links_errors)])
+            ws2.append(["数据来源", "官方主题抓取"])
+            wb.save(path)
+            self.links_status.configure(text="已导出 Excel")
+        except Exception as error:  # noqa: BLE001
+            messagebox.showerror("导出失败", str(error), parent=self.root)
+
+    def _build_love_tab(self) -> None:
+        page = self.tab_love
+        top = tk.Frame(page, bg="#ffffff", padx=12, pady=8)
+        top.pack(fill="x")
+        row = tk.Frame(top, bg="#ffffff")
+        row.pack(fill="x")
+        tk.Label(row, text="贴吧ID / 用户名：", bg="#ffffff", fg="#475569", font=("Microsoft YaHei UI", 9)).pack(side="left")
+        self.love_query_var = tk.StringVar()
+        self.love_entry = ttk.Entry(row, textvariable=self.love_query_var, width=32)
+        self.love_entry.pack(side="left")
+        self.love_auto_var = tk.BooleanVar(value=False)
+        ttk.Checkbutton(row, text="自动连续翻页", variable=self.love_auto_var).pack(side="left", padx=(8, 0))
+        ttk.Button(row, text="抓取", command=self._start_love).pack(side="left", padx=(8, 0))
+        ttk.Button(row, text="下一页", command=self._next_love).pack(side="left", padx=(4, 0))
+        ttk.Button(row, text="停止", command=self._stop_love).pack(side="left", padx=(4, 0))
+        ttk.Button(row, text="导出已加载", command=self._export_love).pack(side="left", padx=(8, 0))
+        self.love_status = tk.Label(
+            top,
+            text="数据来自恋文（第三方）+ 官方主题补全；非百度官方。",
+            bg="#ffffff",
+            fg="#8a94a6",
+            font=("Microsoft YaHei UI", 8),
+        )
+        self.love_status.pack(anchor="w", pady=(4, 0))
+
+        wrap = tk.Frame(page, bg="#eef1f5")
+        wrap.pack(fill="both", expand=True, padx=12, pady=(0, 8))
+        self.love_tree = ttk.Treeview(
+            wrap,
+            columns=("time", "type", "bar", "title", "content", "floor", "link"),
+            show="headings",
+            height=18,
+        )
+        for key, title, width in (
+            ("time", "日期", 120),
+            ("type", "类型", 60),
+            ("bar", "贴吧", 100),
+            ("title", "标题", 220),
+            ("content", "内容", 300),
+            ("floor", "楼层", 60),
+            ("link", "链接", 260),
+        ):
+            self.love_tree.heading(key, text=title)
+            self.love_tree.column(key, width=width, anchor="center" if key in ("time", "type", "floor") else "w")
+        yscroll = ttk.Scrollbar(wrap, orient="vertical", command=self.love_tree.yview)
+        xscroll = ttk.Scrollbar(wrap, orient="horizontal", command=self.love_tree.xview)
+        self.love_tree.configure(yscrollcommand=yscroll.set, xscrollcommand=xscroll.set)
+        self.love_tree.grid(row=0, column=0, sticky="nsew")
+        yscroll.grid(row=0, column=1, sticky="ns")
+        xscroll.grid(row=1, column=0, sticky="ew")
+        wrap.rowconfigure(0, weight=1)
+        wrap.columnconfigure(0, weight=1)
+        self._love_rows: List[Dict] = []
+        self._love_seen: set = set()
+        self._love_page = 0
+        self._love_has_next = True
+        self._love_running = False
+        self._love_stop = threading.Event()
+
+    def _stop_love(self) -> None:
+        self._love_stop.set()
+        self.love_status.configure(text="正在停止…")
+
+    def _start_love(self) -> None:
+        query = self.love_query_var.get().strip()
+        if not query:
+            self.love_status.configure(text="请输入贴吧ID或用户名")
+            return
+        if not getattr(self, "_love_disclaimer_seen", False):
+            if not messagebox.askyesno(
+                "恋文增强（第三方）",
+                "本功能使用恋文（第三方）的公开数据。\n"
+                "恋文不是百度官方接口，与本软件无隶属关系。\n"
+                "第三方数据可能不完整、滞后或不准确。\n"
+                "本功能不发送 Cookie/BDUSS。\n\n继续？",
+                parent=self.root,
+            ):
+                return
+            self._love_disclaimer_seen = True
+        self._love_rows = []
+        self._love_seen = set()
+        self._love_page = 0
+        self._love_has_next = True
+        for item in self.love_tree.get_children():
+            self.love_tree.delete(item)
+        uid = query if query.isdigit() else ""
+        username = "" if uid else query
+        self._love_identity = (uid, username)
+        self._load_love_page()
+
+    def _next_love(self) -> None:
+        if self._love_running or not self._love_has_next:
+            return
+        self._load_love_page()
+
+    def _load_love_page(self) -> None:
+        if self._love_running:
+            return
+        uid, username = getattr(self, "_love_identity", ("", ""))
+        if not uid and not username:
+            return
+        self._love_running = True
+        self._love_stop.clear()
+        next_page = self._love_page + 1
+        self.love_status.configure(text=f"正在抓取第 {next_page} 页…")
+
+        def worker():
+            try:
+                fetcher = Fetcher(cookie={}, delay=0.3, verbose=False)
+                data = third_party.fetch_posts_page(uid, username, next_page)
+                items = data.get("items") or []
+                hrefs = "\n".join(str(item.get("href") or "") for item in items)
+                parsed = parse_links(hrefs, fetcher, should_stop=self._love_stop.is_set) if hrefs.strip() else {"rows": [], "errors": []}
+                rows_by_pid = {str(row.get("pid") or ""): row for row in parsed.get("rows") or []}
+                rows = []
+                for item in items:
+                    link = third_party.parse_post_link(str(item.get("href") or ""))
+                    row = rows_by_pid.get(str(link.get("pid") or ""))
+                    if row is None:
+                        row = {
+                            "pid": link.get("pid") or "",
+                            "time": "",
+                            "type": "",
+                            "bar": "",
+                            "title": item.get("title") or "",
+                            "content": item.get("content") or "",
+                            "floor": "",
+                            "url": item.get("href") or "",
+                            "source": "恋文（第三方）",
+                        }
+                    else:
+                        row = dict(row)
+                    row["source"] = "恋文（第三方）"
+                    rows.append(row)
+                self._post(("love_ready", {"page": next_page, "rows": rows, "has_next": bool(data.get("has_next")), "error": ""}, ""))
+            except Exception as error:  # noqa: BLE001
+                self._post(("love_ready", None, str(error)))
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _render_love(self, result: Dict, error: str) -> None:
+        self._love_running = False
+        if result is None:
+            self.love_status.configure(text=f"失败：{error}")
+            return
+        self._love_page = int(result.get("page") or self._love_page)
+        self._love_has_next = bool(result.get("has_next"))
+        added = 0
+        for row in result.get("rows") or []:
+            key = str(row.get("pid") or row.get("url") or "")
+            if key and key in self._love_seen:
+                continue
+            if key:
+                self._love_seen.add(key)
+            self._love_rows.append(row)
+            self.love_tree.insert(
+                "",
+                "end",
+                values=(
+                    row.get("time") or "",
+                    row.get("type") or "",
+                    row.get("bar") or "",
+                    row.get("title") or "",
+                    row.get("content") or "",
+                    row.get("floor") or "",
+                    row.get("url") or "",
+                ),
+            )
+            added += 1
+        self.love_status.configure(
+            text=(
+                f"第 {self._love_page} 页 / 已加载 {len(self._love_rows)} 条 / 本页新增 {added} / "
+                f"{'还有更多' if self._love_has_next else '已到末页'}；数据来自恋文（第三方）"
+            )
+        )
+        if self.love_auto_var.get() and self._love_has_next and not self._love_stop.is_set():
+            self.root.after(120, self._next_love)
+
+    def _export_love(self) -> None:
+        if not self._love_rows:
+            self.love_status.configure(text="没有可导出的结果")
+            return
+        path = filedialog.asksaveasfilename(
+            parent=self.root,
+            title="导出恋文增强",
+            defaultextension=".xlsx",
+            initialfile="恋文增强.xlsx",
+            filetypes=[("Excel 表格", "*.xlsx")],
+        )
+        if not path:
+            return
+        try:
+            from openpyxl import Workbook
+
+            wb = Workbook()
+            ws = wb.active
+            ws.title = "恋文增强"
+            ws.append(["日期", "类型", "贴吧", "标题", "内容", "楼层", "链接", "数据来源"])
+            for row in self._love_rows:
+                ws.append(
+                    [
+                        row.get("time") or "",
+                        row.get("type") or "",
+                        row.get("bar") or "",
+                        row.get("title") or "",
+                        row.get("content") or "",
+                        row.get("floor") or "",
+                        row.get("url") or "",
+                        "恋文（第三方）",
+                    ]
+                )
+            info = wb.create_sheet("说明")
+            info.append(["数据来源", "恋文（第三方）+ 官方主题补全"])
+            info.append(["已加载页", f"1~{self._love_page}"])
+            info.append(["已加载条数", len(self._love_rows)])
+            info.append(["是否还有更多", "是" if self._love_has_next else "否"])
+            wb.save(path)
+            self.love_status.configure(text="已导出已加载内容")
+        except Exception as error:  # noqa: BLE001
+            messagebox.showerror("导出失败", str(error), parent=self.root)
+
     def _build_settings_tab(self) -> None:
         wrap = tk.Frame(self.tab_settings, bg="#eef1f5")
         wrap.pack(fill="both", expand=True, padx=6, pady=6)
@@ -3201,8 +3785,13 @@ class App:
         for key, title in (("safe", "安全（绿色）"), ("warn", "可疑（黄色）"), ("ban", "警告（红色）")):
             frame = ttk.LabelFrame(box, text=f" {title} ")
             frame.pack(fill="both", expand=True, pady=4)
-            editor = tk.Text(frame, height=6, wrap="word", font=("Microsoft YaHei UI", 9))
-            editor.pack(fill="both", expand=True, padx=6, pady=6)
+            editor_wrap = tk.Frame(frame)
+            editor_wrap.pack(fill="both", expand=True, padx=6, pady=6)
+            editor = tk.Text(editor_wrap, height=6, wrap="word", font=("Microsoft YaHei UI", 9))
+            editor_scroll = ttk.Scrollbar(editor_wrap, orient="vertical", command=editor.yview)
+            editor.configure(yscrollcommand=editor_scroll.set)
+            editor.pack(side="left", fill="both", expand=True)
+            editor_scroll.pack(side="right", fill="y")
             editor.insert("1.0", chr(10).join(self.blacklist.get(key, [])))
             self.blacklist_editors[key] = editor
         bar = tk.Frame(box, bg="#eef1f5")
@@ -4497,6 +5086,22 @@ class App:
             )
         if hasattr(self, "auto_refresh_var"):
             self.auto_refresh_var.set(bool(settings.get("auto_refresh_old", False)))
+        if hasattr(self, "lookup_fill_var"):
+            self.lookup_fill_var.set(bool(settings.get("lookup_fill_threads", False)))
+            self.lookup_fill_pages_var.set(
+                "完整主题" if settings.get("lookup_fill_pages") == "full" else "第 1 页"
+            )
+            self.lookup_fill_limit_var.set(str(settings.get("lookup_fill_limit", 50)))
+            self.lookup_fill_all_var.set(bool(settings.get("lookup_fill_all", False)))
+            self.lookup_fill_comments_var.set(bool(settings.get("lookup_fill_comments", False)))
+            all_topics = bool(settings.get("lookup_fill_all", False))
+            try:
+                self.lookup_fill_pages_box.configure(state="disabled" if all_topics else "readonly")
+                self.lookup_fill_limit_box.configure(state="disabled" if all_topics else "normal")
+            except tk.TclError:
+                pass
+        if hasattr(self, "love_level_var"):
+            self.love_level_var.set(bool(settings.get("love_level_enabled", False)))
         if hasattr(self, "removed_action_var"):
             self.removed_action_var.set(
                 {"keep": "保留旧结果", "remove": "移除旧结果", "ask": "每次询问"}.get(
@@ -4743,6 +5348,74 @@ class App:
             side="left", padx=(6, 0)
         )
 
+        fill_box = ttk.LabelFrame(box, text=" 查用户补全主题 ")
+        fill_box.pack(fill="x", pady=(0, 6))
+        self.lookup_fill_var = tk.BooleanVar(value=bool(self.settings.get("lookup_fill_threads", False)))
+        ttk.Checkbutton(
+            fill_box,
+            text="查用户时回抓 feed 主题（慢，默认关闭）",
+            variable=self.lookup_fill_var,
+            command=self._on_lookup_fill_changed,
+        ).pack(anchor="w", padx=8, pady=(4, 0))
+        fill_row = tk.Frame(fill_box, bg="#eef1f5")
+        fill_row.pack(anchor="w", fill="x", padx=8, pady=(4, 0))
+        tk.Label(fill_row, text="每主题页数：", bg="#eef1f5", fg="#475569").pack(side="left")
+        self.lookup_fill_pages_var = tk.StringVar(
+            value="完整主题" if self.settings.get("lookup_fill_pages") == "full" else "第 1 页"
+        )
+        self.lookup_fill_pages_box = ttk.Combobox(
+            fill_row, values=("第 1 页", "完整主题"), textvariable=self.lookup_fill_pages_var, width=8, state="readonly"
+        )
+        self.lookup_fill_pages_box.pack(side="left")
+        self.lookup_fill_pages_box.bind("<<ComboboxSelected>>", lambda _event: self._on_lookup_fill_changed())
+        tk.Label(fill_row, text="  最多补主题数：", bg="#eef1f5", fg="#475569").pack(side="left")
+        self.lookup_fill_limit_var = tk.StringVar(value=str(self.settings.get("lookup_fill_limit", 50)))
+        self.lookup_fill_limit_box = ttk.Spinbox(
+            fill_row, from_=1, to=10000, increment=10, width=7, textvariable=self.lookup_fill_limit_var, state="normal"
+        )
+        self.lookup_fill_limit_box.pack(side="left")
+        self.lookup_fill_limit_box.bind("<FocusOut>", lambda _event: self._on_lookup_fill_changed())
+        self.lookup_fill_comments_var = tk.BooleanVar(value=bool(self.settings.get("lookup_fill_comments", False)))
+        ttk.Checkbutton(
+            fill_row,
+            text="楼层 + 楼中楼",
+            variable=self.lookup_fill_comments_var,
+            command=self._on_lookup_fill_changed,
+        ).pack(side="left", padx=(8, 0))
+        fill_all_row = tk.Frame(fill_box, bg="#eef1f5")
+        fill_all_row.pack(anchor="w", fill="x", padx=8, pady=(4, 4))
+        self.lookup_fill_all_var = tk.BooleanVar(value=bool(self.settings.get("lookup_fill_all", False)))
+        ttk.Checkbutton(
+            fill_all_row,
+            text="补全所有 feed 主题（特慢，完整主题、不限数量）",
+            variable=self.lookup_fill_all_var,
+            command=self._on_lookup_fill_changed,
+        ).pack(anchor="w")
+        tk.Label(
+            fill_all_row,
+            text="默认只补第 1 页、最多 50 个主题；勾选后可能耗时几分钟。",
+            bg="#eef1f5",
+            fg="#8a94a6",
+            font=("Microsoft YaHei UI", 8),
+        ).pack(anchor="w", padx=20)
+
+        level_box = ttk.LabelFrame(box, text=" 恋文等级补充（第三方，实验性） ")
+        level_box.pack(fill="x", pady=(0, 6))
+        self.love_level_var = tk.BooleanVar(value=bool(self.settings.get("love_level_enabled", False)))
+        ttk.Checkbutton(
+            level_box,
+            text="用恋文补充已知贴吧等级（默认关闭）",
+            variable=self.love_level_var,
+            command=self._on_love_level_changed,
+        ).pack(anchor="w", padx=8, pady=(4, 0))
+        tk.Label(
+            level_box,
+            text="只查已知吧；第三方等级可能滞后或不准确；需要贴吧ID或用户名。",
+            bg="#eef1f5",
+            fg="#8a94a6",
+            font=("Microsoft YaHei UI", 8),
+        ).pack(anchor="w", padx=20, pady=(2, 4))
+
         ui_box = ttk.LabelFrame(box, text=" 界面 ")
         ui_box.pack(fill="x", pady=(0, 6))
         start_row = tk.Frame(ui_box, bg="#eef1f5", padx=8, pady=4)
@@ -4846,6 +5519,64 @@ class App:
             value = 1
         self.settings["batch_concurrency"] = max(1, min(3, value))
         save_settings(self.settings)
+
+    def _on_lookup_fill_changed(self) -> None:
+        enabled = bool(self.lookup_fill_var.get())
+        if enabled and not self.settings.get("lookup_fill_threads", False):
+            if not messagebox.askyesno(
+                "启用回抓主题",
+                "开启后会从官方 feed 提取主题并逐个抓取。\n"
+                "每个主题至少一次请求，可能明显变慢；只补当前主题抓不到的内容。\n\n继续？",
+                parent=self.root,
+            ):
+                self.lookup_fill_var.set(False)
+                enabled = False
+        all_topics = bool(self.lookup_fill_all_var.get())
+        if all_topics and not self.settings.get("lookup_fill_all", False):
+            if not messagebox.askyesno(
+                "补全所有 feed 主题（特慢）",
+                "勾选后会抓完整主题，且不限制主题数量。\n"
+                "一次查询可能耗时几分钟，并增加触发安全验证的风险。\n\n继续？",
+                parent=self.root,
+            ):
+                self.lookup_fill_all_var.set(False)
+                all_topics = False
+        try:
+            limit = max(1, min(10000, int(self.lookup_fill_limit_var.get())))
+        except ValueError:
+            limit = 50
+        self.settings["lookup_fill_threads"] = enabled
+        self.settings["lookup_fill_pages"] = "full" if self.lookup_fill_pages_var.get() == "完整主题" else "1"
+        self.settings["lookup_fill_limit"] = limit
+        self.settings["lookup_fill_all"] = all_topics
+        self.settings["lookup_fill_comments"] = bool(self.lookup_fill_comments_var.get())
+        if all_topics:
+            self.settings["lookup_fill_pages"] = "full"
+        save_settings(self.settings)
+        try:
+            state = "disabled" if all_topics else "readonly"
+            self.lookup_fill_pages_box.configure(state=state)
+            self.lookup_fill_limit_box.configure(state="disabled" if all_topics else "normal")
+        except tk.TclError:
+            pass
+        self.general_hint.configure(text="已保存")
+
+    def _on_love_level_changed(self) -> None:
+        enabled = bool(self.love_level_var.get())
+        if enabled and not self.settings.get("love_level_enabled", False):
+            if not messagebox.askyesno(
+                "恋文等级补充（第三方）",
+                "数据来自恋文（第三方），非百度官方。\n"
+                "恋文等级可能滞后或不准确，只能查询已知贴吧；"
+                "需要贴吧ID或用户名。\n"
+                "恋文与本软件无隶属关系。\n\n继续？",
+                parent=self.root,
+            ):
+                self.love_level_var.set(False)
+                enabled = False
+        self.settings["love_level_enabled"] = enabled
+        save_settings(self.settings)
+        self.general_hint.configure(text="已保存")
 
     def _on_fetch_settings_changed(self) -> None:
         self.settings["auto_refresh_old"] = bool(self.auto_refresh_var.get())
@@ -5292,6 +6023,7 @@ class App:
                         "name": item["name"],
                         "username": item["username"],
                         "uid": item["uid"],
+                        "tieba_uid": item.get("tieba_uid") or "",
                         "portrait": item["portrait"],
                         "level": item["level"],
                         "badge": item["badge"],
@@ -5314,6 +6046,8 @@ class App:
                     bucket["username"] = item["username"]
                 if not bucket["portrait"] and item["portrait"]:
                     bucket["portrait"] = item["portrait"]
+                if not bucket["tieba_uid"] and item.get("tieba_uid"):
+                    bucket["tieba_uid"] = item["tieba_uid"]
                 if not bucket["level"] and item["level"]:
                     bucket["level"] = item["level"]
                 if not bucket["badge"] and item["badge"]:
@@ -5345,12 +6079,13 @@ class App:
 
         stats = self._aggregate_threads(threads)
         if all_mode:
-            headers = ["#", "昵称", "用户名", "用户ID", "等级", "头衔", "参与帖子", "楼层", "楼中楼", "合计"]
+            headers = ["#", "昵称", "用户名", "贴吧ID", "用户ID", "等级", "头衔", "参与帖子", "楼层", "楼中楼", "合计"]
             user_rows = [
                 [
                     index,
                     self._display_name(item),
                     display_text(item["username"]),
+                    item.get("tieba_uid") or "-",
                     item["uid"],
                     item["level"],
                     display_text(item["badge"]),
@@ -5362,12 +6097,13 @@ class App:
                 for index, item in enumerate(stats, start=1)
             ]
         else:
-            headers = ["#", "昵称", "用户名", "用户ID", "等级", "头衔", "楼层", "楼中楼", "合计"]
+            headers = ["#", "昵称", "用户名", "贴吧ID", "用户ID", "等级", "头衔", "楼层", "楼中楼", "合计"]
             user_rows = [
                 [
                     index,
                     self._display_name(item),
                     display_text(item["username"]),
+                    item.get("tieba_uid") or "-",
                     item["uid"],
                     item["level"],
                     display_text(item["badge"]),
@@ -5398,6 +6134,7 @@ class App:
                             f"{thread_index}. {title}",
                             self._display_name(item),
                             display_text(item["username"]),
+                            item.get("tieba_uid") or "-",
                             item["uid"],
                             item["level"],
                             display_text(item["badge"]),
@@ -5410,7 +6147,7 @@ class App:
             self._add_grid_tab(
                 self.grid_nb,
                 "分帖统计",
-                ["帖子", "昵称", "用户名", "用户ID", "等级", "头衔", "楼层", "楼中楼", "合计"],
+                ["帖子", "昵称", "用户名", "贴吧ID", "用户ID", "等级", "头衔", "楼层", "楼中楼", "合计"],
                 per_rows,
                 urls=per_urls,
                 default_sort="合计",
@@ -5431,6 +6168,7 @@ class App:
                         floor.post_no,
                         display_text(floor.author),
                         display_text(floor.author_name),
+                        floor.tieba_uid or "-",
                         floor.author_id,
                         floor.level,
                         display_text(floor.badge),
@@ -5446,6 +6184,7 @@ class App:
                         comment.floor_no,
                         display_text(comment.author),
                         display_text(comment.author_name),
+                        comment.tieba_uid or "-",
                         comment.author_id,
                         comment.level,
                         display_text(comment.content),
@@ -5456,6 +6195,7 @@ class App:
             "楼层",
             "昵称",
             "用户名",
+            "贴吧ID",
             "用户ID",
             "等级",
             "头衔",
@@ -5465,6 +6205,7 @@ class App:
             "所在楼层",
             "回复者",
             "用户名",
+            "贴吧ID",
             "用户ID",
             "等级",
             "内容",
@@ -5603,7 +6344,7 @@ class App:
 
     _SORT_ONLY_HEADERS = {"日期", "等级", "楼层", "楼中楼", "合计", "所在楼层", "#"}
     _TEXT_FILTER_HEADERS = {
-        "类型", "标记", "昵称", "回复者", "用户名", "用户ID", "头衔",
+        "类型", "标记", "昵称", "回复者", "用户名", "贴吧ID", "用户ID", "头衔",
         "内容", "帖子", "贴吧", "标题", "来源",
     }
 
@@ -6052,6 +6793,7 @@ class App:
         for title, index in (
             ("复制昵称", next((i for i, h in enumerate(headers) if h in ("昵称", "回复者")), -1)),
             ("复制用户名", next((i for i, h in enumerate(headers) if h == "用户名"), -1)),
+            ("复制贴吧ID", next((i for i, h in enumerate(headers) if h == "贴吧ID"), -1)),
             ("复制用户ID", next((i for i, h in enumerate(headers) if h == "用户ID"), -1)),
         ):
             if index >= 0:
@@ -6830,6 +7572,20 @@ class App:
                     use_cache=(not force if use_page_cache is None else bool(use_page_cache)),
                     cached_posts=local_cached,
                 )
+                if profile.get("ok"):
+                    official = list(profile.get("recent_posts") or [])
+                    current = merge_current_threads(official, getattr(self, "last_threads", []), profile)
+                    posts = official + current["posts"]
+                    posts.sort(key=lambda item: int(item.get("ts") or 0), reverse=(prefer != "start"))
+                    profile["recent_posts"] = posts[:count]
+                    profile["_supplement"] = {
+                        "official": len(official),
+                        "current": len(current["posts"]),
+                        "retrace": 0,
+                        "failed": 0,
+                        "total": len(posts),
+                        "shown": len(profile["recent_posts"]),
+                    }
             except Exception as error:  # noqa: BLE001
                 profile = {"ok": False, "error": str(error)}
             self._post(("profile_ready", key, user, profile))
@@ -6933,26 +7689,40 @@ class App:
                 continue
             item = dict(forum)
             if forums:
-                item["source"] = "公开"
+                item["source"] = "公开关注"
             elif "BDUSS" in str(profile.get("follow_error") or ""):
                 item["source"] = "profile片段"
             else:
-                item["source"] = "隐藏恢复"
+                item["source"] = "隐藏关注"
+            item["level_source"] = "官方" if int(item.get("level") or 0) > 0 else "-"
             merged[name] = item
         if not forums:
             for forum in profile.get("like_forum") or []:
                 name = forum.get("name")
                 if name and name not in merged:
-                    merged[name] = {"name": name, "level": 0, "level_name": "", "source": "精选"}
+                    merged[name] = {
+                        "name": name,
+                        "level": 0,
+                        "level_name": "",
+                        "source": "精选",
+                        "level_source": "-",
+                    }
         if bar_name and bar_level:
             name = bar_name[:-1] if bar_name.endswith("吧") and len(bar_name) > 2 else bar_name
             level_int = int(bar_level or 0)
             if name and level_int > 0:
                 existing = merged.get(name)
                 if existing is None:
-                    merged[name] = {"name": name, "level": level_int, "level_name": "", "source": "等级"}
+                    merged[name] = {
+                        "name": name,
+                        "level": level_int,
+                        "level_name": "",
+                        "source": "等级",
+                        "level_source": "主题",
+                    }
                 elif not existing.get("level"):
                     existing["level"] = level_int
+                    existing["level_source"] = "主题"
         for forum in profile.get("probed_forums") or []:
             name = forum.get("name")
             if not name:
@@ -6964,8 +7734,9 @@ class App:
                     "level": int(forum.get("level") or 0),
                     "level_name": forum.get("level_name") or "",
                     "source": "候选确认",
+                    "level_source": "官方" if int(forum.get("level") or 0) > 0 else "-",
                 }
-            elif existing.get("source") != "公开":
+            elif existing.get("source") != "公开关注":
                 if int(forum.get("level") or 0) > int(existing.get("level") or 0):
                     existing["level"] = int(forum.get("level") or 0)
                 existing["source"] = "候选确认"
@@ -7321,12 +8092,20 @@ class App:
                 values=(
                     forum["name"],
                     f"Lv.{forum['level']}" if forum.get("level") else "-",
+                    forum.get("level_source") or "-",
                     forum.get("source") or "",
                 ),
                 tags=self._row_tags(forum["name"], "forum"),
             )
             self._profile_forum_names[iid] = forum["name"]
+        self._request_love_levels(profile, combined, forum_tree, self._profile_forum_names, "profile")
 
+        has_supplement = any(str(post.get("source") or "") not in ("", "官方") for post in posts)
+        post_tree["displaycolumns"] = (
+            ("time", "type", "bar", "title", "content", "source")
+            if has_supplement
+            else ("time", "type", "bar", "title", "content")
+        )
         for index, post in enumerate(posts):
             iid = str(index)
             post_tree.insert(
@@ -7339,6 +8118,7 @@ class App:
                     post.get("bar") or "",
                     post.get("title") or "",
                     post.get("content") or "",
+                    post.get("source") or "官方",
                 ),
                 tags=self._row_tags(post.get("bar"), "posts"),
             )
@@ -7407,8 +8187,8 @@ class App:
                 pass
 
         status = (
-            f"{display_text(user['name'])} | {user['username'] or '-'} | ID {user['uid'] or '-'} | "
-            f"Lv.{level or '-'} | 发言 {len(posts)} | 关注 {len(combined)}"
+            f"{display_text(user['name'])} | {user['username'] or '-'} | 贴吧ID {user.get('tieba_uid') or '-'} | "
+            f"用户ID {user['uid'] or '-'} | Lv.{level or '-'} | 发言 {len(posts)} | 关注 {len(combined)}"
         )
         if profile.get("fans") is not None:
             status += f" | 粉丝 {profile['fans']}"
@@ -8025,6 +8805,15 @@ class App:
                 self.lookup_status.configure(text="查询失败")
             else:
                 self._render_lookup(profile)
+        elif kind == "levels_ready":
+            _, level_kind, profile, forums, results = message
+            self._apply_level_results(level_kind, profile, forums, results)
+        elif kind == "links_ready":
+            _, result, error = message
+            self._render_links(result, error)
+        elif kind == "love_ready":
+            _, result, error = message
+            self._render_love(result, error)
         elif kind == "cancelled":
             self._set_running(False)
             self.status_var.set("已停止")

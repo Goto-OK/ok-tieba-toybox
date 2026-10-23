@@ -15,6 +15,7 @@ import uuid
 from typing import Dict, List, Optional
 
 PROFILE_URL = "http://tiebac.baidu.com/c/u/user/profile?cmd=303012"
+TIEBA_UID_URL = "http://tiebac.baidu.com/c/u/user/getUserByTiebaUid?cmd=309702"
 CLIENT_VERSION = b"12.64.1.1"
 USER_AGENT = "bdtb for Android 12.64.1.1"
 
@@ -138,6 +139,60 @@ def build_request(uid: int, bduss: str) -> bytes:
     return _fb(1, data)
 
 
+def build_request_tieba_uid(tieba_uid: str, bduss: str = "") -> bytes:
+    common = b"".join(
+        [
+            _fv(1, 2),
+            _fb(2, CLIENT_VERSION),
+            _fb(10, bduss.encode()),
+        ]
+    )
+    data = b"".join(
+        [
+            _fb(1, common),
+            _fb(2, str(tieba_uid).encode()),
+        ]
+    )
+    return _fb(1, data)
+
+
+def _post_proto(request_url: str, payload: bytes) -> bytes:
+    boundary = "----tbpb" + uuid.uuid4().hex
+    body = (
+        (
+            f"--{boundary}\r\n"
+            'Content-Disposition: form-data; name="data"; filename="blob"\r\n'
+            "Content-Type: application/octet-stream\r\n\r\n"
+        ).encode()
+        + payload
+        + f"\r\n--{boundary}--\r\n".encode()
+    )
+    request = urllib.request.Request(
+        request_url,
+        data=body,
+        headers={
+            "User-Agent": USER_AGENT,
+            "Content-Type": f"multipart/form-data; boundary={boundary}",
+            "x_bd_data_type": "protobuf",
+        },
+    )
+    with urllib.request.urlopen(request, timeout=40) as response:
+        return response.read()
+
+
+def fetch_profile_by_tieba_uid(fetcher, tieba_uid: str) -> Dict:
+    """用用户可见的 tieba_uid 反查内部 user_id。"""
+    text = str(tieba_uid or "").strip()
+    if not text.isdigit():
+        return {}
+    bduss = fetcher.cookie_dict().get("BDUSS", "")
+    try:
+        raw = _post_proto(TIEBA_UID_URL, build_request_tieba_uid(text, bduss))
+    except Exception:  # noqa: BLE001
+        return {}
+    return parse_response(raw)
+
+
 def fetch_profile(fetcher, uid: str = "", portrait: str = "") -> Dict:
     """Return profile info from the client protobuf endpoint; {} on failure.
 
@@ -204,6 +259,7 @@ def parse_response(raw: bytes) -> Dict:
                 forums.append({"name": name, "fid": _num(value, 2)})
     return {
         "uid": _num(user, 2),
+        "tieba_uid": _text(user, 120) or "",
         "username": _text(user, 3) or "",
         "nickname": _text(user, 4) or "",
         "portrait": (_text(user, 5) or "").split("?")[0],

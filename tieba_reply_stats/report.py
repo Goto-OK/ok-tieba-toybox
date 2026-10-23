@@ -58,6 +58,7 @@ def export_user_posts(
     info = [
         ("昵称", user.get("name") or ""),
         ("用户名", user.get("username") or ""),
+        ("贴吧ID", user.get("tieba_uid") or ""),
         ("用户ID", user.get("uid") or ""),
         ("导出时间", datetime.now().strftime("%Y-%m-%d %H:%M:%S")),
         ("日期范围", f"{start_date or '不限'} ~ {end_date or '不限'}"),
@@ -96,8 +97,8 @@ def export_user_posts(
         summary.cell(row, 1, forum)
         summary.cell(row, 2, count)
 
-    headers = ["日期", "类型", "贴吧", "标题", "内容", "链接", "用户名", "用户ID"]
-    widths = [12, 9, 14, 34, 60, 46, 16, 14]
+    headers = ["日期", "类型", "贴吧", "标题", "内容", "链接", "用户名", "贴吧ID", "用户ID"]
+    widths = [12, 9, 14, 34, 60, 46, 16, 16, 14]
 
     def add_sheet(title: str, items: Sequence[Dict]) -> None:
         sheet = book.create_sheet(title)
@@ -117,6 +118,7 @@ def export_user_posts(
                     post.get("content") or "",
                     url,
                     user.get("username") or "",
+                    user.get("tieba_uid") or "",
                     user.get("uid") or "",
                 ]
             )
@@ -216,6 +218,7 @@ def export_user_report(
     info = [
         ("昵称", profile.get("nickname") or user.get("name") or ""),
         ("用户名", profile.get("username") or user.get("username") or ""),
+        ("贴吧 ID", user.get("tieba_uid") or profile.get("tieba_uid") or ""),
         ("用户 ID", profile.get("user_id") or user.get("uid") or ""),
         ("等级", user.get("level") or ""),
         ("粉丝", profile.get("fans") if profile.get("fans") is not None else ""),
@@ -240,9 +243,16 @@ def export_user_report(
     sheet.column_dimensions["B"].width = 50
 
     forum_sheet = book.create_sheet("关注贴吧")
-    forum_sheet.append(["贴吧", "等级", "来源"])
+    forum_sheet.append(["贴吧", "等级", "等级来源", "关注来源"])
     for forum in forums:
-        forum_sheet.append([forum["name"], forum["level"] or "-", forum["source"]])
+        forum_sheet.append(
+            [
+                forum["name"],
+                forum["level"] or "-",
+                forum.get("level_source") or "-",
+                forum["source"],
+            ]
+        )
     for cell in forum_sheet[1]:
         cell.font = bold
 

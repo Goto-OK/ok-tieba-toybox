@@ -7,7 +7,7 @@ from typing import Dict, List, Optional
 
 EMOJI_CODE_RE = re.compile(r"\[U\+([0-9A-Fa-f]{4,6})\]")
 LEVEL_OPTIONS = ("全部", "Lv.1-3", "Lv.4-6", "Lv.7-9", "Lv.10+", "无等级", "自定义")
-FIELD_OPTIONS = ("全部字段", "昵称", "用户名", "用户ID")
+FIELD_OPTIONS = ("全部字段", "昵称", "用户名", "贴吧ID", "用户ID")
 MARK_OPTIONS = ("全部", "警告", "可疑", "安全", "白")
 
 
@@ -76,6 +76,7 @@ def filter_users(
     for user in users:
         name = str(user.get("name") or "")
         username = str(user.get("username") or "")
+        tieba_uid = str(user.get("tieba_uid") or "")
         uid = str(user.get("uid") or "")
         aliases = [str(value or "") for value in user.get("aliases") or []]
         if text:
@@ -83,10 +84,12 @@ def filter_users(
                 values = [name, decode_display(name)] + aliases + [decode_display(a) for a in aliases]
             elif field == "用户名":
                 values = [username]
+            elif field == "贴吧ID":
+                values = [tieba_uid]
             elif field == "用户ID":
                 values = [uid]
             else:
-                values = [name, decode_display(name), username, uid] + aliases + [
+                values = [name, decode_display(name), username, tieba_uid, uid] + aliases + [
                     decode_display(a) for a in aliases
                 ]
             if text not in " ".join(values).casefold():

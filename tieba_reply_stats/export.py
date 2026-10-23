@@ -141,7 +141,7 @@ def _fill_cell(cell, col: Col, value) -> None:
 
     if col.text or isinstance(value, str):
         set_text(cell, str(value))
-        if col.text and col.title in ("用户ID", "帖子ID"):
+        if col.text and col.title in ("贴吧ID", "用户ID", "帖子ID"):
             cell.number_format = "@"
         return
 
@@ -198,6 +198,7 @@ def _user_rows(thread: ThreadData, include_op: bool = True) -> List[list]:
                 rank,
                 item["name"],
                 item["username"] or "-",
+                item.get("tieba_uid") or "-",
                 item["uid"] or "-",
                 _fmt_level(item["level"]),
                 item["badge"] or "-",
@@ -216,6 +217,7 @@ USER_COLS = [
     Col("排名", 7, "center"),
     Col("昵称", 20),
     Col("用户名", 20),
+    Col("贴吧ID", 22, "center", text=True),
     Col("用户ID", 22, "center", text=True),
     Col("等级", 10, "center"),
     Col("头衔", 15),
@@ -231,6 +233,7 @@ FLOOR_COLS = [
     Col("楼层", 9, "center"),
     Col("昵称", 20),
     Col("用户名", 20),
+    Col("贴吧ID", 22, "center", text=True),
     Col("用户ID", 22, "center", text=True),
     Col("等级", 10, "center"),
     Col("头衔", 15),
@@ -244,6 +247,7 @@ COMMENT_COLS = [
     Col("楼层作者", 18),
     Col("回复者", 20),
     Col("用户名", 20),
+    Col("贴吧ID", 22, "center", text=True),
     Col("用户ID", 22, "center", text=True),
     Col("等级", 10, "center"),
     Col("回复时间", 19, "center", fmt="yyyy-mm-dd hh:mm"),
@@ -340,6 +344,7 @@ def _write_thread(
             floor.post_no,
             floor.author,
             floor.author_name or "-",
+            floor.tieba_uid or "-",
             floor.author_id or "-",
             _fmt_level(floor.level),
             floor.badge or "-",
@@ -352,7 +357,7 @@ def _write_thread(
     floor_links = []
     for floor in thread.floors:
         profile = profile_url(floor.author_name, floor.portrait)
-        floor_links.append({2: profile, 3: profile, 9: post_url(thread.meta.tid, floor.pid)})
+        floor_links.append({2: profile, 3: profile, 10: post_url(thread.meta.tid, floor.pid)})
     sheet = workbook.create_sheet(f"{prefix}楼层明细")
     sheet.sheet_properties.tabColor = TAB_COLORS[1]
     write_table(sheet, FLOOR_COLS, floor_rows, links=floor_links)
@@ -363,6 +368,7 @@ def _write_thread(
             comment.floor_author,
             comment.author,
             comment.author_name or "-",
+            comment.tieba_uid or "-",
             comment.author_id or "-",
             _fmt_level(comment.level),
             comment.posted_at,
@@ -374,7 +380,7 @@ def _write_thread(
     comment_links = []
     for comment in thread.comments:
         profile = profile_url(comment.author_name, comment.portrait)
-        comment_links.append({3: profile, 4: profile, 9: post_url(thread.meta.tid, comment.pid)})
+        comment_links.append({3: profile, 4: profile, 10: post_url(thread.meta.tid, comment.pid)})
     sheet = workbook.create_sheet(f"{prefix}楼中楼明细")
     sheet.sheet_properties.tabColor = TAB_COLORS[2]
     write_table(sheet, COMMENT_COLS, comment_rows, links=comment_links)
@@ -483,8 +489,17 @@ def _write_overview(workbook: Workbook, threads: List[ThreadData], include_op: b
             key = item["uid"] or f"name:{item['name']}"
             entry = totals.setdefault(
                 key,
-                {"name": item["name"], "uid": item["uid"], "threads": 0, "floors": 0, "comments": 0},
+                {
+                    "name": item["name"],
+                    "uid": item["uid"],
+                    "tieba_uid": item.get("tieba_uid") or "",
+                    "threads": 0,
+                    "floors": 0,
+                    "comments": 0,
+                },
             )
+            if not entry.get("tieba_uid"):
+                entry["tieba_uid"] = item.get("tieba_uid") or ""
             entry["threads"] += 1
             entry["floors"] += item["floor_count"]
             entry["comments"] += item["comment_count"]
@@ -494,6 +509,7 @@ def _write_overview(workbook: Workbook, threads: List[ThreadData], include_op: b
     cols = [
         Col("排名", 7, "center"),
         Col("用户", 24),
+        Col("贴吧ID", 22, "center", text=True),
         Col("用户ID", 22, "center", text=True),
         Col("参与帖子", 12, "center", fmt="0"),
         Col("主题楼层", 13, "center", fmt="0"),
@@ -504,6 +520,7 @@ def _write_overview(workbook: Workbook, threads: List[ThreadData], include_op: b
         [
             rank,
             item["name"],
+            item.get("tieba_uid") or "-",
             item["uid"] or "-",
             item["threads"],
             item["floors"],

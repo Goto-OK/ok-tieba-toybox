@@ -36,15 +36,16 @@ def _cached_get_json(
     key: tuple[str, str, int],
     use_cache: bool = True,
     cache_priority: int = post_cache.PRIORITY_HIGH,
+    variant: str = "",
 ):
     user_key, kind, page = key
     if use_cache:
-        hit = post_cache.cache().get_page(user_key, kind, page)
+        hit = post_cache.cache().get_page(user_key, kind, page, variant=variant)
         if hit is not None:
             return hit
     payload = fetcher.get_json(url, name=name)
     if use_cache and user_key:
-        post_cache.cache().put_page(user_key, kind, page, payload, priority=cache_priority)
+        post_cache.cache().put_page(user_key, kind, page, payload, priority=cache_priority, variant=variant)
     return payload
 
 
@@ -55,14 +56,15 @@ def _cached_thread_page(
     use_cache: bool = True,
     cache_priority: int = post_cache.PRIORITY_HIGH,
 ) -> List[Dict]:
+    variant = "60:v1"
     if use_cache:
-        hit = post_cache.cache().get_page(uid, "topic", page)
+        hit = post_cache.cache().get_page(uid, "topic", page, variant=variant)
         if hit is not None:
             return list(hit.get("items") or [])
     raw = userpost_pb._request(fetcher, int(uid), page)
     items = userpost_pb.parse_response(raw)
     if use_cache:
-        post_cache.cache().put_page(uid, "topic", page, {"items": items}, priority=cache_priority)
+        post_cache.cache().put_page(uid, "topic", page, {"items": items}, priority=cache_priority, variant=variant)
     return items
 
 
@@ -187,6 +189,17 @@ def resolve_user(fetcher, query: str, mode: str = "用户名") -> Dict:
         return {}
     if mode == "昵称":
         return search_user_by_nickname(fetcher, text)
+    if mode == "贴吧ID":
+        profile = profile_pb.fetch_profile_by_tieba_uid(fetcher, text)
+        if not profile.get("uid"):
+            return {}
+        return {
+            "uid": str(profile["uid"]),
+            "tieba_uid": text,
+            "username": profile.get("username") or "",
+            "nickname": profile.get("nickname") or "",
+            "portrait": profile.get("portrait") or "",
+        }
     key = "uid" if mode == "用户ID" or (mode == "自动" and text.isdigit()) else "un"
     try:
         payload = fetcher.get_json(USER_JSON_URL.format(key=key, value=quote(text)))
@@ -348,7 +361,9 @@ def fetch_user_posts(
                        "replies_exhausted": False,
                        "threads_ok": None, "threads_error": "",
                        "topic_pages": 0, "topic_reached_start": False,
-                       "topic_truncated": False, "topic_exhausted": False})
+                       "topic_truncated": False, "topic_exhausted": False,
+                       "requested_start": start_date, "requested_end": end_date,
+                       "requested_count": count, "coverage_start": "", "coverage_end": ""})
     if not portrait and not uid:
         return posts
     start = _parse_date(start_date)
@@ -381,6 +396,7 @@ def fetch_user_posts(
                 "pid": str(pid),
                 "content": content[:120],
                 "url": f"https://tieba.baidu.com/p/{tid}" + (f"?pid={pid}" if pid else ""),
+                "source": "官方",
             }
         )
 
@@ -389,8 +405,10 @@ def fetch_user_posts(
     # 否则后面的主题流会把这批回复挤出结果。
     # 旧接口支持 rn=100，用大页减少翻页数；80*20 只能到最近几个月。
     reply_page_size = 300
-    # 指定开始日期时，条数只限制最终展示；抓取必须到开始日期。
-    collect_start = bool(start)
+    # 指定开始日期 + 优先最早：抓取必须到开始日期；
+    # 指定开始日期 + 优先最近：每条流取够 count 即停。
+    deep_start = bool(start) and prefer == "start"
+    collect_start = deep_start
     page = 1
     while page <= 150 and (len(posts) < count or collect_start):
         params = _sign(
@@ -412,6 +430,7 @@ def fetch_user_posts(
                 (_cache_user_key(uid, portrait), "reply", page),
                 use_cache=use_cache,
                 cache_priority=cache_priority,
+                variant=f"{reply_page_size}:v1",
             )
             if status is not None:
                 status["replies_ok"] = True
@@ -488,10 +507,10 @@ def fetch_user_posts(
                 )
             oldest = min((int(item.get("ts") or 0) for item in thread_items), default=0)
             oldest_day = datetime.fromtimestamp(oldest).date() if oldest else None
-            if start and oldest_day and oldest_day < start:
+            if deep_start and start and oldest_day and oldest_day < start:
                 topic_reached_start = True
                 break
-            if not start and len(posts) >= count:
+            if len(posts) >= count and not deep_start:
                 break
         if status is not None:
             status["topic_reached_start"] = topic_reached_start
@@ -522,6 +541,7 @@ def fetch_user_posts(
                     (_cache_user_key(uid, portrait), "thread", page),
                     use_cache=use_cache,
                     cache_priority=cache_priority,
+                    variant=f"{reply_page_size}:v1",
                 )
             except Exception as error:  # noqa: BLE001
                 if status is not None:
@@ -555,6 +575,16 @@ def fetch_user_posts(
     known.sort(key=lambda item: item.get("ts") or 0, reverse=(prefer != "start"))
     # 不做类型配额：按时间排序后是什么就返回什么，避免人为改变数据。
     posts = known + unknown
+    coverage_dates = [
+        datetime.fromtimestamp(int(item.get("ts") or 0)).date()
+        for item in posts
+        if int(item.get("ts") or 0) > 0
+    ]
+    coverage_start = min(coverage_dates).strftime("%Y-%m-%d") if coverage_dates else ""
+    coverage_end = max(coverage_dates).strftime("%Y-%m-%d") if coverage_dates else ""
+    if status is not None:
+        status["coverage_start"] = coverage_start
+        status["coverage_end"] = coverage_end
     if uid:
         cache_key = str(uid)
         post_cache.cache().put_user(
@@ -563,6 +593,11 @@ def fetch_user_posts(
                 "posts": posts,
                 "fetched_at": time.time(),
                 "count": count,
+                "requested_start": start_date,
+                "requested_end": end_date,
+                "requested_count": count,
+                "coverage_start": coverage_start,
+                "coverage_end": coverage_end,
                 "start_date": start_date,
                 "end_date": end_date,
                 "prefer": prefer,
@@ -594,15 +629,11 @@ def cached_user_posts(
         return None
     start = _parse_date(start_date)
     end = _parse_date(end_date)
-    cached_start = _parse_date(str(data.get("start_date") or ""))
-    cached_end = _parse_date(str(data.get("end_date") or ""))
+    cached_start = _parse_date(str(data.get("coverage_start") or data.get("start_date") or ""))
+    cached_end = _parse_date(str(data.get("coverage_end") or data.get("end_date") or ""))
     if start and (not cached_start or start < cached_start):
         return None
-    if not start and cached_start:
-        return None
     if end and (not cached_end or end > cached_end):
-        return None
-    if not end and cached_end:
         return None
     filtered = []
     for item in posts:
@@ -730,6 +761,7 @@ def fetch_user_profile(
     return {
         "ok": True,
         "user_id": user_id,
+        "tieba_uid": str(pb.get("tieba_uid") or ""),
         "username": username,
         "nickname": pb.get("nickname") or "",
         "portrait": portrait,

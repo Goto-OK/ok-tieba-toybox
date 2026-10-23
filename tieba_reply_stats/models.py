@@ -16,6 +16,7 @@ class Floor:
     author: str  # 显示名（昵称 user_nickname，浏览时最先看到）
     author_name: str = ""  # 用户名（原始 user_name，如 “吧友1384”）
     author_id: str = ""
+    tieba_uid: str = ""  # 用户可见的贴吧ID，可为空
     portrait: str = ""  # 头像标识，用于查询用户资料
     posted_at: Optional[datetime] = None
     content: str = ""
@@ -40,6 +41,7 @@ class Comment:
     author: str  # 显示名（昵称）
     author_name: str = ""  # 用户名（原始）
     author_id: str = ""
+    tieba_uid: str = ""  # 用户可见的贴吧ID，可为空
     portrait: str = ""  # 头像标识
     posted_at: Optional[datetime] = None
     content: str = ""
@@ -93,6 +95,7 @@ class ThreadData:
             badge: str = "",
             username: str = "",
             portrait: str = "",
+            tieba_uid: str = "",
         ) -> dict:
             level = str(level or "").strip()
             if level in ("0", "None"):
@@ -112,6 +115,7 @@ class ThreadData:
                     "name": name or "匿名用户",
                     "username": username or "",
                     "uid": uid,
+                    "tieba_uid": tieba_uid or "",
                     "portrait": portrait or "",
                     "level": level or "",
                     "badge": badge or "",
@@ -130,6 +134,8 @@ class ThreadData:
                 bucket["username"] = username
             if not bucket["portrait"] and portrait:
                 bucket["portrait"] = portrait
+            if not bucket["tieba_uid"] and tieba_uid:
+                bucket["tieba_uid"] = tieba_uid
             if not bucket["level"] and level:
                 bucket["level"] = level
             if not bucket["badge"] and badge:
@@ -149,6 +155,7 @@ class ThreadData:
                 floor.badge,
                 floor.author_name,
                 floor.portrait,
+                floor.tieba_uid,
             )
             bucket["floor_count"] += 1
             bucket["total"] += 1
@@ -161,6 +168,7 @@ class ThreadData:
                 level=comment.level,
                 username=comment.author_name,
                 portrait=comment.portrait,
+                tieba_uid=comment.tieba_uid,
             )
             bucket["comment_count"] += 1
             bucket["total"] += 1

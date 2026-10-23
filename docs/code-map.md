@@ -25,6 +25,9 @@
 | `profile_pb.py` | 客户端 profile protobuf |
 | `userpost_pb.py` | 客户端 userpost protobuf |
 | `follow_probe.py` | 隐藏关注候选探测 |
+| `lookup_supplement.py` | 查用户当前主题/回抓主题补全 |
+| `link_parser.py` | 官方帖子链接解析 |
+| `third_party.py` | 恋文公开数据适配（发言/等级） |
 | `collect.py` | 抓取编排、身份/等级补全、匿名/关注增强分流 |
 | `models.py` | Floor / Comment / ThreadData / 用户汇总 |
 | `filters.py` | 参与者关键词/等级/标记筛选 |
@@ -51,6 +54,8 @@
 - 表格查看（回复统计、分帖、楼层、楼中楼、对比）；
 - 参与者页（筛选、分页、红绿灯、资料面板）；
 - 查用户页；
+- 链接解析页（官方链接）；
+- 恋文增强页（第三方发言）；
 - 设置页（左侧分类）；
 - 对话框 / 快捷键 / 单实例；
 - 持久化 / 导出 / 日志 / 主题。

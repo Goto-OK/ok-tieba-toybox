@@ -23,6 +23,12 @@ DEFAULTS: Dict[str, Any] = {
     "auto_refresh_old": False,
     "removed_thread_action": "keep",  # keep / remove / ask
     "batch_concurrency": 1,
+    "lookup_fill_threads": False,
+    "lookup_fill_pages": "1",
+    "lookup_fill_limit": 50,
+    "lookup_fill_all": False,
+    "lookup_fill_comments": False,
+    "love_level_enabled": False,
     "proxy_mode": "system",  # system / none / custom
     "proxy_url": "",
     "log_enabled": False,
@@ -45,6 +51,7 @@ _CHOICES = {
     "table_density": ("comfortable", "compact"),
     "theme_mode": ("light", "dark", "system"),
     "accent": ("blue", "green", "purple", "orange", "pink", "cyan", "red"),
+    "lookup_fill_pages": ("1", "full"),
 }
 
 
