@@ -25,7 +25,7 @@ from tkinter import filedialog, messagebox, simpledialog, ttk
 from typing import Any, Callable, Dict, List, Optional
 from urllib.parse import quote
 
-from tieba_reply_stats import third_party
+from tieba_reply_stats import profile_pb, third_party
 from tieba_reply_stats.blacklist import (
     LEVEL_LABEL,
     classify,
@@ -197,6 +197,10 @@ class App:
         self.last_outputs: List[str] = []
         self.last_threads: list = []
         self._auto_filled = False
+        self._tieba_uid_tried: set = set()
+        self._tieba_uid_cache: Dict[str, str] = {}
+        self._tieba_uid_running = False
+        self._pending_export = None
         self._profile_topic_limit = 50
         self._lookup_normalize_job: Optional[str] = None
         self._emoji_window: Optional[tk.Toplevel] = None
@@ -1787,6 +1791,85 @@ class App:
 
         threading.Thread(target=worker, daemon=True).start()
 
+    def _auto_fill_tieba_uids(self) -> None:
+        """参与者先显示，后台按 uid 查资料补 tieba_uid。"""
+        if getattr(self, "_tieba_uid_running", False):
+            return
+        tried = getattr(self, "_tieba_uid_tried", None)
+        if tried is None:
+            tried = set()
+            self._tieba_uid_tried = tried
+        cache = getattr(self, "_tieba_uid_cache", None)
+        if cache is None:
+            cache = {}
+            self._tieba_uid_cache = cache
+        missing = [
+            user
+            for user in getattr(self, "people_users", [])
+            if user.get("uid") and not user.get("tieba_uid") and user["uid"] not in tried
+        ]
+        if not missing:
+            return
+        uids = []
+        for user in missing:
+            uid = str(user.get("uid") or "")
+            if uid and uid not in uids:
+                uids.append(uid)
+                tried.add(uid)
+        if not uids:
+            return
+        self._tieba_uid_running = True
+        self._tieba_uid_done = 0
+        self._tieba_uid_total = len(uids)
+        self.people_hint.configure(text=f"正在补全贴吧ID 0/{len(uids)}…")
+
+        def worker():
+            from concurrent.futures import ThreadPoolExecutor, as_completed
+
+            fetcher = Fetcher(cookie={}, delay=0.2, verbose=False)
+            results = {}
+
+            def one(uid):
+                if uid in cache:
+                    return uid, cache[uid]
+                try:
+                    profile = profile_pb.fetch_profile(fetcher, uid)
+                    return uid, str(profile.get("tieba_uid") or "")
+                except Exception:  # noqa: BLE001
+                    return uid, ""
+
+            with ThreadPoolExecutor(max_workers=3) as pool:
+                futures = [pool.submit(one, uid) for uid in uids]
+                for index, future in enumerate(as_completed(futures), start=1):
+                    uid, tieba_uid = future.result()
+                    results[uid] = tieba_uid
+                    if tieba_uid:
+                        cache[uid] = tieba_uid
+                    if index == 1 or index % 5 == 0 or index == len(uids):
+                        self._post(("tieba_uids_progress", index, len(uids)))
+            self._post(("tieba_uids_ready", results, len(uids)))
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _apply_tieba_uids(self, results) -> None:
+        for thread in getattr(self, "last_threads", []):
+            for floor in thread.floors:
+                if floor.author_id in results and results[floor.author_id]:
+                    floor.tieba_uid = results[floor.author_id]
+            for comment in thread.comments:
+                if comment.author_id in results and results[comment.author_id]:
+                    comment.tieba_uid = results[comment.author_id]
+        for user in getattr(self, "people_users", []):
+            uid = str(user.get("uid") or "")
+            if uid in results and results[uid]:
+                user["tieba_uid"] = results[uid]
+        for profile in (getattr(self, "_last_lookup_profile", None), getattr(self, "_profile_data", None)):
+            if not profile:
+                continue
+            uid = str(profile.get("user_id") or "")
+            if uid in results and results[uid]:
+                profile["tieba_uid"] = results[uid]
+
     def _on_lookup_query_changed(self, *_args) -> None:
         if getattr(self, "_normalizing_query", False):
             return
@@ -2125,13 +2208,15 @@ class App:
             wraplength=590,
             justify="left",
         )
-        self.lookup_info.pack(side="left", fill="x", expand=True)
+        self.lookup_info.pack(fill="x")
         self.lookup_info.bind("<Button-3>", lambda _event: self._copy_lookup_summary())
+        summary_bottom = tk.Frame(summary, bg="#eef1f5")
+        summary_bottom.pack(fill="x", pady=(2, 0))
         self.lookup_copy_btn = ttk.Button(
-            summary, text="复制摘要", command=self._copy_lookup_summary, width=9
+            summary_bottom, text="复制摘要", command=self._copy_lookup_summary, width=9
         )
         self.lookup_copy_btn.pack(side="right", padx=(6, 0))
-        traffic = tk.Frame(summary, bg="#eef1f5")
+        traffic = tk.Frame(summary_bottom, bg="#eef1f5")
         traffic.pack(side="right", padx=(8, 0))
         tk.Label(
             traffic, text="红绿灯：", bg="#eef1f5", fg="#6b7280", font=("Microsoft YaHei UI", 8)
@@ -2155,6 +2240,10 @@ class App:
             traffic, text="", bg="#eef1f5", fg="#6b7280", font=("Microsoft YaHei UI", 8)
         )
         self.lookup_traffic_text.pack(side="left", padx=(8, 0))
+        self.lookup_summary.bind(
+            "<Configure>",
+            lambda event: self.lookup_info.configure(wraplength=max(300, event.width - 24)),
+        )
 
         cache_row = tk.Frame(page, bg="#eef1f5", padx=12)
         self.lookup_cache_row = cache_row
@@ -3118,6 +3207,7 @@ class App:
         for tree in (self.profile_forum_tree, self.profile_post_tree):
             for item in tree.get_children():
                 tree.delete(item)
+        self._auto_fill_tieba_uids()
 
     def _people_go(self, value) -> None:
         users = getattr(self, "people_users", [])
@@ -7144,7 +7234,36 @@ class App:
             parts.append(current)
         return parts
 
+    def _wait_for_tieba_uid_export(self, callback) -> bool:
+        if not getattr(self, "_tieba_uid_running", False):
+            self._auto_fill_tieba_uids()
+        if not getattr(self, "_tieba_uid_running", False):
+            return True
+        choice = self._ask_choice(
+            "贴吧ID补全中",
+            f"贴吧ID还在补全 {getattr(self, '_tieba_uid_done', 0)}/{getattr(self, '_tieba_uid_total', 0)}。\n"
+            "等待补全后导出的贴吧ID更完整；直接导出会按当前结果写入，未补到的写 -。",
+            [
+                ("等待补全后导出", "wait"),
+                ("直接导出", "now"),
+                ("取消", None),
+            ],
+            default=0,
+        )
+        if choice is None:
+            return False
+        if choice == "wait":
+            self._pending_export = callback
+            self.people_hint.configure(text="等待贴吧ID补全后导出…")
+            return False
+        return True
+
     def _export_now(self) -> None:
+        if not self._wait_for_tieba_uid_export(self._export_now_actual):
+            return
+        self._export_now_actual()
+
+    def _export_now_actual(self) -> None:
         if not self.last_threads:
             self.status_var.set("还没有可导出的数据")
             self._append_log("导出前需要先抓取帖子。", "muted")
@@ -7204,6 +7323,14 @@ class App:
             "筛选条件": self._filter_summary(),
             "关注增强": "开" if self.settings.get("follow_enhance") else "关",
             "包含关注": "是" if self.include_follows_var.get() else "否",
+            "贴吧ID补全": (
+                f"进行中 {getattr(self, '_tieba_uid_done', 0)}/{getattr(self, '_tieba_uid_total', 0)}"
+                if getattr(self, "_tieba_uid_running", False)
+                else "完成"
+            ),
+            "贴吧ID为空用户": str(
+                sum(1 for user in self._visible_people() if not user.get("tieba_uid"))
+            ),
             "数据警告": "；".join(warnings) if warnings else "无",
             "空帖子": "；".join(empty) if empty else "无",
         }
@@ -7882,6 +8009,8 @@ class App:
         return "没有查到关注列表"
 
     def _export_profile_report(self) -> None:
+        if not self._wait_for_tieba_uid_export(self._export_profile_report):
+            return
         user = getattr(self, "_profile_user", None)
         profile = getattr(self, "_profile_data", None)
         if not user or not profile:
@@ -7895,6 +8024,8 @@ class App:
         self._choose_report_path(user, profile, mark)
 
     def _export_lookup_report(self) -> None:
+        if not self._wait_for_tieba_uid_export(self._export_lookup_report):
+            return
         profile = getattr(self, "_last_lookup_profile", None)
         if not profile:
             messagebox.showinfo("还没有资料", "先查询一个用户。", parent=self.root)
@@ -8021,6 +8152,10 @@ class App:
         return chosen_start, chosen_end
 
     def _export_posts_for(self, user, profile, start: str, end: str) -> None:
+        if not self._wait_for_tieba_uid_export(
+            lambda: self._export_posts_for(user, profile, start, end)
+        ):
+            return
         sources = profile.get("post_sources") or {}
         if sources.get("topic_truncated"):
             if not messagebox.askokcancel(
@@ -8424,6 +8559,7 @@ class App:
             ):
                 return
         self.last_threads = threads
+        self._tieba_uid_tried = set()
         self._enrich_restored_identities()
         try:
             self._refresh_people()
@@ -8772,6 +8908,7 @@ class App:
             self.last_threads = self._merge_threads(threads or [])
             self._persist_result(self.last_threads)
             self._auto_filled = False
+            self._tieba_uid_tried = set()
             try:
                 self._reset_people_filters()
                 self._refresh_people()
@@ -8810,6 +8947,7 @@ class App:
             self.last_output = output
             self.last_threads = threads or []
             self._auto_filled = False
+            self._tieba_uid_tried = set()
             self._set_running(False)
             self.status_var.set("已停止（已导出完成部分）" if output else "已停止")
             if output:
@@ -8930,6 +9068,29 @@ class App:
                 self.lookup_status.configure(text="查询失败")
             else:
                 self._render_lookup(profile)
+        elif kind == "tieba_uids_progress":
+            _, done, total = message
+            self._tieba_uid_done = done
+            self._tieba_uid_total = total
+            self.people_hint.configure(text=f"正在补全贴吧ID {done}/{total}…")
+        elif kind == "tieba_uids_ready":
+            _, results, total = message
+            self._tieba_uid_running = False
+            self._apply_tieba_uids(results)
+            self._refresh_people()
+            self._refresh_grid()
+            if getattr(self, "_last_lookup_profile", None):
+                self._render_lookup(self._last_lookup_profile)
+            if getattr(self, "_profile_data", None):
+                self._render_profile(getattr(self, "_profile_user", {}), self._profile_data)
+            missing = sum(1 for user in self.people_users if not user.get("tieba_uid"))
+            self.people_hint.configure(
+                text=f"贴吧ID补全完成：{len(results) - missing}/{total}，仍缺 {missing} 人"
+            )
+            pending = getattr(self, "_pending_export", None)
+            if pending:
+                self._pending_export = None
+                self.root.after(50, pending)
         elif kind == "levels_ready":
             _, level_kind, profile, forums, results = message
             self._apply_level_results(level_kind, profile, forums, results)
