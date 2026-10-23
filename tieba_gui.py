@@ -3353,6 +3353,7 @@ class App:
         ttk.Button(bar, text="从剪贴板导入", command=self._links_from_clipboard).pack(side="left")
         ttk.Button(bar, text="开始解析", command=self._start_links).pack(side="left", padx=(8, 0))
         ttk.Button(bar, text="停止", command=self._stop_links).pack(side="left", padx=(8, 0))
+        ttk.Button(bar, text="打开选中链接", command=self._open_links_link).pack(side="left", padx=(8, 0))
         ttk.Button(bar, text="导出 Excel", command=self._export_links).pack(side="left", padx=(8, 0))
         self.links_status = tk.Label(
             bar, text="", bg="#ffffff", fg="#64748b", font=("Microsoft YaHei UI", 9)
@@ -3386,10 +3387,19 @@ class App:
         xscroll.grid(row=1, column=0, sticky="ew")
         wrap.rowconfigure(0, weight=1)
         wrap.columnconfigure(0, weight=1)
+        self._links_urls: Dict[str, str] = {}
+        self.links_tree.bind("<Double-1>", lambda _event: self._open_links_link())
         self._links_rows: List[Dict] = []
         self._links_errors: List[Dict] = []
         self._links_stop = threading.Event()
         self._links_running = False
+
+    def _open_links_link(self) -> None:
+        selection = self.links_tree.selection()
+        if selection:
+            url = self._links_urls.get(selection[0], "")
+            if url:
+                webbrowser.open(url)
 
     def _links_from_clipboard(self) -> None:
         try:
@@ -3414,6 +3424,7 @@ class App:
         self._links_stop.clear()
         self._links_rows = []
         self._links_errors = []
+        self._links_urls = {}
         for item in self.links_tree.get_children():
             self.links_tree.delete(item)
         self.links_status.configure(text="解析中…")
@@ -3439,10 +3450,12 @@ class App:
             return
         self._links_rows = list(result.get("rows") or [])
         self._links_errors = list(result.get("errors") or [])
-        for row in self._links_rows:
+        for index, row in enumerate(self._links_rows):
+            iid = str(index)
             self.links_tree.insert(
                 "",
                 "end",
+                iid=iid,
                 values=(
                     row.get("time") or "",
                     row.get("type") or "",
@@ -3453,6 +3466,7 @@ class App:
                     row.get("url") or "",
                 ),
             )
+            self._links_urls[iid] = row.get("url") or ""
         extra = f" / 失败 {len(self._links_errors)}" if self._links_errors else ""
         self.links_status.configure(
             text=f"链接 {result.get('links', 0)} / 主题 {result.get('threads', 0)} / 成功 {len(self._links_rows)}{extra}"
@@ -3516,6 +3530,7 @@ class App:
         ttk.Button(row, text="抓取", command=self._start_love).pack(side="left", padx=(8, 0))
         ttk.Button(row, text="下一页", command=self._next_love).pack(side="left", padx=(4, 0))
         ttk.Button(row, text="停止", command=self._stop_love).pack(side="left", padx=(4, 0))
+        ttk.Button(row, text="打开选中链接", command=self._open_love_link).pack(side="left", padx=(8, 0))
         ttk.Button(row, text="导出已加载", command=self._export_love).pack(side="left", padx=(8, 0))
         self.love_status = tk.Label(
             top,
@@ -3553,12 +3568,45 @@ class App:
         xscroll.grid(row=1, column=0, sticky="ew")
         wrap.rowconfigure(0, weight=1)
         wrap.columnconfigure(0, weight=1)
+        self._love_urls: Dict[str, str] = {}
+        self.love_tree.bind("<Double-1>", lambda _event: self._open_love_link())
+        self.love_tree.bind("<Control-c>", lambda _event: self._copy_love_link())
+        self.love_menu = tk.Menu(self.love_tree, tearoff=0)
+        self.love_menu.add_command(label="打开链接", command=self._open_love_link)
+        self.love_menu.add_command(label="复制链接", command=self._copy_love_link)
+        self.love_tree.bind(
+            "<Button-3>",
+            lambda event: self._popup_tree_menu(self.love_tree, self.love_menu, event),
+        )
         self._love_rows: List[Dict] = []
         self._love_seen: set = set()
         self._love_page = 0
         self._love_has_next = True
         self._love_running = False
         self._love_stop = threading.Event()
+
+    def _popup_tree_menu(self, tree, menu, event) -> None:
+        row = tree.identify_row(event.y)
+        if row:
+            tree.selection_set(row)
+        try:
+            menu.tk_popup(event.x_root, event.y_root)
+        finally:
+            menu.grab_release()
+
+    def _selected_love_url(self) -> str:
+        selection = self.love_tree.selection()
+        return self._love_urls.get(selection[0], "") if selection else ""
+
+    def _open_love_link(self) -> None:
+        url = self._selected_love_url()
+        if url:
+            webbrowser.open(url)
+
+    def _copy_love_link(self) -> None:
+        url = self._selected_love_url()
+        if url:
+            self._copy_text(url)
 
     def _stop_love(self) -> None:
         self._love_stop.set()
@@ -3582,6 +3630,7 @@ class App:
             self._love_disclaimer_seen = True
         self._love_rows = []
         self._love_seen = set()
+        self._love_urls = {}
         self._love_page = 0
         self._love_has_next = True
         for item in self.love_tree.get_children():
@@ -3656,9 +3705,11 @@ class App:
             if key:
                 self._love_seen.add(key)
             self._love_rows.append(row)
+            iid = str(len(self._love_rows) - 1)
             self.love_tree.insert(
                 "",
                 "end",
+                iid=iid,
                 values=(
                     row.get("time") or "",
                     row.get("type") or "",
@@ -3669,6 +3720,7 @@ class App:
                     row.get("url") or "",
                 ),
             )
+            self._love_urls[iid] = row.get("url") or ""
             added += 1
         self.love_status.configure(
             text=(
