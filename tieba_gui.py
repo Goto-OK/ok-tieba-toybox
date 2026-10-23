@@ -5351,6 +5351,19 @@ class App:
         ttk.Button(help_row, text="复制诊断信息", command=self._copy_diagnostics, width=14).pack(
             side="left", padx=(8, 0)
         )
+        ttk.Button(
+            help_row,
+            text="测试内置验证窗口",
+            command=self._test_embedded_verification,
+            width=16,
+        ).pack(side="left", padx=(8, 0))
+        tk.Label(
+            help_box,
+            text="测试只读取 Cookie 名称，不触发验证码，不写入登录状态。",
+            bg="#eef1f5",
+            fg="#8a94a6",
+            font=("Microsoft YaHei UI", 8),
+        ).pack(anchor="w", padx=8, pady=(0, 4))
         tk.Label(
             help_box,
             text="第三方组件：Python / PyInstaller / lxml / openpyxl / Tcl-Tk，各自按其许可证分发。",
@@ -5488,6 +5501,30 @@ class App:
             os.startfile(path)  # type: ignore[attr-defined]
         except OSError as error:
             messagebox.showerror("打不开目录", friendly_error(error), parent=self.root)
+
+    def _test_embedded_verification(self) -> None:
+        if getattr(self, "_webview_running", False):
+            messagebox.showinfo("正在测试", "内置验证窗口已经打开。", parent=self.root)
+            return
+        if not webview2.available():
+            messagebox.showinfo(
+                "内置验证窗口不可用",
+                "未检测到 pywebview 或 WebView2 Runtime。\n"
+                "仍可使用「转到登录模式（完整 Cookie）」。",
+                parent=self.root,
+            )
+            return
+        self._webview_running = True
+        self.status_var.set("正在打开内置验证窗口（测试）…")
+
+        def worker():
+            try:
+                cookie = webview2.open_verification("https://tieba.baidu.com/")
+                self._post(("webview_test_done", cookie, ""))
+            except Exception as error:  # noqa: BLE001
+                self._post(("webview_test_done", "", str(error)))
+
+        threading.Thread(target=worker, daemon=True).start()
 
     def _copy_diagnostics(self) -> None:
         lines = [
@@ -10011,6 +10048,28 @@ class App:
 
                 threading.Thread(target=worker, daemon=True).start()
             self._refresh_log_summary()
+        elif kind == "webview_test_done":
+            _, cookie, error = message
+            self._webview_running = False
+            if error:
+                self.status_var.set("内置验证窗口测试失败")
+                messagebox.showwarning(
+                    "测试失败",
+                    f"内置验证窗口启动失败：\n{error}",
+                    parent=self.root,
+                )
+                return
+            names = [part.split("=", 1)[0] for part in cookie.split("; ") if part]
+            self.status_var.set(
+                f"内置验证窗口测试完成：读取 {len(names)} 个 Cookie"
+            )
+            messagebox.showinfo(
+                "测试完成",
+                f"已读取 {len(names)} 个 Cookie。\n"
+                + (f"包含：{', '.join(names[:10])}\n" if names else "没有读取到 Cookie。\n")
+                + "\n测试不会修改登录状态。",
+                parent=self.root,
+            )
         elif kind == "embedded_cookie":
             _, cookie, error = message
             self._webview_running = False
