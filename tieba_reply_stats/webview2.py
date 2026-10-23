@@ -7,7 +7,6 @@
 from __future__ import annotations
 
 import importlib.util
-import json
 import os
 import subprocess
 import sys
@@ -43,26 +42,10 @@ def available() -> bool:
     return _runtime_installed()
 
 
-def _cookie_header(cookies) -> str:
-    pairs = []
-    for cookie in cookies or []:
-        if not isinstance(cookie, dict):
-            continue
-        name = str(cookie.get("name") or "").strip()
-        value = str(cookie.get("value") or "")
-        domain = str(cookie.get("domain") or "")
-        if not name:
-            continue
-        if domain and "baidu.com" not in domain:
-            continue
-        pairs.append(f"{name}={value}")
-    return "; ".join(dict.fromkeys(pairs))
-
-
-def open_verification(url: str, timeout: int = 600) -> str:
-    """打开内置验证窗口，返回可粘贴到完整 Cookie 框的 Cookie 头。"""
+def open_window(url: str, timeout: int = 600) -> None:
+    """打开内置窗口并等待用户关闭，不读取也不导出 Cookie。"""
     if not available():
-        return ""
+        raise RuntimeError("WebView2 不可用")
     if getattr(sys, "frozen", False):
         command = [sys.executable, "--webview2-verify", url]
     else:
@@ -79,11 +62,8 @@ def open_verification(url: str, timeout: int = 600) -> str:
     if completed.returncode != 0:
         detail = (completed.stderr or completed.stdout or "").strip().splitlines()
         raise RuntimeError(detail[-1] if detail else "WebView2 验证窗口启动失败")
-    marker = "__TIEBA_COOKIES__"
-    for line in completed.stdout.splitlines():
-        if line.startswith(marker):
-            try:
-                return _cookie_header(json.loads(line[len(marker) :]))
-            except json.JSONDecodeError:
-                return ""
-    return ""
+
+
+def open_verification(url: str, timeout: int = 600) -> None:
+    """真实验证码窗口；不自动读取 Cookie。"""
+    open_window(url, timeout=timeout)

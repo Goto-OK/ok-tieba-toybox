@@ -5519,10 +5519,10 @@ class App:
 
         def worker():
             try:
-                cookie = webview2.open_verification("https://tieba.baidu.com/")
-                self._post(("webview_test_done", cookie, ""))
+                webview2.open_window("about:blank")
+                self._post(("webview_test_done", ""))
             except Exception as error:  # noqa: BLE001
-                self._post(("webview_test_done", "", str(error)))
+                self._post(("webview_test_done", str(error)))
 
         threading.Thread(target=worker, daemon=True).start()
 
@@ -10041,15 +10041,15 @@ class App:
 
                 def worker():
                     try:
-                        cookie = webview2.open_verification(url)
-                        self._post(("embedded_cookie", cookie, ""))
+                        webview2.open_verification(url)
+                        self._post(("embedded_done", ""))
                     except Exception as error:  # noqa: BLE001
-                        self._post(("embedded_cookie", "", str(error)))
+                        self._post(("embedded_done", str(error)))
 
                 threading.Thread(target=worker, daemon=True).start()
             self._refresh_log_summary()
         elif kind == "webview_test_done":
-            _, cookie, error = message
+            _, error = message
             self._webview_running = False
             if error:
                 self.status_var.set("内置验证窗口测试失败")
@@ -10059,39 +10059,34 @@ class App:
                     parent=self.root,
                 )
                 return
-            names = [part.split("=", 1)[0] for part in cookie.split("; ") if part]
-            self.status_var.set(
-                f"内置验证窗口测试完成：读取 {len(names)} 个 Cookie"
-            )
+            self.status_var.set("内置验证窗口测试完成")
             messagebox.showinfo(
                 "测试完成",
-                f"已读取 {len(names)} 个 Cookie。\n"
-                + (f"包含：{', '.join(names[:10])}\n" if names else "没有读取到 Cookie。\n")
-                + "\n测试不会修改登录状态。",
+                "内置验证窗口已成功打开并关闭。\n"
+                "本测试不访问百度、不读取 Cookie、不修改登录状态。",
                 parent=self.root,
             )
-        elif kind == "embedded_cookie":
-            _, cookie, error = message
+        elif kind == "embedded_done":
+            _, error = message
             self._webview_running = False
-            if cookie:
-                self.mode_var.set("login")
-                self.login_method_var.set("cookie")
-                self._on_login_method_changed()
-                self.cookie_var.set(cookie)
-                self.cookie_entry.focus_set()
-                self._append_log("已从内置验证窗口读取完整 Cookie。", "ok")
-                messagebox.showinfo(
-                    "验证完成",
-                    "已读取完整 Cookie。请重新开始统计；已完成的帖子不会重抓。",
-                    parent=self.root,
-                )
+            self.mode_var.set("login")
+            self.login_method_var.set("cookie")
+            self._on_login_method_changed()
+            self.cookie_entry.focus_set()
+            if error:
+                self._append_log(f"内置验证窗口失败：{error}", "err")
             else:
-                detail = f"\n{error}" if error else ""
-                messagebox.showwarning(
-                    "内置验证未完成",
-                    "没有读取到完整 Cookie。" + detail + "\n请改用“转到登录模式（完整 Cookie）”。",
-                    parent=self.root,
+                self._append_log(
+                    "内置验证窗口已关闭。请从系统浏览器复制完整 Cookie 后粘贴重试。",
+                    "muted",
                 )
+            messagebox.showinfo(
+                "请转到完整 Cookie",
+                "内置验证窗口已关闭。\n"
+                "软件不会自动读取 Cookie。请用系统浏览器完成验证，"
+                "复制 tieba.baidu.com 的完整 Cookie 后粘贴到输入框，再重新开始。",
+                parent=self.root,
+            )
             self._refresh_log_summary()
         elif kind == "rate_limit_ask":
             _, detail, retry_after, _url = message
