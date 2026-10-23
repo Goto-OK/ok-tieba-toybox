@@ -46,6 +46,7 @@ from tieba_reply_stats.collect import (
     CollectOptions,
     collect_thread,
     enrich_identities,
+    enrich_tieba_uids,
     enrich_user_levels,
     extract_tid,
 )
@@ -7259,6 +7260,13 @@ class App:
         return True
 
     def _export_now(self) -> None:
+        if self.running:
+            messagebox.showinfo(
+                "正在抓取",
+                "抓取或身份补全还在进行，完成后才能导出。",
+                parent=self.root,
+            )
+            return
         if not self._wait_for_tieba_uid_export(self._export_now_actual):
             return
         self._export_now_actual()
@@ -8712,9 +8720,10 @@ class App:
         self._write_log("fetch_start", threads=len(urls))
         self._set_running(True)
         self._append_log(f"\n开始统计 {len(urls)} 个帖子，请耐心等待…", "title")
+        base_threads = list(self.last_threads)
         self.worker = threading.Thread(
             target=self._run_worker,
-            args=(urls, output, options, cookie, delay, include_op, export),
+            args=(urls, output, options, cookie, delay, include_op, export, base_threads),
             daemon=True,
         )
         self.worker.start()
@@ -8771,7 +8780,7 @@ class App:
         self.root.destroy()
 
     # ------------------------------------------------------------- worker
-    def _run_worker(self, urls, output, options, cookie, delay, include_op, export=True) -> None:
+    def _run_worker(self, urls, output, options, cookie, delay, include_op, export=True, base_threads=None) -> None:
         completed = []
         try:
             fetcher = Fetcher(cookie=cookie, delay=delay, verbose=False)
@@ -8827,6 +8836,7 @@ class App:
                 log=self._log_from_thread,
                 should_stop=self.stop_event.is_set,
             )
+            self._post(("stage", "抓取完成，正在补全身份…"))
             self._post(("log", "  正在补全用户身份，补全完成后才算抓取完成…", "muted"))
             for thread in completed:
                 enrich_identities(thread, fetcher, identity_options, self._log_from_thread)
@@ -8846,34 +8856,67 @@ class App:
                     ("log", f"  ⚠ 仍有 {self._identity_missing} 条身份待补全（不影响已抓内容）", "err")
                 )
 
+            final_threads = []
+            by_tid = {str(thread.meta.tid): thread for thread in (base_threads or [])}
+            for thread in completed:
+                by_tid[str(thread.meta.tid)] = thread
+            final_threads = list(by_tid.values())
+
+            self._post(("stage", "身份完成，正在补全贴吧ID…"))
+            self._post(("log", "  正在补全贴吧ID，补全完成后才生成 Excel…", "muted"))
+            uid_stats = enrich_tieba_uids(
+                final_threads,
+                fetcher,
+                identity_options,
+                self._log_from_thread,
+            )
+            self._tieba_uid_missing = int(uid_stats.get("failed") or 0)
+            self._write_log("tieba_uid_done", missing=self._tieba_uid_missing, users=len(final_threads))
+            self._post(("stage", "正在保存结果…"))
+            self._persist_result(final_threads)
+            self._write_log("save", threads=len(final_threads), stage="identity")
+
             if export:
-                export_workbook(output, completed, include_op=include_op)
-                self._write_log("export", ok=True, threads=len(completed))
+                self._post(("stage", "正在生成 Excel…"))
+                export_workbook(output, final_threads, include_op=include_op)
+                self._write_log("export", ok=True, threads=len(final_threads))
                 self._write_log(
                     "done",
-                    threads=len(completed),
-                    users=sum(len(thread.user_stats()) for thread in completed),
+                    threads=len(final_threads),
+                    users=sum(len(thread.user_stats()) for thread in final_threads),
                     exported=True,
                 )
-                self._post(("done", output, len(completed), list(completed)))
+                self._post(("done", output, len(final_threads), list(final_threads)))
             else:
                 self._write_log(
                     "done",
-                    threads=len(completed),
-                    users=sum(len(thread.user_stats()) for thread in completed),
+                    threads=len(final_threads),
+                    users=sum(len(thread.user_stats()) for thread in final_threads),
                     exported=False,
                 )
-                self._post(("done", None, len(completed), list(completed)))
+                self._post(("done", None, len(final_threads), list(final_threads)))
         except CaptchaError as error:
             self._write_log("error", error="CaptchaError")
             self._post(("captcha", str(error)))
         except CollectCancelled:
             self._write_log("cancelled", threads=len(completed), exported=bool(export and completed))
             if completed:
+                by_tid = {str(thread.meta.tid): thread for thread in (base_threads or [])}
+                for thread in completed:
+                    by_tid[str(thread.meta.tid)] = thread
+                final_threads = list(by_tid.values())
+                self._persist_result(final_threads)
                 if export:
-                    export_workbook(output, completed, include_op=include_op)
-                    self._write_log("export", ok=True, threads=len(completed))
-                self._post(("cancelled_partial", output if export else None, len(completed), list(completed)))
+                    export_workbook(output, final_threads, include_op=include_op)
+                    self._write_log("export", ok=True, threads=len(final_threads))
+                self._post(
+                    (
+                        "cancelled_partial",
+                        output if export else None,
+                        len(final_threads),
+                        list(final_threads),
+                    )
+                )
             else:
                 self._post(("cancelled",))
         except Exception as error:  # noqa: BLE001 - 界面上要给出可读信息
@@ -8902,13 +8945,17 @@ class App:
         if kind == "log":
             _, text, tag = message
             self._append_log(text, tag)
+        elif kind == "stage":
+            self.status_var.set(message[1])
         elif kind == "done":
             _, output, count, threads = message
             self.last_output = output
             self.last_threads = self._merge_threads(threads or [])
             self._persist_result(self.last_threads)
             self._auto_filled = False
-            self._tieba_uid_tried = set()
+            self._tieba_uid_tried = {
+                str(user.get("uid") or "") for user in self._aggregate_users() if user.get("uid")
+            }
             try:
                 self._reset_people_filters()
                 self._refresh_people()
@@ -8917,9 +8964,12 @@ class App:
                 pass
             self._set_running(False)
             identity_missing = int(getattr(self, "_identity_missing", 0) or 0)
+            tieba_missing = int(getattr(self, "_tieba_uid_missing", 0) or 0)
             status = f"完成 · {len(self.last_threads)} 个帖子 / {len(self._aggregate_users())} 位用户"
             if identity_missing:
                 status += f" · 身份待补全 {identity_missing} 条"
+            if tieba_missing:
+                status += f" · 贴吧ID失败 {tieba_missing} 人"
             self.status_var.set(status)
             self._refresh_cache_stats_if_visible()
             self._refresh_log_summary()
@@ -8927,9 +8977,10 @@ class App:
                 self.open_btn.configure(state="normal")
                 self._append_log(f"\n完成！共 {count} 个帖子，文件已保存：\n{output}", "ok")
                 messagebox.showinfo(
-                    "完成",
+                    "全部完成",
                     f"统计完成，共 {count} 个帖子。\n\n文件已保存到：\n{output}\n\n"
-                    "切到「参与者」选项卡可以点开每个人，查看他的发言和关注的贴吧。",
+                    + (f"贴吧ID失败 {tieba_missing} 人。\n\n" if tieba_missing else "")
+                    + "切到「参与者」选项卡可以点开每个人，查看他的发言和关注的贴吧。",
                     parent=self.root,
                 )
                 self._open_result()
@@ -8937,9 +8988,10 @@ class App:
                 self.open_btn.configure(state="disabled")
                 self._append_log(f"\n完成！共 {count} 个帖子（按设置未导出 Excel）。", "ok")
                 messagebox.showinfo(
-                    "完成",
+                    "全部完成",
                     f"统计完成，共 {count} 个帖子。\n\n按设置没有导出 Excel，可以切到「参与者」看结果，"
-                    "或点「导出 Excel」现在生成。",
+                    "或点「导出 Excel」现在生成。"
+                    + (f"\n\n贴吧ID失败 {tieba_missing} 人。" if tieba_missing else ""),
                     parent=self.root,
                 )
         elif kind == "cancelled_partial":

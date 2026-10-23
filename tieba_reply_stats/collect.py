@@ -471,6 +471,84 @@ def enrich_user_levels(thread: ThreadData, fetcher: Fetcher, options: CollectOpt
     log(f"  等级补全完成：{done} 位用户")
 
 
+def enrich_tieba_uids(
+    threads: List[ThreadData],
+    fetcher: Fetcher,
+    options: CollectOptions,
+    log,
+    concurrency: int = 3,
+) -> Dict[str, int]:
+    """对已抓帖子的唯一用户补 tieba_uid；一次资料请求同时带回身份字段。"""
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
+    from . import profile_pb
+
+    by_uid: Dict[str, Dict] = {}
+    for thread in threads:
+        for obj in list(thread.floors) + list(thread.comments):
+            uid = str(getattr(obj, "author_id", "") or "")
+            if not uid:
+                continue
+            item = by_uid.setdefault(
+                uid,
+                {
+                    "uid": uid,
+                    "tieba_uid": getattr(obj, "tieba_uid", "") or "",
+                    "username": getattr(obj, "author_name", "") or "",
+                    "portrait": getattr(obj, "portrait", "") or "",
+                },
+            )
+            if not item["tieba_uid"] and getattr(obj, "tieba_uid", ""):
+                item["tieba_uid"] = obj.tieba_uid
+            if not item["username"] and getattr(obj, "author_name", ""):
+                item["username"] = obj.author_name
+            if not item["portrait"] and getattr(obj, "portrait", ""):
+                item["portrait"] = obj.portrait
+    todo = [item for item in by_uid.values() if not item.get("tieba_uid")]
+    if not todo:
+        log("  贴吧ID补全：所有人都已有 tieba_uid")
+        return {"total": len(by_uid), "failed": 0}
+    log(f"  贴吧ID补全：{len(todo)} 位用户需要查询（并发 {concurrency}）…")
+
+    results: Dict[str, Dict] = {}
+    done = 0
+
+    def one(item: Dict) -> tuple[str, Dict]:
+        profile = profile_pb.fetch_profile(fetcher.clone(), item["uid"])
+        return item["uid"], profile
+
+    with ThreadPoolExecutor(max_workers=max(1, concurrency)) as pool:
+        futures = [pool.submit(one, item) for item in todo]
+        for future in as_completed(futures):
+            _check_stop(options)
+            try:
+                uid, profile = future.result()
+            except Exception as error:  # noqa: BLE001
+                if options.verbose:
+                    log(f"    ! 贴吧ID补全失败：{error}")
+                continue
+            if profile.get("tieba_uid"):
+                results[uid] = profile
+            done += 1
+            if options.verbose and (done % 10 == 0 or done == len(todo)):
+                log(f"    贴吧ID补全 {done}/{len(todo)}")
+
+    for thread in threads:
+        for obj in list(thread.floors) + list(thread.comments):
+            uid = str(getattr(obj, "author_id", "") or "")
+            profile = results.get(uid)
+            if not profile:
+                continue
+            obj.tieba_uid = str(profile.get("tieba_uid") or obj.tieba_uid or "")
+            if not obj.author_name and profile.get("username"):
+                obj.author_name = str(profile.get("username") or "")
+            if not obj.portrait and profile.get("portrait"):
+                obj.portrait = str(profile.get("portrait") or "")
+    failed = len(todo) - len(results)
+    log(f"  贴吧ID补全完成：{len(results)} 位成功，{failed} 位失败")
+    return {"total": len(by_uid), "failed": failed}
+
+
 def enrich_identities(thread: ThreadData, fetcher: Fetcher, options: CollectOptions, log) -> None:
     """抓取后补全楼中楼/楼层缺失的 uid，写回原始对象。"""
     from concurrent.futures import ThreadPoolExecutor, as_completed
