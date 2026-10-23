@@ -19,10 +19,12 @@ Response (PbPageResIdl):
 from __future__ import annotations
 
 import re
+import urllib.error
 import urllib.request
 from datetime import datetime
 from typing import Dict, List, Optional
 
+from .fetch import CAPTCHA_MARKERS, CaptchaError, RateLimitError, _retry_after_seconds, wait_request_gate
 from .models import Comment, Floor, ThreadData, ThreadMeta
 
 PAGE_URL = "https://tiebac.baidu.com/c/f/pb/page?cmd=302001"
@@ -300,8 +302,21 @@ def _request(
             "x_bd_data_type": "protobuf",
         },
     )
-    with urllib.request.urlopen(request, timeout=40) as response:
-        return response.read()
+    wait_request_gate()
+    try:
+        with urllib.request.urlopen(request, timeout=40) as response:
+            return response.read()
+    except urllib.error.HTTPError as error:
+        body = error.read() if error.fp else b""
+        text = body[:6000].decode("utf-8", "ignore")
+        if error.code in (403, 412) or any(marker in text for marker in CAPTCHA_MARKERS):
+            raise CaptchaError("游客模式请求被百度安全验证拦截。") from error
+        if error.code == 429:
+            raise RateLimitError(
+                "游客模式请求被限流（HTTP 429）。",
+                _retry_after_seconds(error.headers),
+            ) from error
+        raise
 
 
 def fetch_page(
@@ -424,18 +439,34 @@ def collect_thread_anon(url: str, fetcher, options) -> ThreadData:
 
     total = page.get("total") or 1
     max_pages = options.max_pages or total
+    warnings: List[str] = []
+    complete = True
     for pn in range(2, min(total, max_pages) + 1):
         if options.should_stop and options.should_stop():
             break
         try:
             add_page(fetch_page(fetcher, tid, pn, options.include_comments, 30, 10, bduss=""))
+        except (CaptchaError, RateLimitError) as error:
+            complete = False
+            warnings.append(f"第 {pn} 页未抓完：{error}")
+            if options.log:
+                options.log(f"  第 {pn} 页被拦截，保留已完成页：{error}")
+            break
         except Exception as error:  # noqa: BLE001
+            complete = False
+            warnings.append(f"第 {pn} 页失败：{error}")
             if options.log:
                 options.log(f"  第 {pn} 页失败：{error}")
             break
 
     floors.sort(key=lambda item: item.post_no)
-    thread_data = ThreadData(meta=meta, floors=floors, comments=comments)
+    thread_data = ThreadData(
+        meta=meta,
+        floors=floors,
+        comments=comments,
+        warnings=warnings,
+        complete=complete,
+    )
     fill_comments_anon(thread_data, fetcher, options)
     comments = thread_data.comments
     comments.sort(key=lambda item: (item.floor_no, item.pid))
@@ -484,8 +515,21 @@ def _floor_request(fetcher, tid: str, pid: str, pn: int, bduss: str = "") -> byt
             "x_bd_data_type": "protobuf",
         },
     )
-    with urllib.request.urlopen(request, timeout=40) as response:
-        return response.read()
+    wait_request_gate()
+    try:
+        with urllib.request.urlopen(request, timeout=40) as response:
+            return response.read()
+    except urllib.error.HTTPError as error:
+        body = error.read() if error.fp else b""
+        text = body[:6000].decode("utf-8", "ignore")
+        if error.code in (403, 412) or any(marker in text for marker in CAPTCHA_MARKERS):
+            raise CaptchaError("游客模式请求被百度安全验证拦截。") from error
+        if error.code == 429:
+            raise RateLimitError(
+                "游客模式请求被限流（HTTP 429）。",
+                _retry_after_seconds(error.headers),
+            ) from error
+        raise
 
 
 def parse_floor_response(raw: bytes) -> Dict:
@@ -547,7 +591,12 @@ def fill_comments_anon(thread: ThreadData, fetcher, options) -> None:
                 break
             try:
                 page = fetch_floor_page(fetcher, thread.meta.tid, floor.pid, pn, bduss="")
+            except (CaptchaError, RateLimitError) as error:
+                thread.complete = False
+                thread.warnings.append(f"第 {floor.post_no} 层楼中楼未抓完：{error}")
+                break
             except Exception as error:  # noqa: BLE001
+                thread.complete = False
                 thread.warnings.append(f"第 {floor.post_no} 层楼中楼失败：{error}")
                 break
             for row in page["comments"]:

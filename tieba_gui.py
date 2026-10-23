@@ -56,7 +56,16 @@ from tieba_reply_stats.config_backup import read_backup, write_backup
 from tieba_reply_stats.cookie_store import clear_cookie, load_cookie, save_cookie
 from tieba_reply_stats.errors import friendly_error
 from tieba_reply_stats.export import export_workbook
-from tieba_reply_stats.fetch import CaptchaError, Fetcher, FetchError, ThreadGoneError, parse_cookie_input
+from tieba_reply_stats.fetch import (
+    CaptchaError,
+    Fetcher,
+    FetchError,
+    RateLimitError,
+    ThreadGoneError,
+    configure_gate,
+    parse_cookie_input,
+    pause_requests,
+)
 from tieba_reply_stats.filters import FIELD_OPTIONS, LEVEL_OPTIONS, filter_users
 from tieba_reply_stats.follow_probe import candidate_bars, probe_forums
 from tieba_reply_stats.link_parser import parse_links
@@ -9208,6 +9217,8 @@ class App:
             ):
                 return
 
+        self._current_urls = list(urls)
+        configure_gate(float(delay or 0))
         self.stop_event.clear()
         self._identity_choice_queue = queue.Queue()
         self._manual_timing = {}
@@ -9343,7 +9354,7 @@ class App:
                 self._write_log("thread_start", tid=tid)
                 try:
                     thread = collect_thread(url, fetcher, options)
-                except CaptchaError:
+                except (CaptchaError, RateLimitError):
                     raise
                 except CollectCancelled:
                     raise
@@ -9524,6 +9535,9 @@ class App:
         except CaptchaError as error:
             self._write_log("error", error="CaptchaError")
             self._post(("captcha", str(error)))
+        except RateLimitError as error:
+            self._write_log("error", error="RateLimitError")
+            self._post(("rate_limit", str(error), float(error.retry_after or 0)))
         except CollectCancelled:
             self._write_log("cancelled", threads=len(completed), exported=bool(export and completed))
             if completed:
@@ -9841,31 +9855,63 @@ class App:
             self._set_running(False)
             self.status_var.set("被安全验证拦截")
             self._append_log("抓取失败：" + detail, "err")
-            if self.login_method_var.get() == "bduss":
+            current_cookie_mode = (
+                self.mode_var.get() == "login" and self.login_method_var.get() == "cookie"
+            )
+            choices = [
+                (
+                    "重新粘贴完整 Cookie" if current_cookie_mode else "转到登录模式（完整 Cookie）",
+                    "login",
+                ),
+                ("停止本次", "stop"),
+            ]
+            choice = self._ask_choice(
+                "被安全验证拦截",
+                "当前请求需要完整 Cookie。\n"
+                "请用浏览器打开帖子完成验证，复制 tieba.baidu.com 的完整 Cookie 后粘贴回软件。",
+                choices,
+                default=0,
+            )
+            if choice == "login":
+                self.mode_var.set("login")
                 self.login_method_var.set("cookie")
                 self._on_login_method_changed()
+                url = (getattr(self, "_current_urls", []) or ["https://tieba.baidu.com/"])[0]
+                try:
+                    webbrowser.open(url)
+                except Exception:  # noqa: BLE001
+                    pass
                 self.cookie_entry.focus_set()
                 self._append_log(
-                    "仅 BDUSS 未能通过验证，已切换到完整 Cookie。请从浏览器复制完整 Cookie 后重试。",
+                    "已切换到登录模式（完整 Cookie）。完成验证后粘贴完整 Cookie，再重新开始。",
                     "err",
                 )
-                messagebox.showwarning(
-                    "需要完整 Cookie",
-                    "贴吧要求安全验证，仅 BDUSS 无法通过。已切换到「完整 Cookie」。"
-                    "请点「如何获取？」，在浏览器完成验证并复制完整 Cookie，粘贴后再点「开始统计」。",
-                    parent=self.root,
-                )
-            else:
-                self._append_log(
-                    "完整 Cookie 仍被拦截：请在浏览器完成验证，更新完整 Cookie 后重试。",
-                    "err",
-                )
-                self.cookie_entry.focus_set()
-                messagebox.showwarning(
-                    "被安全验证拦截",
-                    "贴吧要求安全验证，当前完整 Cookie 也未能通过。"
-                    "请在浏览器完成验证，重新复制完整 Cookie 后再试。",
-                    parent=self.root,
+            self._refresh_log_summary()
+        elif kind == "rate_limit":
+            _, detail, retry_after = message
+            self._set_running(False)
+            self.status_var.set("被限流")
+            self._append_log("抓取失败：" + detail, "warn")
+            wait = int(retry_after or 30)
+            choice = self._ask_choice(
+                "被限流",
+                f"服务端返回限流，建议至少等待 {wait} 秒。\n"
+                "等待后可重新开始；已完成的数据不会丢失。",
+                [
+                    (f"等待 {wait} 秒后重试", "wait"),
+                    ("暂停 2 分钟", "120"),
+                    ("暂停 5 分钟", "300"),
+                    ("停止本次", "stop"),
+                ],
+                default=0,
+            )
+            if choice in ("wait", "120", "300"):
+                seconds = wait if choice == "wait" else int(choice)
+                pause_requests(seconds)
+                self._append_log(f"已设置请求暂停 {seconds} 秒。", "muted")
+                self.root.after(
+                    int(seconds * 1000),
+                    lambda: self.status_var.set("暂停结束，可以重新开始"),
                 )
             self._refresh_log_summary()
         elif kind == "error":

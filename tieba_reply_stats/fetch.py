@@ -13,6 +13,7 @@ import os
 import random
 import re
 import ssl
+import threading
 import time
 import urllib.error
 import urllib.parse
@@ -25,6 +26,52 @@ DEFAULT_UA = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
     "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
 )
+
+class RequestGate:
+    """跨线程共享的最小请求间隔与暂停闸门。"""
+
+    def __init__(self) -> None:
+        self._lock = threading.Lock()
+        self._last = 0.0
+        self._interval = 0.0
+        self._pause_until = 0.0
+
+    def configure(self, interval: float) -> None:
+        with self._lock:
+            self._interval = max(0.0, float(interval or 0))
+
+    def pause(self, seconds: float) -> None:
+        with self._lock:
+            self._pause_until = max(self._pause_until, time.monotonic() + max(0.0, seconds))
+
+    def wait(self) -> None:
+        while True:
+            with self._lock:
+                now = time.monotonic()
+                if now < self._pause_until:
+                    delay = self._pause_until - now
+                else:
+                    delay = self._interval - (now - self._last)
+                    if delay <= 0:
+                        self._last = now
+                        return
+            time.sleep(min(max(delay, 0.01), 1.0))
+
+
+_GATE = RequestGate()
+
+
+def configure_gate(interval: float) -> None:
+    _GATE.configure(interval)
+
+
+def pause_requests(seconds: float) -> None:
+    _GATE.pause(seconds)
+
+
+def wait_request_gate() -> None:
+    _GATE.wait()
+
 
 CAPTCHA_MARKERS = (
     "百度安全验证",
@@ -55,6 +102,14 @@ class CaptchaError(FetchError):
 
 class ThreadGoneError(FetchError):
     """帖子不存在 / 已删除。"""
+
+
+class RateLimitError(FetchError):
+    """被限流（HTTP 429）。"""
+
+    def __init__(self, message: str, retry_after: float = 0) -> None:
+        super().__init__(message)
+        self.retry_after = max(0.0, float(retry_after or 0))
 
 
 @dataclass
@@ -118,6 +173,13 @@ def load_cookie_file(path: str) -> Dict[str, str]:
             continue
         cookies[name] = value
     return cookies
+
+
+def _retry_after_seconds(headers) -> int:
+    try:
+        return max(0, int(float((headers or {}).get("Retry-After") or 0)))
+    except (TypeError, ValueError):
+        return 0
 
 
 def _safe_filename(name: str) -> str:
@@ -272,6 +334,7 @@ class Fetcher:
             raise FetchError(str(error)) from error
 
     def _sleep(self) -> None:
+        _GATE.wait()
         if self.delay > 0:
             time.sleep(self.delay + random.uniform(0, self.delay * 0.35))
 
@@ -327,6 +390,13 @@ class Fetcher:
             text = self._decode(body, headers)
             response = Response(text, url, status)
 
+            if status == 429:
+                retry_after = _retry_after_seconds(headers)
+                if attempt < self.retries:
+                    time.sleep(retry_after or min(2**attempt, 8))
+                    last_error = RateLimitError("HTTP 429", retry_after)
+                    continue
+                raise RateLimitError("请求被限流（HTTP 429）。", retry_after)
             if status in (403, 412) or response.looks_like_captcha():
                 raise CaptchaError(
                     "请求被百度安全验证拦截（当前网络 IP 可能被判定为异常）。"
