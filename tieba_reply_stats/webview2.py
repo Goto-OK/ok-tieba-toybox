@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 import os
 import subprocess
 import sys
@@ -42,8 +43,24 @@ def available() -> bool:
     return _runtime_installed()
 
 
-def open_window(url: str, timeout: int = 600, center=None) -> None:
-    """打开内置窗口并等待用户关闭，不读取也不导出 Cookie。"""
+def filter_cookies(cookies, anonymous: bool) -> dict[str, str]:
+    result: dict[str, str] = {}
+    for item in cookies or []:
+        if not isinstance(item, dict):
+            continue
+        domain = str(item.get("domain") or "")
+        if domain and "baidu.com" not in domain:
+            continue
+        name = str(item.get("name") or "")
+        if not name:
+            continue
+        if anonymous and name in ("BDUSS", "STOKEN"):
+            continue
+        result[name] = str(item.get("value") or "")
+    return result
+
+
+def _run_window(url: str, timeout: int = 600, center=None):
     if not available():
         raise RuntimeError("WebView2 不可用")
     extra = []
@@ -65,8 +82,23 @@ def open_window(url: str, timeout: int = 600, center=None) -> None:
     if completed.returncode != 0:
         detail = (completed.stderr or completed.stdout or "").strip().splitlines()
         raise RuntimeError(detail[-1] if detail else "WebView2 验证窗口启动失败")
+    return completed
 
 
-def open_verification(url: str, timeout: int = 600, center=None) -> None:
-    """真实验证码窗口；不自动读取 Cookie。"""
-    open_window(url, timeout=timeout, center=center)
+def open_window(url: str, timeout: int = 600, center=None) -> None:
+    """打开内置窗口并等待用户关闭，不读取 Cookie。"""
+    _run_window(url, timeout=timeout, center=center)
+
+
+def open_verification(url: str, timeout: int = 600, center=None):
+    """真实验证码窗口；返回 WebView2 Cookie 列表，由调用方按权限过滤。"""
+    completed = _run_window(url, timeout=timeout, center=center)
+    marker = "__TIEBA_COOKIES__"
+    for line in completed.stdout.splitlines():
+        if line.startswith(marker):
+            try:
+                data = json.loads(line[len(marker) :])
+            except json.JSONDecodeError:
+                return []
+            return data if isinstance(data, list) else []
+    return []

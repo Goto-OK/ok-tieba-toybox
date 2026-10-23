@@ -1,6 +1,6 @@
 import pytest
 
-from tieba_reply_stats import page_pb, profile_pb, settings
+from tieba_reply_stats import page_pb, profile_pb, settings, webview2
 from tieba_reply_stats.collect import CollectOptions, enrich_tieba_uids
 from tieba_reply_stats.export import _tieba_cell
 from tieba_reply_stats.fetch import FetchError, RequestGate
@@ -175,6 +175,21 @@ def test_filter_uses_dash_for_failed_tieba_uid():
     ]
     assert filter_users(users, keyword="-", field="贴吧ID") == [users[0]]
     assert filter_users(users, keyword="待补充", field="贴吧ID") == [users[1]]
+
+
+def test_webview2_guest_cookie_filter_drops_login_tokens():
+    raw = [
+        {"name": "BAIDUID", "value": "a", "domain": ".baidu.com"},
+        {"name": "BDUSS", "value": "b", "domain": ".baidu.com"},
+        {"name": "STOKEN", "value": "c", "domain": ".baidu.com"},
+        {"name": "OTHER", "value": "d", "domain": "example.com"},
+    ]
+    assert webview2.filter_cookies(raw, anonymous=True) == {"BAIDUID": "a"}
+    assert webview2.filter_cookies(raw, anonymous=False) == {
+        "BAIDUID": "a",
+        "BDUSS": "b",
+        "STOKEN": "c",
+    }
 
 
 def test_identity_defaults():

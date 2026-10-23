@@ -215,6 +215,7 @@ class App:
         self._last_stage_times: Dict[str, float] = {}
         self._manual_timing: Dict[str, float] = {}
         self._supplement_stop = threading.Event()
+        self._guest_cookie: Dict[str, str] = {}
         self._tieba_uid_failed: set[str] = set()
         self._user_id_failed: set[str] = set()
         self._profile_topic_limit = 50
@@ -5437,7 +5438,7 @@ class App:
         ).pack(side="left", padx=(8, 0))
         tk.Label(
             help_box,
-            text="测试只读取 Cookie 名称，不触发验证码，不写入登录状态。",
+            text="测试只打开真实页面，不读取 Cookie、不写入登录状态。",
             bg="#eef1f5",
             fg="#8a94a6",
             font=("Microsoft YaHei UI", 8),
@@ -5594,6 +5595,7 @@ class App:
         if self._network_task_active() or getattr(self, "_active_choice_window", None):
             return
         self._append_log("模拟验证码：未发出网络请求，仅测试界面流程。", "muted")
+        self._simulated_captcha = True
         self._set_running(True)
         self.root.after(
             20,
@@ -8148,7 +8150,7 @@ class App:
 
     def _request_cookie(self) -> dict:
         if self.mode_var.get() == "guest":
-            return {}
+            return dict(getattr(self, "_guest_cookie", {}) or {})
         return parse_cookie_input(self._current_cookie_text())
 
     def _user_bar(self, user) -> str:
@@ -9397,8 +9399,11 @@ class App:
         delay = min(5.0, max(0.3, delay))
 
         mode = self.mode_var.get()
-        cookie_text = "" if mode == "guest" else self._current_cookie_text()
-        cookie = parse_cookie_input(cookie_text)
+        cookie = (
+            self._request_cookie()
+            if mode == "guest"
+            else parse_cookie_input(self._current_cookie_text())
+        )
         if mode == "login" and not cookie.get("BDUSS"):
             messagebox.showwarning(
                 "需要 BDUSS",
@@ -9413,7 +9418,7 @@ class App:
         if mode == "guest":
             self._append_log("本次使用免登录模式：公开帖子，楼中楼按设置补全", "muted")
         elif self._remember_current_login():
-            if save_cookie(cookie_text):
+            if save_cookie(self._current_cookie_text()):
                 self._append_log("已记住登录信息（本机加密保存），下次会自动填入。", "muted")
             else:
                 self._append_log("登录信息保存失败，本次仍可正常使用。", "muted")
@@ -10176,6 +10181,15 @@ class App:
             self._set_running(False)
             self.status_var.set("被安全验证拦截")
             self._append_log("抓取失败：" + detail, "err")
+            if getattr(self, "_simulated_captcha", False):
+                self._simulated_captcha = False
+                self._ask_choice(
+                    "模拟验证码",
+                    "这是模拟流程，不打开 WebView2、不读取 Cookie、不修改登录状态。",
+                    [("结束模拟", "stop")],
+                )
+                self._refresh_log_summary()
+                return
             current_cookie_mode = (
                 self.mode_var.get() == "login" and self.login_method_var.get() == "cookie"
             )
@@ -10215,6 +10229,22 @@ class App:
                     "err",
                 )
             elif choice == "embedded":
+                anonymous = self.mode_var.get() == "guest"
+                scope = (
+                    "只读取匿名 Cookie，不读取 BDUSS/STOKEN"
+                    if anonymous
+                    else "读取完整 Cookie，可能包含 BDUSS/STOKEN"
+                )
+                if not messagebox.askyesno(
+                    "读取验证 Cookie？",
+                    "内置验证完成后，软件将" + scope + "。\n"
+                    "Cookie 只在内存中使用，不写日志、不导出。\n\n继续？",
+                    parent=self.root,
+                    default=messagebox.NO,
+                ):
+                    self._append_log("用户取消读取验证 Cookie。", "muted")
+                    self._refresh_log_summary()
+                    return
                 url = (getattr(self, "_current_urls", []) or ["https://tieba.baidu.com/"])[0]
                 self._webview_running = True
                 self.status_var.set("正在打开内置验证窗口…")
@@ -10222,10 +10252,13 @@ class App:
 
                 def worker():
                     try:
-                        webview2.open_verification(url, center=center)
-                        self._post(("embedded_done", ""))
+                        raw_cookies = webview2.open_verification(url, center=center)
+                        cookies = webview2.filter_cookies(raw_cookies, anonymous=anonymous)
+                        if not cookies:
+                            raise RuntimeError("没有读取到可用 Cookie")
+                        self._post(("embedded_done", cookies, ""))
                     except Exception as error:  # noqa: BLE001
-                        self._post(("embedded_done", str(error)))
+                        self._post(("embedded_done", {}, str(error)))
 
                 threading.Thread(target=worker, daemon=True).start()
             self._refresh_log_summary()
@@ -10248,26 +10281,38 @@ class App:
                 parent=self.root,
             )
         elif kind == "embedded_done":
-            _, error = message
+            _, cookies, error = message
             self._webview_running = False
-            self.mode_var.set("login")
-            self.login_method_var.set("cookie")
-            self._on_login_method_changed()
-            self.cookie_entry.focus_set()
-            if error:
-                self._append_log(f"内置验证窗口失败：{error}", "err")
-            else:
-                self._append_log(
-                    "内置验证窗口已关闭。请从系统浏览器复制完整 Cookie 后粘贴重试。",
-                    "muted",
+            if error or not cookies:
+                self._append_log(f"内置验证窗口失败：{error or '没有可用 Cookie'}", "err")
+                messagebox.showwarning(
+                    "内置验证未完成",
+                    (error or "没有读取到可用 Cookie。")
+                    + "\n可以改用「转到登录模式（完整 Cookie）」。",
+                    parent=self.root,
                 )
-            messagebox.showinfo(
-                "请转到完整 Cookie",
-                "内置验证窗口已关闭。\n"
-                "软件不会自动读取 Cookie。请用系统浏览器完成验证，"
-                "复制 tieba.baidu.com 的完整 Cookie 后粘贴到输入框，再重新开始。",
-                parent=self.root,
-            )
+                self._refresh_log_summary()
+                return
+            if self.mode_var.get() == "guest":
+                self._guest_cookie = dict(cookies)
+                self._append_log("已获取匿名验证会话，保持游客模式。", "ok")
+                messagebox.showinfo(
+                    "游客验证会话已获取",
+                    "已读取匿名 Cookie，未读取 BDUSS/STOKEN。\n"
+                    "模式仍为游客。请重新开始统计，已完成的帖子不会重抓。",
+                    parent=self.root,
+                )
+            else:
+                self.cookie_var.set("; ".join(f"{k}={v}" for k, v in cookies.items()))
+                self.login_method_var.set("cookie")
+                self._on_login_method_changed()
+                self.cookie_entry.focus_set()
+                self._append_log("已从内置验证窗口读取完整 Cookie。", "ok")
+                messagebox.showinfo(
+                    "验证完成",
+                    "已读取完整 Cookie。请重新开始统计，已完成的帖子不会重抓。",
+                    parent=self.root,
+                )
             self._refresh_log_summary()
         elif kind == "rate_limit_ask":
             _, detail, retry_after, _url = message

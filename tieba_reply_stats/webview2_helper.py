@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import ctypes
+import json
 import sys
 
 
@@ -38,7 +39,7 @@ def main() -> int:
                 y = int(sys.argv[index + 1])
             except ValueError:
                 pass
-    webview.create_window(
+    window = webview.create_window(
         "贴吧安全验证",
         url,
         width=width,
@@ -47,7 +48,18 @@ def main() -> int:
         y=y,
         on_top=True,
     )
-    webview.start()
+    cookies = []
+
+    def on_closed() -> None:
+        nonlocal cookies
+        try:
+            cookies = window.get_cookies() or []
+        except Exception:  # noqa: BLE001
+            cookies = []
+
+    window.events.closed += on_closed
+    webview.start(private_mode=True)
+    print("__TIEBA_COOKIES__" + json.dumps(cookies, ensure_ascii=False))
     return 0
 
 
