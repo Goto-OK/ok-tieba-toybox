@@ -111,7 +111,7 @@ def main() -> int:
     def monitor() -> None:
         started = time.monotonic()
         while not state["closed"]:
-            time.sleep(0.4)
+            time.sleep(0.25)
             if state["closed"]:
                 return
             texts = _child_window_texts()
@@ -129,7 +129,7 @@ def main() -> int:
                 if state["normal_since"] == 0.0:
                     state["normal_since"] = time.monotonic()
                 stable = time.monotonic() - state["normal_since"]
-                if stable >= 1.0 and (state["captcha_seen"] or time.monotonic() - started >= 2.0):
+                if stable >= 0.5 and (state["captcha_seen"] or time.monotonic() - started >= 2.0):
                     state["auto"] = True
                     capture_cookies()
                     _close_window()
