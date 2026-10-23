@@ -65,6 +65,7 @@ from tieba_reply_stats.fetch import (
     configure_gate,
     parse_cookie_input,
     pause_requests,
+    set_stop_checker,
 )
 from tieba_reply_stats.filters import FIELD_OPTIONS, LEVEL_OPTIONS, filter_users
 from tieba_reply_stats.follow_probe import candidate_bars, probe_forums
@@ -519,13 +520,14 @@ class App:
         self.identity_concurrency_var = tk.StringVar(
             value=str(self.settings.get("identity_concurrency", 3))
         )
-        ttk.Combobox(
+        self.identity_concurrency_box = ttk.Combobox(
             identity_row,
             values=("3", "5"),
             textvariable=self.identity_concurrency_var,
             width=3,
             state="readonly",
-        ).pack(side="left")
+        )
+        self.identity_concurrency_box.pack(side="left")
         self.identity_risk_label = tk.Label(
             identity_row,
             text="",
@@ -538,6 +540,20 @@ class App:
             "write", lambda *_: self._save_identity_strategy()
         )
         self._update_identity_risk_hint()
+        self.risk_summary_label = tk.Label(
+            options,
+            text="",
+            bg="#ffffff",
+            fg="#b91c1c",
+            font=("Microsoft YaHei UI", 8),
+            anchor="w",
+            justify="left",
+        )
+        self.risk_summary_label.grid(row=5, column=0, columnspan=3, sticky="w", padx=4, pady=(4, 2))
+        self.delay_var.trace_add("write", lambda *_: self._update_risk_summary())
+        self.comment_concurrency_var.trace_add(
+            "write", lambda *_: self._update_risk_summary()
+        )
 
         # 3. 保存位置
         out_box = ttk.LabelFrame(body, text=" 保存到 ", style="Card.TLabelframe")
@@ -1100,14 +1116,6 @@ class App:
         self._batch_pending: List[Dict[str, Any]] = []
         self._batch_cancel = False
         self._marks_stale = False
-        self.retry_incomplete_btn = ttk.Button(
-            bar2, text="重试失败部分", command=self._retry_incomplete_threads, width=12
-        )
-        self.retry_incomplete_btn.pack(side="left", padx=(6, 0))
-        self.supplement_btn = ttk.Button(
-            bar2, text="补全身份", command=self._supplement_identity_manual, width=10
-        )
-        self.supplement_btn.pack(side="left", padx=(6, 0))
         self.refresh_people_btn = ttk.Button(
             bar2, text="刷新列表", command=self._refresh_people, width=8
         )
@@ -1115,7 +1123,21 @@ class App:
         ttk.Button(bar2, text="打开主页", command=self._open_current_profile, width=10).pack(
             side="left", padx=(6, 0)
         )
-        self.people_hint = tk.Label(bar2, text="", bg="#ffffff", fg="#8a94a6", font=("Microsoft YaHei UI", 9))
+
+        bar3 = tk.Frame(self.tab_people, bg="#ffffff", padx=12, pady=4)
+        bar3.pack(fill="x")
+        tk.Label(bar3, text="身份 / 修复：", bg="#ffffff", fg="#475569", font=("Microsoft YaHei UI", 9)).pack(
+            side="left"
+        )
+        self.retry_incomplete_btn = ttk.Button(
+            bar3, text="重试失败部分", command=self._retry_incomplete_threads, width=12
+        )
+        self.retry_incomplete_btn.pack(side="left", padx=(0, 0))
+        self.supplement_btn = ttk.Button(
+            bar3, text="补全身份", command=self._supplement_identity_manual, width=10
+        )
+        self.supplement_btn.pack(side="left", padx=(6, 0))
+        self.people_hint = tk.Label(bar3, text="", bg="#ffffff", fg="#8a94a6", font=("Microsoft YaHei UI", 9))
         self.people_hint.pack(side="right")
 
         filter_bar = tk.Frame(self.tab_people, bg="#ffffff", padx=10, pady=6)
@@ -1854,6 +1876,7 @@ class App:
             return
         self._supplement_running = True
         self._supplement_stop.clear()
+        set_stop_checker(self._supplement_stop.is_set)
         self.retry_incomplete_btn.configure(state="disabled")
         self.stop_btn.configure(state="normal")
         self.people_hint.configure(text=f"正在重试 {len(targets)} 个帖子的失败部分…")
@@ -1915,6 +1938,7 @@ class App:
         self._last_identity_strategy = strategy
         self._tieba_uid_failed = set()
         self._supplement_stop.clear()
+        set_stop_checker(self._supplement_stop.is_set)
         self.supplement_btn.configure(state="disabled")
         self.stop_btn.configure(state="normal")
         self.people_hint.configure(text="正在补全身份…")
@@ -3741,6 +3765,7 @@ class App:
                 else "公开帖子 · 楼中楼按设置补全 · 红绿灯只看发言"
             )
         self._apply_risk_ui()
+        self._update_risk_summary()
 
     def _set_mode(self, mode: str, persist: bool = True) -> None:
         mode = mode if mode in ("guest", "login") else "guest"
@@ -6273,14 +6298,32 @@ class App:
         save_settings(self.settings)
         self._clear_identity_strategy_selection()
         self._update_identity_risk_hint()
+        self._update_risk_summary()
+
+    def _update_risk_summary(self) -> None:
+        if not hasattr(self, "risk_summary_label"):
+            return
+        items = self._high_risk_items()
+        self.risk_summary_label.configure(
+            text=("风险：" + " · ".join(items)) if items else "风险：无高风险设置"
+        )
 
     def _update_identity_risk_hint(self) -> None:
         if not hasattr(self, "identity_risk_label"):
             return
-        high = str(getattr(self, "identity_concurrency_var", tk.StringVar(value="3")).get()) == "5"
-        self.identity_risk_label.configure(
-            text="高风险：可能触发验证码或临时限流" if high else ""
-        )
+        strategy = self._identity_strategy()
+        value = str(getattr(self, "identity_concurrency_var", tk.StringVar(value="3")).get())
+        unused = strategy in ("skip", "user_id", "detail")
+        if hasattr(self, "identity_concurrency_box"):
+            self.identity_concurrency_box.configure(state="disabled" if unused else "readonly")
+        if unused:
+            self.identity_risk_label.configure(text="未使用", fg="#8a94a6")
+        elif value == "5":
+            self.identity_risk_label.configure(
+                text="高风险：可能触发验证码或临时限流", fg="#b91c1c"
+            )
+        else:
+            self.identity_risk_label.configure(text="较稳（默认）", fg="#64748b")
 
     def _identity_strategy(self) -> str:
         return {
@@ -7920,6 +7963,15 @@ class App:
             "补全用户ID失败": str(int(getattr(self, "_identity_missing", 0) or 0)),
             "补全贴吧ID失败": str(int(getattr(self, "_tieba_uid_missing", 0) or 0)),
             "待补充贴吧ID用户": str(pending_tieba),
+            "不完整帖子": str(
+                sum(1 for thread in self.last_threads if not getattr(thread, "complete", True))
+            ),
+            "不完整帖子标题": "；".join(
+                display_text(thread.meta.title or thread.meta.tid)
+                for thread in self.last_threads
+                if not getattr(thread, "complete", True)
+            )
+            or "无",
             "总耗时": (
                 f"{float(stage_times.get('总耗时') or 0):.1f} 秒"
                 if stage_times.get("总耗时")
@@ -9297,6 +9349,7 @@ class App:
         include_op = not self.exclude_op_var.get()
         self.last_include_op = include_op
 
+        self._update_risk_summary()
         risk_items = self._high_risk_items()
         if risk_items:
             if not self._ask_choice(
@@ -9312,6 +9365,7 @@ class App:
         self._current_urls = list(urls)
         configure_gate(float(delay or 0))
         self.stop_event.clear()
+        set_stop_checker(self.stop_event.is_set)
         self._identity_choice_queue = queue.Queue()
         self._rate_choice_queue = queue.Queue()
         self._manual_timing = {}
@@ -9727,6 +9781,9 @@ class App:
             self._set_running(False)
             identity_missing = int(getattr(self, "_identity_missing", 0) or 0)
             tieba_missing = int(getattr(self, "_tieba_uid_missing", 0) or 0)
+            incomplete_threads = [
+                thread for thread in self.last_threads if not getattr(thread, "complete", True)
+            ]
             timing_enabled = bool(self.identity_timing_var.get())
             total_seconds = float(timings.get("总耗时") or 0) if timing_enabled else 0.0
             missing_label = (
@@ -9741,6 +9798,8 @@ class App:
                     status += f" · 贴吧ID待补充 {tieba_missing} 人"
                 else:
                     status += f" · 贴吧ID失败 {tieba_missing} 人"
+            if incomplete_threads:
+                status += f" · 不完整 {len(incomplete_threads)} 帖"
             self.status_var.set(status)
             self._refresh_cache_stats_if_visible()
             self._refresh_log_summary()
@@ -9751,6 +9810,12 @@ class App:
                     "全部完成",
                     f"统计完成，共 {count} 个帖子。\n\n文件已保存到：\n{output}\n\n"
                     + (f"总耗时：{total_seconds:.1f} 秒。\n\n" if timing_enabled else "")
+                    + (
+                        f"有 {len(incomplete_threads)} 个帖子只抓到部分内容，"
+                        "可在参与者页点「重试失败部分」。\n\n"
+                        if incomplete_threads
+                        else ""
+                    )
                     + (f"贴吧ID{missing_label} {tieba_missing} 人。\n\n" if tieba_missing else "")
                     + "切到「参与者」选项卡可以点开每个人，查看他的发言和关注的贴吧。",
                     parent=self.root,
@@ -9764,6 +9829,12 @@ class App:
                     f"统计完成，共 {count} 个帖子。\n\n按设置没有导出 Excel，可以切到「参与者」看结果，"
                     "或点「导出 Excel」现在生成。\n\n"
                     + (f"总耗时：{total_seconds:.1f} 秒。" if timing_enabled else "")
+                    + (
+                        f"\n\n有 {len(incomplete_threads)} 个帖子只抓到部分内容，"
+                        "可在参与者页点「重试失败部分」。"
+                        if incomplete_threads
+                        else ""
+                    )
                     + (f"\n\n贴吧ID{missing_label} {tieba_missing} 人。" if tieba_missing else ""),
                     parent=self.root,
                 )
@@ -9899,6 +9970,7 @@ class App:
             _, done_strategy, manual_timings = message
             self._supplement_running = False
             self.stop_btn.configure(state="disabled")
+            set_stop_checker(self.stop_event.is_set)
             self._refresh_people()
             self._refresh_grid()
             timing_enabled = bool(self.identity_timing_var.get())
@@ -9923,6 +9995,7 @@ class App:
         elif kind == "incomplete_retry_done":
             self._supplement_running = False
             self.stop_btn.configure(state="disabled")
+            set_stop_checker(self.stop_event.is_set)
             self._refresh_people()
             self._refresh_grid()
             self.people_hint.configure(text="失败部分重试完成，需要重新导出")
@@ -9934,11 +10007,13 @@ class App:
         elif kind == "incomplete_retry_stopped":
             self._supplement_running = False
             self.stop_btn.configure(state="disabled")
+            set_stop_checker(self.stop_event.is_set)
             self._refresh_people()
             self.people_hint.configure(text="重试已停止，已完成部分已保留")
         elif kind == "incomplete_retry_error":
             self._supplement_running = False
             self.stop_btn.configure(state="disabled")
+            set_stop_checker(self.stop_event.is_set)
             self._refresh_people()
             self.people_hint.configure(
                 text=f"重试失败：{friendly_error(RuntimeError(message[1]))}"
@@ -9946,11 +10021,13 @@ class App:
         elif kind == "identity_supplement_stopped":
             self._supplement_running = False
             self.stop_btn.configure(state="disabled")
+            set_stop_checker(self.stop_event.is_set)
             self._refresh_people()
             self.people_hint.configure(text="补全已停止，已完成部分已保留")
         elif kind == "identity_supplement_error":
             self._supplement_running = False
             self.stop_btn.configure(state="disabled")
+            set_stop_checker(self.stop_event.is_set)
             self._refresh_people()
             self.people_hint.configure(text=f"补全失败：{friendly_error(RuntimeError(message[1]))}")
         elif kind == "identity_remember":

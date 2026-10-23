@@ -1,6 +1,9 @@
+import pytest
+
 from tieba_reply_stats import page_pb, profile_pb, settings
 from tieba_reply_stats.collect import CollectOptions, enrich_tieba_uids
 from tieba_reply_stats.export import _tieba_cell
+from tieba_reply_stats.fetch import FetchError, RequestGate
 from tieba_reply_stats.models import Floor, ThreadData, ThreadMeta
 
 
@@ -92,6 +95,14 @@ def test_tieba_cell_distinguishes_pending_and_failed_identity():
     assert _tieba_cell({"uid": "1", "tieba_uid_failed": True}) == "-"
     assert _tieba_cell({"uid": "1", "tieba_uid": "345"}) == "345"
     assert _tieba_cell({}) == "-"
+
+
+def test_request_gate_stops_while_paused():
+    gate = RequestGate()
+    gate.pause(60)
+    gate.set_stop_checker(lambda: True)
+    with pytest.raises(FetchError):
+        gate.wait()
 
 
 def test_identity_defaults():
