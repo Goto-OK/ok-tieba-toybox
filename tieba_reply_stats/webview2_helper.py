@@ -2,7 +2,21 @@
 
 from __future__ import annotations
 
+import ctypes
 import sys
+
+
+def _center(width: int, height: int) -> tuple[int, int]:
+    try:
+        ctypes.windll.shcore.SetProcessDpiAwareness(2)
+    except Exception:  # noqa: BLE001
+        pass
+    try:
+        screen_w = int(ctypes.windll.user32.GetSystemMetrics(0))
+        screen_h = int(ctypes.windll.user32.GetSystemMetrics(1))
+    except Exception:  # noqa: BLE001
+        return 80, 80
+    return max(0, (screen_w - width) // 2), max(0, (screen_h - height) // 2)
 
 
 def main() -> int:
@@ -11,7 +25,17 @@ def main() -> int:
     url = sys.argv[1]
     import webview
 
-    webview.create_window("贴吧安全验证", url, width=980, height=760)
+    width, height = 980, 760
+    x, y = _center(width, height)
+    webview.create_window(
+        "贴吧安全验证",
+        url,
+        width=width,
+        height=height,
+        x=x,
+        y=y,
+        on_top=True,
+    )
     webview.start()
     return 0
 
