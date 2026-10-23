@@ -1381,6 +1381,13 @@ pid
 内容：[..............] [抓取]
 ```
 
+Windows 下内容框使用原生 Win32 EDIT：
+
+- 支持微软输入法、Win+.、Ctrl+V、Ctrl+A；
+- 支持 Enter 直接抓取；
+- 点击其他 Tk 控件时释放原生 Edit 焦点；
+- 非 Windows 回退普通 Entry。
+
 查询方式固定：
 
 ```text

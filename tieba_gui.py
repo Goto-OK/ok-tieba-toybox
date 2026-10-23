@@ -208,6 +208,8 @@ class App:
         self.lookup_entry: Optional[ttk.Entry] = None
         self.lookup_native_edit: Optional[int] = None
         self.lookup_native_host: Optional[tk.Frame] = None
+        self.love_native_edit: Optional[int] = None
+        self.love_native_host: Optional[tk.Frame] = None
         self.emoji_btn: Optional[tk.Button] = None
         self.blacklist = load_blacklist()
         self.settings = load_settings()
@@ -2019,6 +2021,101 @@ class App:
             self.lookup_native_edit = None
             return False
 
+    def _create_love_native_edit(self) -> bool:
+        try:
+            import ctypes
+            from ctypes import wintypes
+
+            user32 = ctypes.WinDLL("user32", use_last_error=True)
+            gdi32 = ctypes.WinDLL("gdi32", use_last_error=True)
+            kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+            user32.CreateWindowExW.restype = wintypes.HWND
+            user32.CreateWindowExW.argtypes = [
+                wintypes.DWORD, wintypes.LPCWSTR, wintypes.LPCWSTR, wintypes.DWORD,
+                ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int,
+                wintypes.HWND, wintypes.HMENU, wintypes.HINSTANCE, wintypes.LPVOID,
+            ]
+            user32.SendMessageW.restype = ctypes.c_ssize_t
+            user32.SendMessageW.argtypes = [
+                wintypes.HWND, wintypes.UINT, wintypes.WPARAM, wintypes.LPARAM
+            ]
+            user32.GetWindowTextLengthW.argtypes = [wintypes.HWND]
+            user32.GetWindowTextW.argtypes = [wintypes.HWND, wintypes.LPWSTR, ctypes.c_int]
+            user32.SetWindowTextW.argtypes = [wintypes.HWND, wintypes.LPCWSTR]
+            user32.MoveWindow.argtypes = [
+                wintypes.HWND, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int, wintypes.BOOL
+            ]
+            gdi32.CreateFontW.restype = wintypes.HFONT
+            kernel32.GetModuleHandleW.restype = wintypes.HMODULE
+            style = 0x40000000 | 0x10000000 | 0x00010000 | 0x00800000 | 0x00000080
+            edit = user32.CreateWindowExW(
+                0x00000200, "EDIT", "", style, 0, 0, 100, 28,
+                wintypes.HWND(self.love_edit_host.winfo_id()), None, kernel32.GetModuleHandleW(None), None,
+            )
+            if not edit:
+                return False
+            self.love_native_edit = edit
+            self.love_native_host = self.love_edit_host
+            font = gdi32.CreateFontW(
+                -16, 0, 0, 0, 400, 0, 0, 0, 1, 0, 0, 0, 0, "Microsoft YaHei UI"
+            )
+            self._love_native_font = font
+            if font:
+                user32.SendMessageW(edit, 0x0030, font, 1)
+
+            def resize(event) -> None:
+                user32.MoveWindow(edit, 0, 0, max(40, event.width), max(20, event.height), True)
+
+            self.love_edit_host.bind("<Configure>", resize)
+            resize(type("E", (), {"width": 260, "height": 28})())
+
+            user32.CallWindowProcW.restype = ctypes.c_ssize_t
+            user32.CallWindowProcW.argtypes = [
+                ctypes.c_void_p, wintypes.HWND, wintypes.UINT, wintypes.WPARAM, wintypes.LPARAM
+            ]
+
+            def on_key(hwnd, msg, wparam, lparam):
+                if msg == 0x0100 and wparam == 0x0D:
+                    self.root.after_idle(self._start_love)
+                    return 0
+                return user32.CallWindowProcW(old_proc, hwnd, msg, wparam, lparam)
+
+            proc_type = ctypes.WINFUNCTYPE(
+                ctypes.c_ssize_t, wintypes.HWND, wintypes.UINT, wintypes.WPARAM, wintypes.LPARAM
+            )
+            self._love_native_proc = proc_type(on_key)
+            set_ptr = getattr(user32, "SetWindowLongPtrW", user32.SetWindowLongW)
+            set_ptr.restype = ctypes.c_void_p
+            set_ptr.argtypes = [wintypes.HWND, ctypes.c_int, ctypes.c_void_p]
+            old_proc = set_ptr(edit, -4, ctypes.cast(self._love_native_proc, ctypes.c_void_p))
+            self._love_native_old_proc = old_proc
+            self._love_native_user32 = user32
+            self.root.bind_all("<Button-1>", self._release_lookup_native_focus, add="+")
+            return True
+        except Exception:  # noqa: BLE001
+            self.love_native_edit = None
+            self.love_native_host = None
+            return False
+
+    def _love_text(self) -> str:
+        edit = getattr(self, "love_native_edit", None)
+        user32 = getattr(self, "_love_native_user32", None)
+        if edit and user32 is not None:
+            length = user32.GetWindowTextLengthW(edit)
+            buffer = ctypes.create_unicode_buffer(length + 1)
+            user32.GetWindowTextW(edit, buffer, length + 1)
+            return buffer.value
+        return self.love_query_var.get()
+
+    def _love_focus(self) -> None:
+        edit = getattr(self, "love_native_edit", None)
+        user32 = getattr(self, "_love_native_user32", None)
+        if edit and user32 is not None:
+            user32.SetFocus(edit)
+            return
+        if self.love_entry is not None:
+            self.love_entry.focus_set()
+
     def _lookup_text(self) -> str:
         edit = getattr(self, "lookup_native_edit", None)
         if not edit:
@@ -2050,19 +2147,22 @@ class App:
             entry.focus_set()
 
     def _release_lookup_native_focus(self, event) -> None:
-        """Clicking a Tk widget must take Win32 focus back from the child EDIT."""
-        edit = getattr(self, "lookup_native_edit", None)
-        user32 = getattr(self, "_lookup_native_user32", None)
-        if not edit or user32 is None:
-            return
+        """Clicking a Tk widget must take Win32 focus back from child EDITs."""
         widget = getattr(event, "widget", None)
         if widget is None:
             return
-        try:
-            widget.focus_set()
-            user32.SetFocus(widget.winfo_id())
-        except (AttributeError, OSError, tk.TclError):
-            pass
+        edits = (
+            (getattr(self, "lookup_native_edit", None), getattr(self, "_lookup_native_user32", None)),
+            (getattr(self, "love_native_edit", None), getattr(self, "_love_native_user32", None)),
+        )
+        for edit, user32 in edits:
+            if not edit or user32 is None:
+                continue
+            try:
+                widget.focus_set()
+                user32.SetFocus(widget.winfo_id())
+            except (AttributeError, OSError, tk.TclError):
+                pass
 
     def _lookup_insert_text(self, text: str) -> None:
         edit = getattr(self, "lookup_native_edit", None)
@@ -3685,8 +3785,13 @@ class App:
         ).pack(side="left", padx=(0, 6))
         tk.Label(row, text="内容：", bg="#ffffff", fg="#475569", font=("Microsoft YaHei UI", 9)).pack(side="left")
         self.love_query_var = tk.StringVar()
-        self.love_entry = ttk.Entry(row, textvariable=self.love_query_var, width=24)
-        self.love_entry.pack(side="left")
+        self.love_entry = None
+        self.love_edit_host = tk.Frame(row, bg="#ffffff", height=28)
+        self.love_edit_host.pack(side="left", fill="x", expand=True, padx=(0, 4))
+        self.love_edit_host.pack_propagate(False)
+        if os.name != "nt" or not self._create_love_native_edit():
+            self.love_entry = ttk.Entry(self.love_edit_host, textvariable=self.love_query_var, width=24)
+            self.love_entry.pack(fill="x", expand=True)
         self.love_auto_var = tk.BooleanVar(value=False)
         ttk.Checkbutton(row, text="自动连续翻页", variable=self.love_auto_var).pack(side="left", padx=(8, 0))
         ttk.Button(row, text="抓取", command=self._start_love).pack(side="left", padx=(8, 0))
@@ -3762,7 +3867,7 @@ class App:
         return self._love_urls.get(selection[0], "") if selection else ""
 
     def _open_love_profile(self) -> None:
-        query = self.love_query_var.get().strip()
+        query = self._love_text().strip()
         if not query:
             self.love_status.configure(text="先输入用户名 / 贴吧ID / 昵称")
             return
@@ -3808,7 +3913,7 @@ class App:
         self.love_status.configure(text="正在停止…")
 
     def _start_love(self) -> None:
-        query = self.love_query_var.get().strip()
+        query = self._love_text().strip()
         if not query:
             self.love_status.configure(text="请输入贴吧ID或用户名")
             return
