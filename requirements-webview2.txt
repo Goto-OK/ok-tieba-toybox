@@ -1,0 +1,4 @@
+# 可选：内置 WebView2 验证窗口
+# 不安装时，“转到登录模式（完整 Cookie）”仍然可用。
+pywebview>=6.2
+pythonnet>=3.2

@@ -177,6 +177,8 @@ Android 核心同步通过
 - 验证码弹窗改为“转到登录模式（完整 Cookie）”并打开浏览器；
 - 游客模式记录 failed_pages / failed_comment_floors，新增「重试失败部分」；
 - 限流弹窗可按服务端 Retry-After 或手动暂停后继续当前帖子；
+- 可选 WebView2 验证窗口：安装 pywebview/pythonnet 且系统有 Evergreen Runtime 时启用；
+- 未安装 WebView2 依赖/运行时不强制，继续走完整 Cookie；
 - 「详情再补」完成后自动切到参与者；参与者补全弹窗不再提供详情再补；
 - 补全选择框记住上次勾选状态，首次默认勾选；
 - 内置表格和导出统一使用「待补充」标记可补未补的 ID；
