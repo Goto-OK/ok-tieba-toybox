@@ -275,6 +275,13 @@ def build_request(
     return _fb(1, data)
 
 
+def _open_request(fetcher, request):
+    opener = getattr(fetcher, "opener", None)
+    if opener is not None:
+        return opener.open(request, timeout=40)
+    return urllib.request.urlopen(request, timeout=40)
+
+
 def _request(
     fetcher,
     tid: str,
@@ -304,7 +311,7 @@ def _request(
     )
     wait_request_gate()
     try:
-        with urllib.request.urlopen(request, timeout=40) as response:
+        with _open_request(fetcher, request) as response:
             return response.read()
     except urllib.error.HTTPError as error:
         body = error.read() if error.fp else b""
@@ -545,14 +552,14 @@ def collect_thread_anon(
             add_page(fetch_page(fetcher, tid, pn, options.include_comments, 30, 10, bduss=""))
         except (CaptchaError, RateLimitError) as error:
             complete = False
-            failed_pages.append(pn)
+            failed_pages.extend(range(pn, min(total, max_pages) + 1))
             warnings.append(f"第 {pn} 页未抓完：{error}")
             if options.log:
                 options.log(f"  第 {pn} 页被拦截，保留已完成页：{error}")
             break
         except Exception as error:  # noqa: BLE001
             complete = False
-            failed_pages.append(pn)
+            failed_pages.extend(range(pn, min(total, max_pages) + 1))
             warnings.append(f"第 {pn} 页失败：{error}")
             if options.log:
                 options.log(f"  第 {pn} 页失败：{error}")
@@ -617,7 +624,7 @@ def _floor_request(fetcher, tid: str, pid: str, pn: int, bduss: str = "") -> byt
     )
     wait_request_gate()
     try:
-        with urllib.request.urlopen(request, timeout=40) as response:
+        with _open_request(fetcher, request) as response:
             return response.read()
     except urllib.error.HTTPError as error:
         body = error.read() if error.fp else b""

@@ -1978,6 +1978,7 @@ class App:
                     for item in list(thread.floors) + list(thread.comments)
                     if not item.author_id and (item.author_name or item.portrait)
                 }
+                self._apply_user_id_failed_states(self.last_threads)
                 timings["用户ID"] = time.perf_counter() - stage_at
                 stage_at = time.perf_counter()
                 if strategy == "full":
@@ -3430,11 +3431,18 @@ class App:
             return "待补充"
         return "-"
 
+    def _apply_user_id_failed_states(self, threads) -> None:
+        failed = set(getattr(self, "_user_id_failed", set()) or set())
+        for thread in threads or []:
+            for item in list(thread.floors) + list(thread.comments):
+                if not getattr(item, "author_id", ""):
+                    item.user_id_failed = self._identity_fail_key(item) in failed
+
     def _person_uid_text(self, user) -> str:
         uid = str(user.get("uid") or "")
         if uid:
             return uid
-        if self._identity_fail_key(user) in self._user_id_failed:
+        if user.get("user_id_failed") or self._identity_fail_key(user) in self._user_id_failed:
             return "-"
         if user.get("username") or user.get("portrait"):
             return "待补充"
@@ -5543,6 +5551,15 @@ class App:
         except OSError as error:
             messagebox.showerror("打不开目录", friendly_error(error), parent=self.root)
 
+    def _webview_center(self) -> tuple[int, int]:
+        try:
+            self.root.update_idletasks()
+            x = self.root.winfo_rootx() + self.root.winfo_width() // 2 - 490
+            y = self.root.winfo_rooty() + self.root.winfo_height() // 2 - 380
+            return max(0, x), max(0, y)
+        except tk.TclError:
+            return 0, 0
+
     def _test_embedded_verification(self) -> None:
         if getattr(self, "_webview_running", False):
             messagebox.showinfo("正在测试", "内置验证窗口已经打开。", parent=self.root)
@@ -5560,7 +5577,7 @@ class App:
 
         def worker():
             try:
-                webview2.open_window("about:blank")
+                webview2.open_window("about:blank", center=self._webview_center())
                 self._post(("webview_test_done", ""))
             except Exception as error:  # noqa: BLE001
                 self._post(("webview_test_done", str(error)))
@@ -6279,6 +6296,7 @@ class App:
         self.settings["proxy_url"] = self.proxy_url_var.get().strip()
         save_settings(self.settings)
         self._apply_proxy()
+        self._update_risk_summary()
 
     def _on_batch_concurrency_changed(self) -> None:
         try:
@@ -9247,9 +9265,11 @@ class App:
             self._refresh_grid()
         except Exception:  # noqa: BLE001
             pass
+        incomplete = sum(1 for thread in threads if not getattr(thread, "complete", True))
         self.status_var.set(
             f"已恢复 {len(threads)} 个帖子（{len(self._aggregate_users())} 位用户）；"
-            "缺失身份可点「补全身份」"
+            + (f"不完整 {incomplete} 帖；" if incomplete else "")
+            + "缺失身份可点「补全身份」"
         )
 
     def _start_from_key(self, _event=None):
@@ -9257,7 +9277,7 @@ class App:
         return "break"
 
     def _on_start(self) -> None:
-        if self.running:
+        if self.running or getattr(self, "_supplement_running", False):
             return
         raw = self.url_text.get("1.0", "end").strip()
         tokens = [item for item in re.split(r"[\s,，;；]+", raw) if item]
@@ -9432,6 +9452,8 @@ class App:
             items.append("登录抓取")
         if self.settings.get("follow_enhance"):
             items.append("抓取增强")
+        if getattr(self, "proxy_mode_var", None) is not None and self.proxy_mode_var.get() == "自定义":
+            items.append("自定义代理")
         return items
 
     def _on_pause(self) -> None:
@@ -9683,6 +9705,7 @@ class App:
                 }
             else:
                 self._user_id_failed = set()
+            self._apply_user_id_failed_states(final_threads)
             timings["用户ID"] = time.perf_counter() - stage_at
             stage_at = time.perf_counter()
             if strategy == "full":
@@ -10151,7 +10174,7 @@ class App:
 
                 def worker():
                     try:
-                        webview2.open_verification(url)
+                        webview2.open_verification(url, center=self._webview_center())
                         self._post(("embedded_done", ""))
                     except Exception as error:  # noqa: BLE001
                         self._post(("embedded_done", str(error)))
@@ -10379,10 +10402,9 @@ def _acquire_instance():
 def main() -> int:
     if "--webview2-verify" in sys.argv:
         index = sys.argv.index("--webview2-verify")
-        url = sys.argv[index + 1] if index + 1 < len(sys.argv) else ""
         from tieba_reply_stats.webview2_helper import main as verify_main
 
-        sys.argv = [sys.argv[0], url]
+        sys.argv = [sys.argv[0], *sys.argv[index + 1 :]]
         return verify_main()
     if "--selftest" in sys.argv:
         return _selftest()

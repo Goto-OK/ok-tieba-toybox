@@ -114,7 +114,15 @@ def test_resume_without_checkpoint_does_not_mark_complete(monkeypatch):
 def test_checkpoint_fields_round_trip():
     thread = ThreadData(
         meta=ThreadMeta(tid="1"),
-        floors=[Floor(post_no=1, pid="p1", author="a", tieba_uid_failed=True)],
+        floors=[
+            Floor(
+                post_no=1,
+                pid="p1",
+                author="a",
+                tieba_uid_failed=True,
+                user_id_failed=True,
+            )
+        ],
         complete=False,
         failed_pages=[2],
         failed_comment_floors=[1],
@@ -125,6 +133,7 @@ def test_checkpoint_fields_round_trip():
     assert restored.failed_pages == [2]
     assert restored.failed_comment_floors == [1]
     assert restored.floors[0].tieba_uid_failed is True
+    assert restored.floors[0].user_id_failed is True
 
 
 def test_tieba_cell_distinguishes_pending_and_failed_identity():

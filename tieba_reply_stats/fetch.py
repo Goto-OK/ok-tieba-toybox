@@ -67,18 +67,16 @@ class RequestGate:
             with self._lock:
                 if self._paused:
                     delay = 0.1
-                    now = time.monotonic()
-                    self._last = now
-                    time.sleep(delay)
-                    continue
-                now = time.monotonic()
-                if now < self._pause_until:
-                    delay = self._pause_until - now
+                    self._last = time.monotonic()
                 else:
-                    delay = self._interval - (now - self._last)
-                    if delay <= 0:
-                        self._last = now
-                        return
+                    now = time.monotonic()
+                    if now < self._pause_until:
+                        delay = self._pause_until - now
+                    else:
+                        delay = self._interval - (now - self._last)
+                        if delay <= 0:
+                            self._last = now
+                            return
             time.sleep(min(max(delay, 0.01), 1.0))
 
 

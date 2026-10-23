@@ -27,6 +27,17 @@ def main() -> int:
 
     width, height = 980, 760
     x, y = _center(width, height)
+    for index, value in enumerate(sys.argv):
+        if value == "--x" and index + 1 < len(sys.argv):
+            try:
+                x = int(sys.argv[index + 1])
+            except ValueError:
+                pass
+        if value == "--y" and index + 1 < len(sys.argv):
+            try:
+                y = int(sys.argv[index + 1])
+            except ValueError:
+                pass
     webview.create_window(
         "贴吧安全验证",
         url,

@@ -42,14 +42,17 @@ def available() -> bool:
     return _runtime_installed()
 
 
-def open_window(url: str, timeout: int = 600) -> None:
+def open_window(url: str, timeout: int = 600, center=None) -> None:
     """打开内置窗口并等待用户关闭，不读取也不导出 Cookie。"""
     if not available():
         raise RuntimeError("WebView2 不可用")
+    extra = []
+    if center:
+        extra = ["--x", str(int(center[0])), "--y", str(int(center[1]))]
     if getattr(sys, "frozen", False):
-        command = [sys.executable, "--webview2-verify", url]
+        command = [sys.executable, "--webview2-verify", url, *extra]
     else:
-        command = [sys.executable, "-m", "tieba_reply_stats.webview2_helper", url]
+        command = [sys.executable, "-m", "tieba_reply_stats.webview2_helper", url, *extra]
     completed = subprocess.run(
         command,
         capture_output=True,
@@ -64,6 +67,6 @@ def open_window(url: str, timeout: int = 600) -> None:
         raise RuntimeError(detail[-1] if detail else "WebView2 验证窗口启动失败")
 
 
-def open_verification(url: str, timeout: int = 600) -> None:
+def open_verification(url: str, timeout: int = 600, center=None) -> None:
     """真实验证码窗口；不自动读取 Cookie。"""
-    open_window(url, timeout=timeout)
+    open_window(url, timeout=timeout, center=center)
