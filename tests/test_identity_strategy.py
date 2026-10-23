@@ -142,6 +142,14 @@ def test_request_gate_stops_while_paused():
         gate.wait()
 
 
+def test_request_gate_stops_while_task_paused():
+    gate = RequestGate()
+    gate.set_paused(True)
+    gate.set_stop_checker(lambda: True)
+    with pytest.raises(FetchError):
+        gate.wait()
+
+
 def test_identity_defaults():
     assert settings.DEFAULTS["identity_strategy"] == "full"
     assert settings.DEFAULTS["identity_timing"] is True

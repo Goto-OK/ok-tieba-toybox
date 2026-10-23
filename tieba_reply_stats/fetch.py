@@ -35,6 +35,7 @@ class RequestGate:
         self._last = 0.0
         self._interval = 0.0
         self._pause_until = 0.0
+        self._paused = False
         self._stop_check = None
 
     def configure(self, interval: float) -> None:
@@ -52,6 +53,11 @@ class RequestGate:
     def resume(self) -> None:
         with self._lock:
             self._pause_until = 0.0
+            self._paused = False
+
+    def set_paused(self, paused: bool) -> None:
+        with self._lock:
+            self._paused = bool(paused)
 
     def wait(self) -> None:
         while True:
@@ -59,6 +65,12 @@ class RequestGate:
             if checker is not None and checker():
                 raise FetchError("已停止")
             with self._lock:
+                if self._paused:
+                    delay = 0.1
+                    now = time.monotonic()
+                    self._last = now
+                    time.sleep(delay)
+                    continue
                 now = time.monotonic()
                 if now < self._pause_until:
                     delay = self._pause_until - now
@@ -87,6 +99,10 @@ def resume_requests() -> None:
 
 def set_stop_checker(checker) -> None:
     _GATE.set_stop_checker(checker)
+
+
+def set_requests_paused(paused: bool) -> None:
+    _GATE.set_paused(paused)
 
 
 def wait_request_gate() -> None:

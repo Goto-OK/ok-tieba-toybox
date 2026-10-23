@@ -65,6 +65,7 @@ from tieba_reply_stats.fetch import (
     configure_gate,
     parse_cookie_input,
     pause_requests,
+    set_requests_paused,
     set_stop_checker,
 )
 from tieba_reply_stats.filters import FIELD_OPTIONS, LEVEL_OPTIONS, filter_users
@@ -690,6 +691,21 @@ class App:
             state="disabled",
         )
         self.start_btn.pack(side="left")
+        self.pause_btn = tk.Button(
+            buttons,
+            text="暂停",
+            command=self._on_pause,
+            bg="#e5e9f0",
+            fg="#334155",
+            activebackground="#d5dbe5",
+            relief="flat",
+            padx=16,
+            pady=6,
+            cursor="hand2",
+            font=("Microsoft YaHei UI", 9),
+            state="disabled",
+        )
+        self.pause_btn.pack(side="left", padx=(10, 0))
         self.stop_btn = tk.Button(
             buttons,
             text="停止",
@@ -9365,6 +9381,8 @@ class App:
         self._current_urls = list(urls)
         configure_gate(float(delay or 0))
         self.stop_event.clear()
+        self._task_paused = False
+        set_requests_paused(False)
         set_stop_checker(self.stop_event.is_set)
         self._identity_choice_queue = queue.Queue()
         self._rate_choice_queue = queue.Queue()
@@ -9416,7 +9434,22 @@ class App:
             items.append("抓取增强")
         return items
 
+    def _on_pause(self) -> None:
+        if not self.running:
+            return
+        paused = not getattr(self, "_task_paused", False)
+        self._task_paused = paused
+        set_requests_paused(paused)
+        self.pause_btn.configure(text="继续" if paused else "暂停")
+        if paused:
+            self.status_var.set("已暂停；已完成数据保留")
+            self._append_log("已暂停，不再发新请求。", "muted")
+        else:
+            self.status_var.set("已继续抓取")
+            self._append_log("已继续抓取。", "muted")
+
     def _on_stop(self) -> None:
+        set_requests_paused(False)
         if getattr(self, "_supplement_running", False):
             self._supplement_stop.set()
             self.stop_btn.configure(state="disabled")
@@ -10222,6 +10255,7 @@ class App:
         self.running = running
         if running:
             self.start_btn.configure(state="disabled", bg="#9aa7b8")
+            self.pause_btn.configure(state="normal", text="暂停")
             self.stop_btn.configure(state="normal")
             self.open_btn.configure(state="disabled")
             self.status_var.set("正在抓取，请稍候…")
@@ -10232,6 +10266,7 @@ class App:
                 pass
         else:
             self.start_btn.configure(state="normal", bg="#1F4E79")
+            self.pause_btn.configure(state="disabled", text="暂停")
             self.stop_btn.configure(state="disabled")
             try:
                 self.progress.stop()
