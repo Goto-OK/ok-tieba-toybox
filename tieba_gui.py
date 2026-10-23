@@ -10339,6 +10339,13 @@ class App:
                 self.mode_var.set("login")
                 self.login_method_var.set("cookie")
                 self._on_login_method_changed()
+                if mode == "guest":
+                    self.settings["follow_enhance"] = True
+                    if hasattr(self, "follow_enhance_var"):
+                        self.follow_enhance_var.set(True)
+                    save_settings(self.settings)
+                    self._apply_risk_ui()
+                    self._append_log("已自动开启抓取增强。", "muted")
                 if source == "embedded":
                     self._start_webview_cookie_flow(anonymous=False)
                 else:
