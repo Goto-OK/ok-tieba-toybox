@@ -2126,6 +2126,11 @@ class App:
             justify="left",
         )
         self.lookup_info.pack(side="left", fill="x", expand=True)
+        self.lookup_info.bind("<Button-3>", lambda _event: self._copy_lookup_summary())
+        self.lookup_copy_btn = ttk.Button(
+            summary, text="复制摘要", command=self._copy_lookup_summary, width=9
+        )
+        self.lookup_copy_btn.pack(side="right", padx=(6, 0))
         traffic = tk.Frame(summary, bg="#eef1f5")
         traffic.pack(side="right", padx=(8, 0))
         tk.Label(
@@ -2310,6 +2315,11 @@ class App:
         url = self._lookup_post_urls.get(selection[0])
         if url:
             webbrowser.open(url)
+
+    def _copy_lookup_summary(self) -> None:
+        text = str(self.lookup_info.cget("text") or "")
+        if text:
+            self._copy_text(text)
 
     def _copy_lookup(self) -> None:
         lines = []
@@ -2501,6 +2511,8 @@ class App:
                 profile["nickname"] = profile.get("nickname") or info.get("nickname") or ""
                 profile["tieba_uid"] = profile.get("tieba_uid") or info.get("tieba_uid") or ""
                 if profile.get("ok"):
+                    self._attach_love_levels(profile)
+                if profile.get("ok"):
                     profile = self._supplement_lookup(
                         fetcher, profile, count, start_date, end_date
                     )
@@ -2608,6 +2620,27 @@ class App:
                 self.lookup_cache_row.pack(fill="x", after=self.lookup_summary)
         else:
             self.lookup_cache_row.pack_forget()
+
+    def _attach_love_levels(self, profile) -> None:
+        if not self.settings.get("love_level_enabled", False):
+            return
+        username = str(profile.get("username") or "")
+        if not username:
+            return
+        cache = getattr(self, "_all_levels_cache", None)
+        if cache is None:
+            cache = {}
+            self._all_levels_cache = cache
+        if username in cache:
+            levels = cache[username]
+        else:
+            try:
+                levels = third_party.fetch_all_levels(username)
+            except Exception:  # noqa: BLE001
+                levels = []
+            cache[username] = levels
+        if levels:
+            profile["level_forums"] = levels
 
     def _request_love_levels(self, profile, forums, tree, names, kind) -> None:
         if not self.settings.get("love_level_enabled", False):
@@ -5632,6 +5665,9 @@ class App:
                 enabled = False
         self.settings["love_level_enabled"] = enabled
         save_settings(self.settings)
+        self._profile_cache = {}
+        self._lookup_cache = {}
+        self._all_levels_cache = {}
         self.general_hint.configure(text="已保存")
 
     def _on_fetch_settings_changed(self) -> None:
@@ -7629,6 +7665,7 @@ class App:
                     cached_posts=local_cached,
                 )
                 if profile.get("ok"):
+                    self._attach_love_levels(profile)
                     official = list(profile.get("recent_posts") or [])
                     current = merge_current_threads(official, getattr(self, "last_threads", []), profile)
                     posts = official + current["posts"]
@@ -7796,13 +7833,34 @@ class App:
                 if int(forum.get("level") or 0) > int(existing.get("level") or 0):
                     existing["level"] = int(forum.get("level") or 0)
                 existing["source"] = "候选确认"
+        if self.settings.get("love_level_enabled", False):
+            for forum in profile.get("level_forums") or []:
+                name = str(forum.get("name") or "")
+                if not name:
+                    continue
+                existing = merged.get(name)
+                if existing is None:
+                    merged[name] = {
+                        "name": name,
+                        "level": int(forum.get("level") or 0),
+                        "level_name": "",
+                        "source": "恋文等级",
+                        "level_source": "恋文（第三方）",
+                    }
+                elif not int(existing.get("level") or 0):
+                    existing["level"] = int(forum.get("level") or 0)
+                    existing["level_source"] = "恋文（第三方）"
         return sorted(merged.values(), key=lambda item: int(item.get("level") or 0), reverse=True)
 
     def _forum_note(self, profile, bar_name: str = "", bar_level: str = "") -> str:
         forums = profile.get("followed_forums") or []
         hidden = profile.get("hidden_forums") or []
         if forums:
-            return f"共 {len(forums)} 个（完整）"
+            note = f"共 {len(forums)} 个（完整）"
+            levels = profile.get("level_forums") or []
+            if self.settings.get("love_level_enabled", False) and levels:
+                note += f"；恋文等级另列 {len(levels)} 个（非关注）"
+            return note
         if hidden or profile.get("like_forum"):
             count = len(self._merge_forum_lists(profile, bar_name, bar_level))
             if self.mode_var.get() == "guest" and not profile.get("follow_loaded"):
@@ -8098,13 +8156,24 @@ class App:
 
         if level:
             self._apply_level_to_threads(user, level)
+        profile_tieba = str(profile.get("tieba_uid") or "")
+        if profile_tieba:
+            user["tieba_uid"] = profile_tieba
+            iid = user.get("_iid")
+            if iid is not None:
+                try:
+                    values = list(self.people_tree.item(iid, "values"))
+                    values[3] = profile_tieba
+                    self.people_tree.item(iid, values=values)
+                except tk.TclError:
+                    pass
         if level and not user.get("level"):
             user["level"] = level
             iid = user.get("_iid")
             if iid is not None:
                 try:
                     values = list(self.people_tree.item(iid, "values"))
-                    values[4] = f"Lv.{level}"
+                    values[5] = f"Lv.{level}"
                     self.people_tree.item(iid, values=values)
                 except tk.TclError:
                     pass

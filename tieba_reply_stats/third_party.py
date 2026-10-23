@@ -108,6 +108,37 @@ def fetch_level(uid: str, fname: str, username: str = "") -> Optional[Dict]:
     }
 
 
+def fetch_all_levels(username: str) -> List[Dict]:
+    """旧版等级接口：按用户名返回该用户有等级的全部吧。"""
+    name = (username or "").strip()
+    if not name:
+        return []
+    data = _get("/getLevelOld", {"username": name})
+    result = data.get("result")
+    if not isinstance(result, list):
+        return []
+    rows: List[Dict] = []
+    for item in result:
+        if not isinstance(item, dict):
+            continue
+        fname = str(item.get("fname") or "").strip()
+        try:
+            level = int(item.get("level") or 0)
+        except (TypeError, ValueError):
+            continue
+        if not fname or level <= 0:
+            continue
+        rows.append(
+            {
+                "name": fname,
+                "level": level,
+                "level_source": "恋文（第三方）",
+                "source": "恋文等级",
+            }
+        )
+    return rows
+
+
 def parse_post_link(href: str) -> Dict[str, str]:
     """从贴吧链接提取 tid / pid / 规范化链接。"""
     import re

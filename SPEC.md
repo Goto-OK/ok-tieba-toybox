@@ -387,6 +387,7 @@ Excel：回复统计/分帖统计/楼层明细/楼中楼明细
 - 「帖子范围」下拉宽度至少 56 字符，保持一行，容纳“序号 + 标题”完整显示；
 - 用户列顺序固定：昵称 → 用户名 → 贴吧ID → 用户ID；
 - 贴吧ID列：显示 `tieba_uid`；没有时显示 `-`；身份未补全显示“待补全”；不得用 `user_id` 冒充；
+- 详情资料接口拿到 `tieba_uid` 后回填当前选中行；其他未打开详情的行保持 `-`；
 - 用户ID列：显示内部 `user_id`；有 uid 显示 uid；身份未补全显示“待补全”；完全没有身份显示“-”；
 - 「打开主页」不得静默失败：
   - 有 username → 用 `un=username`；
@@ -641,6 +642,7 @@ Excel：回复统计/分帖统计/楼层明细/楼中楼明细
 - 时间偏向只在指定日期时出现；
 - 表格自身的列排序与时间偏向无关；
 - 摘要/标记/状态单独一行；
+- 摘要右侧有「复制摘要」按钮；右键摘要也可复制全文；
 - 关注贴吧和发言左右分栏；
 - 底部操作栏固定，提示自动换行；
 - 最小窗口下按钮和提示不能被遮挡；
@@ -993,45 +995,61 @@ pid 相同：保留官方 feed 版本
 
 #### 7.6.2 接口
 
+全量等级：
+
+```text
+GET https://tb.anova.me/getLevelOld?username=<用户名>
+```
+
+返回该用户有等级的**全部吧**，不只当前关注。  
+实测：
+
+```text
+username=唐宋元明清总用
+→ 59 个吧等级
+```
+
+指定吧兜底：
+
 ```text
 GET https://tb.anova.me/getLevel?fname=<吧名>&uid=<tieba_uid>
-```
-
-没有 `tieba_uid` 时可用：
-
-```text
-GET https://tb.anova.me/getLevel?fname=<吧名>&username=<用户名>
-```
-
-禁止使用：
-
-```text
-user_id
-nickname
+GET https://tb.anova.me/getLevel?fname=<吧1>,<吧2>&username=<用户名>
 ```
 
 实测：
 
 ```text
-uid=123456789 + fname=示例吧
-→ level=14 / like=1 / exp=29838
+uid=123456789 + fname=示例吧,测试吧,示例二吧
+→ 3 条等级
 ```
 
-说明第三方参数 `uid` 指 `tieba_uid`。
+规则：
 
-一次只查一个吧，不支持逗号批量。
+```text
+全量等级优先用 getLevelOld
+getLevelOld 为空/失败 → getLevel 指定已知吧兜底
+getLevelOld 只接受 username
+getLevel 的 uid 参数是 tieba_uid
+禁止 user_id / nickname 冒充
+```
 
 #### 7.6.3 使用范围
 
-只查已知吧：
+全量等级：
 
 ```text
-参与者详情：关注贴吧表中已有的吧
-查用户：关注贴吧表中已有的吧
-当前主题的吧
+有 username → getLevelOld 取全部吧等级
+新增行来源=恋文等级
+等级来源=恋文（第三方）
+不写成“公开关注”
 ```
 
-不新增关注贴吧行，不枚举未知吧。
+已知吧兜底：
+
+```text
+getLevelOld 为空/失败
+→ 只查表里已有吧
+```
 
 等级补全规则：
 
@@ -1044,8 +1062,20 @@ uid=123456789 + fname=示例吧
 → 成功：填等级，等级来源=恋文（第三方）
 → 失败：保持 -，来源不变
 
-没有 tieba_uid/username/吧名
+没有 username/吧名
 → 跳过，不伪造
+```
+
+新增行只代表：
+
+```text
+该用户有这个吧的等级
+```
+
+不代表：
+
+```text
+当前关注这个吧
 ```
 
 `like` 字段不能用来新增关注贴吧，也不能改变红绿灯 bars。
@@ -1071,6 +1101,7 @@ uid=123456789 + fname=示例吧
   公开关注
   profile片段
   隐藏关注
+  恋文等级
   -
 ```
 
