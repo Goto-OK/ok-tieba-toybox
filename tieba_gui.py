@@ -5624,6 +5624,39 @@ class App:
             ),
         )
 
+    def _start_webview_cookie_flow(self, anonymous: bool) -> None:
+        scope = (
+            "只读取匿名 Cookie，不读取 BDUSS/STOKEN"
+            if anonymous
+            else "读取完整 Cookie，可能包含 BDUSS/STOKEN"
+        )
+        if not messagebox.askyesno(
+            "读取验证 Cookie？",
+            "内置验证完成后，软件将" + scope + "。\n"
+            "Cookie 只在内存中使用，不写日志、不导出。\n\n继续？",
+            parent=self.root,
+            default=messagebox.NO,
+        ):
+            self._append_log("用户取消读取验证 Cookie。", "muted")
+            return
+        url = (getattr(self, "_current_urls", []) or ["https://tieba.baidu.com/"])[0]
+        self._webview_running = True
+        self.status_var.set("正在打开内置验证窗口…")
+        center = self._webview_center()
+
+        def worker():
+            try:
+                result = webview2.open_verification(url, center=center)
+                raw_cookies = result.get("cookies") if isinstance(result, dict) else result
+                cookies = webview2.filter_cookies(raw_cookies, anonymous=anonymous)
+                if not cookies:
+                    raise RuntimeError("没有读取到可用 Cookie")
+                self._post(("embedded_done", cookies, ""))
+            except Exception as error:  # noqa: BLE001
+                self._post(("embedded_done", {}, str(error)))
+
+        threading.Thread(target=worker, daemon=True).start()
+
     def _test_embedded_verification(self) -> None:
         if getattr(self, "_webview_running", False):
             messagebox.showinfo("正在测试", "内置验证窗口已经打开。", parent=self.root)
@@ -10231,10 +10264,16 @@ class App:
                     "验证码通常需要完整 Cookie。"
                 )
             elif mode == "guest":
-                message = (
-                    "当前是游客模式。\n"
-                    "完成验证后软件会自动读取匿名 Cookie，不会读取 BDUSS/STOKEN。"
-                )
+                if webview2.available():
+                    message = (
+                        "当前是游客模式。\n"
+                        "完成验证后软件会自动读取匿名 Cookie，不会读取 BDUSS/STOKEN。"
+                    )
+                else:
+                    message = (
+                        "当前是游客模式，且未检测到 WebView2 Runtime。\n"
+                        "可以改用登录模式（完整 Cookie）继续。"
+                    )
             else:
                 message = (
                     "当前请求需要完整 Cookie。\n"
@@ -10255,7 +10294,7 @@ class App:
             choices.extend(
                 [
                     (
-                        "重新粘贴完整 Cookie"
+                        "重新手动粘贴完整 Cookie"
                         if current_cookie_mode
                         else "转到登录模式（完整 Cookie）",
                         "login",
@@ -10283,53 +10322,40 @@ class App:
                 self._refresh_log_summary()
                 return
             if choice == "login":
+                source = "manual"
+                if mode == "guest" and webview2.available():
+                    source = self._ask_choice(
+                        "改用登录模式（完整 Cookie）",
+                        "选择获取完整 Cookie 的方式。\n"
+                        "内置验证会读取完整 Cookie；手动方式只打开浏览器，不自动读取。",
+                        [
+                            ("打开内置验证（读取完整 Cookie）", "embedded"),
+                            ("手动粘贴完整 Cookie", "manual"),
+                        ],
+                        default=0,
+                    )
+                    if source is None:
+                        return
                 self.mode_var.set("login")
                 self.login_method_var.set("cookie")
                 self._on_login_method_changed()
-                url = (getattr(self, "_current_urls", []) or ["https://tieba.baidu.com/"])[0]
-                try:
-                    webbrowser.open(url)
-                except Exception:  # noqa: BLE001
-                    pass
-                self.cookie_entry.focus_set()
-                self._append_log(
-                    "已切换到登录模式（完整 Cookie）。完成验证后粘贴完整 Cookie，再重新开始。",
-                    "err",
-                )
-            elif choice == "embedded":
-                anonymous = self.mode_var.get() == "guest"
-                scope = (
-                    "只读取匿名 Cookie，不读取 BDUSS/STOKEN"
-                    if anonymous
-                    else "读取完整 Cookie，可能包含 BDUSS/STOKEN"
-                )
-                if not messagebox.askyesno(
-                    "读取验证 Cookie？",
-                    "内置验证完成后，软件将" + scope + "。\n"
-                    "Cookie 只在内存中使用，不写日志、不导出。\n\n继续？",
-                    parent=self.root,
-                    default=messagebox.NO,
-                ):
-                    self._append_log("用户取消读取验证 Cookie。", "muted")
-                    self._refresh_log_summary()
-                    return
-                url = (getattr(self, "_current_urls", []) or ["https://tieba.baidu.com/"])[0]
-                self._webview_running = True
-                self.status_var.set("正在打开内置验证窗口…")
-                center = self._webview_center()
-
-                def worker():
+                if source == "embedded":
+                    self._start_webview_cookie_flow(anonymous=False)
+                else:
+                    url = (getattr(self, "_current_urls", []) or ["https://tieba.baidu.com/"])[0]
                     try:
-                        result = webview2.open_verification(url, center=center)
-                        raw_cookies = result.get("cookies") if isinstance(result, dict) else result
-                        cookies = webview2.filter_cookies(raw_cookies, anonymous=anonymous)
-                        if not cookies:
-                            raise RuntimeError("没有读取到可用 Cookie")
-                        self._post(("embedded_done", cookies, ""))
-                    except Exception as error:  # noqa: BLE001
-                        self._post(("embedded_done", {}, str(error)))
-
-                threading.Thread(target=worker, daemon=True).start()
+                        webbrowser.open(url)
+                    except Exception:  # noqa: BLE001
+                        pass
+                    self.cookie_entry.focus_set()
+                    self._append_log(
+                        "已切换到登录模式（完整 Cookie）。手动粘贴完整 Cookie 后重新开始。",
+                        "err",
+                    )
+            elif choice == "embedded":
+                self._start_webview_cookie_flow(
+                    anonymous=self.mode_var.get() == "guest"
+                )
             self._refresh_log_summary()
         elif kind == "webview_test_done":
             _, error = message
