@@ -73,6 +73,8 @@ class ThreadData:
     fetched_at: datetime = field(default_factory=datetime.now)
     warnings: List[str] = field(default_factory=list)
     complete: bool = True
+    failed_pages: List[int] = field(default_factory=list)
+    failed_comment_floors: List[int] = field(default_factory=list)
 
     @property
     def comment_count(self) -> int:

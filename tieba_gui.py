@@ -1100,6 +1100,10 @@ class App:
         self._batch_pending: List[Dict[str, Any]] = []
         self._batch_cancel = False
         self._marks_stale = False
+        self.retry_incomplete_btn = ttk.Button(
+            bar2, text="重试失败部分", command=self._retry_incomplete_threads, width=12
+        )
+        self.retry_incomplete_btn.pack(side="left", padx=(6, 0))
         self.supplement_btn = ttk.Button(
             bar2, text="补全身份", command=self._supplement_identity_manual, width=10
         )
@@ -1833,6 +1837,53 @@ class App:
                 self._person_popup.tk_popup(event.x_root, event.y_root)
             finally:
                 self._person_popup.grab_release()
+
+    def _retry_incomplete_threads(self) -> None:
+        if getattr(self, "_supplement_running", False) or self.running:
+            return
+        targets = [thread for thread in self.last_threads if not getattr(thread, "complete", True)]
+        if not targets:
+            messagebox.showinfo("没有失败部分", "当前帖子都是完整的。", parent=self.root)
+            return
+        if self.mode_var.get() != "guest":
+            messagebox.showinfo(
+                "暂不支持",
+                "断点续抓目前只支持游客模式。登录模式请重新抓取。",
+                parent=self.root,
+            )
+            return
+        self._supplement_running = True
+        self._supplement_stop.clear()
+        self.retry_incomplete_btn.configure(state="disabled")
+        self.stop_btn.configure(state="normal")
+        self.people_hint.configure(text=f"正在重试 {len(targets)} 个帖子的失败部分…")
+
+        def worker():
+            try:
+                fetcher = Fetcher(cookie={}, delay=float(self.delay_var.get() or 0.8), verbose=False)
+                options = CollectOptions(
+                    mode="guest",
+                    include_comments=self.comments_var.get(),
+                    comment_depth=self._comment_depth_value(),
+                    comment_concurrency=max(
+                        1, min(3, int(self.comment_concurrency_var.get() or 1))
+                    ),
+                    verbose=True,
+                    log=self._log_from_thread,
+                    should_stop=self._supplement_stop.is_set,
+                )
+                for thread in targets:
+                    url = thread.meta.url or f"https://tieba.baidu.com/p/{thread.meta.tid}"
+                    collect_thread(url, fetcher, options, resume_thread=thread)
+                self._persist_result(self.last_threads)
+                self._post(("incomplete_retry_done", len(targets)))
+            except CollectCancelled:
+                self._persist_result(self.last_threads)
+                self._post(("incomplete_retry_stopped",))
+            except Exception as error:  # noqa: BLE001
+                self._post(("incomplete_retry_error", str(error)))
+
+        threading.Thread(target=worker, daemon=True).start()
 
     def _supplement_identity_manual(self) -> None:
         if getattr(self, "_supplement_running", False) or not getattr(self, "last_threads", None):
@@ -3476,6 +3527,9 @@ class App:
         self.people_hint.configure(
             text=f"v{VERSION} · 当前 {len(filtered)} / 共 {len(users)} 人 · 有等级 {with_level}{mode_note}{warning_note}{stale_note}"
         )
+        if hasattr(self, "retry_incomplete_btn"):
+            incomplete = any(not getattr(thread, "complete", True) for thread in self.last_threads)
+            self.retry_incomplete_btn.configure(state="normal" if incomplete else "disabled")
         if hasattr(self, "supplement_btn"):
             missing_identity = any(
                 (not user.get("uid") and (user.get("username") or user.get("portrait")))
@@ -9828,6 +9882,29 @@ class App:
                 )
                 + "请重新导出 Excel 以包含新的贴吧ID。",
                 parent=self.root,
+            )
+        elif kind == "incomplete_retry_done":
+            self._supplement_running = False
+            self.stop_btn.configure(state="disabled")
+            self._refresh_people()
+            self._refresh_grid()
+            self.people_hint.configure(text="失败部分重试完成，需要重新导出")
+            messagebox.showinfo(
+                "重试完成",
+                "失败页/失败楼中楼已重试。请重新导出 Excel。",
+                parent=self.root,
+            )
+        elif kind == "incomplete_retry_stopped":
+            self._supplement_running = False
+            self.stop_btn.configure(state="disabled")
+            self._refresh_people()
+            self.people_hint.configure(text="重试已停止，已完成部分已保留")
+        elif kind == "incomplete_retry_error":
+            self._supplement_running = False
+            self.stop_btn.configure(state="disabled")
+            self._refresh_people()
+            self.people_hint.configure(
+                text=f"重试失败：{friendly_error(RuntimeError(message[1]))}"
             )
         elif kind == "identity_supplement_stopped":
             self._supplement_running = False

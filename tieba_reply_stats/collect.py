@@ -87,7 +87,12 @@ def total_comment_url(tid: str, fid: str, pn: int) -> str:
     return f"https://tieba.baidu.com/p/totalComment?tid={tid}&fid={fid or 0}&pn={pn}&see_lz=0"
 
 
-def collect_thread(url: str, fetcher: Fetcher, options: CollectOptions) -> ThreadData:
+def collect_thread(
+    url: str,
+    fetcher: Fetcher,
+    options: CollectOptions,
+    resume_thread: Optional[ThreadData] = None,
+) -> ThreadData:
     tid = extract_tid(url)
     source_url = normalize_url(url)
     if options.log is not None:
@@ -106,7 +111,12 @@ def collect_thread(url: str, fetcher: Fetcher, options: CollectOptions) -> Threa
         from .page_pb import collect_thread_anon
 
         log("  模式：免登录（公开帖子 / 楼中楼按设置补全）")
-        data = collect_thread_anon(source_url, fetcher, options)
+        if resume_thread is None:
+            data = collect_thread_anon(source_url, fetcher, options)
+        else:
+            data = collect_thread_anon(
+                source_url, fetcher, options, resume_thread=resume_thread
+            )
         data.meta.mode = "guest"
         return data
     if not fetcher.cookie_dict().get("BDUSS"):

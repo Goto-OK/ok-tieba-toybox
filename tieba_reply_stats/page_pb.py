@@ -371,11 +371,92 @@ def _to_datetime(timestamp: int) -> Optional[datetime]:
         return None
 
 
-def collect_thread_anon(url: str, fetcher, options) -> ThreadData:
+def _merge_page(thread: ThreadData, data: Dict, seen_floors: set) -> None:
+    seen_comments = {comment.pid for comment in thread.comments if comment.pid}
+    for row in data["floors"]:
+        if not row["post_no"] or row["pid"] in seen_floors:
+            continue
+        seen_floors.add(row["pid"])
+        thread.floors.append(
+            Floor(
+                post_no=row["post_no"],
+                pid=row["pid"],
+                author=row["author"],
+                author_name=row["author_name"],
+                author_id=row["author_id"],
+                tieba_uid=row.get("tieba_uid", ""),
+                portrait=row["portrait"],
+                posted_at=_to_datetime(row["time"]),
+                content=row["content"],
+                reply_num=row["reply_num"],
+                is_op=row["is_op"],
+                level=str(row["level"]) if row["level"] else "",
+            )
+        )
+    for row in data["comments"]:
+        if row["pid"] and row["pid"] in seen_comments:
+            continue
+        if row["pid"]:
+            seen_comments.add(row["pid"])
+        thread.comments.append(
+            Comment(
+                floor_no=row["floor_no"],
+                floor_author="",
+                pid=row["pid"],
+                author=row["author"],
+                author_name=row["author_name"],
+                author_id=row["author_id"],
+                tieba_uid=row.get("tieba_uid", ""),
+                portrait=row["portrait"],
+                posted_at=_to_datetime(row["time"]),
+                content=row["content"],
+                reply_to=row["reply_to"],
+                is_op=row["is_op"],
+                level=str(row["level"]) if row["level"] else "",
+            )
+        )
+
+
+def resume_thread_anon(url: str, thread: ThreadData, fetcher, options) -> ThreadData:
+    """只补失败页和失败楼中楼，不重抓已完成页。"""
+    tid = thread.meta.tid
+    seen_floors = {floor.pid for floor in thread.floors}
+    for pn in list(dict.fromkeys(thread.failed_pages)):
+        try:
+            data = fetch_page(fetcher, tid, pn, options.include_comments, 30, 10, bduss="")
+            _merge_page(thread, data, seen_floors)
+            thread.failed_pages.remove(pn)
+        except (CaptchaError, RateLimitError) as error:
+            thread.complete = False
+            thread.warnings.append(f"重试第 {pn} 页仍失败：{error}")
+            break
+        except Exception as error:  # noqa: BLE001
+            thread.complete = False
+            thread.warnings.append(f"重试第 {pn} 页失败：{error}")
+            break
+    if thread.failed_comment_floors and options.include_comments:
+        fill_comments_anon(
+            thread,
+            fetcher,
+            options,
+            only_floors=set(thread.failed_comment_floors),
+        )
+    thread.complete = not thread.failed_pages and not thread.failed_comment_floors
+    return thread
+
+
+def collect_thread_anon(
+    url: str,
+    fetcher,
+    options,
+    resume_thread: Optional[ThreadData] = None,
+) -> ThreadData:
     """Collect a thread through the anonymous app endpoint."""
     from .collect import extract_tid
 
     tid = extract_tid(url)
+    if resume_thread is not None:
+        return resume_thread_anon(url, resume_thread, fetcher, options)
     first = fetch_page(fetcher, tid, 1, options.include_comments, 30, 10, bduss="")
     thread = first["thread"]
     page = first["page"]
@@ -440,6 +521,7 @@ def collect_thread_anon(url: str, fetcher, options) -> ThreadData:
     total = page.get("total") or 1
     max_pages = options.max_pages or total
     warnings: List[str] = []
+    failed_pages: List[int] = []
     complete = True
     for pn in range(2, min(total, max_pages) + 1):
         if options.should_stop and options.should_stop():
@@ -448,12 +530,14 @@ def collect_thread_anon(url: str, fetcher, options) -> ThreadData:
             add_page(fetch_page(fetcher, tid, pn, options.include_comments, 30, 10, bduss=""))
         except (CaptchaError, RateLimitError) as error:
             complete = False
+            failed_pages.append(pn)
             warnings.append(f"第 {pn} 页未抓完：{error}")
             if options.log:
                 options.log(f"  第 {pn} 页被拦截，保留已完成页：{error}")
             break
         except Exception as error:  # noqa: BLE001
             complete = False
+            failed_pages.append(pn)
             warnings.append(f"第 {pn} 页失败：{error}")
             if options.log:
                 options.log(f"  第 {pn} 页失败：{error}")
@@ -466,6 +550,7 @@ def collect_thread_anon(url: str, fetcher, options) -> ThreadData:
         comments=comments,
         warnings=warnings,
         complete=complete,
+        failed_pages=failed_pages,
     )
     fill_comments_anon(thread_data, fetcher, options)
     comments = thread_data.comments
@@ -554,7 +639,12 @@ def fetch_floor_page(fetcher, tid: str, pid: str, pn: int = 1, bduss: str = "") 
     return parse_floor_response(raw)
 
 
-def fill_comments_anon(thread: ThreadData, fetcher, options) -> None:
+def fill_comments_anon(
+    thread: ThreadData,
+    fetcher,
+    options,
+    only_floors: Optional[set] = None,
+) -> None:
     """用 floor 接口把免登录楼中楼补全（按总条数上限 + 并发）。"""
     from concurrent.futures import ThreadPoolExecutor
 
@@ -573,7 +663,12 @@ def fill_comments_anon(thread: ThreadData, fetcher, options) -> None:
             total = min(total, depth)
         return total
 
-    floors = [floor for floor in thread.floors if len(existing.get(floor.post_no, ())) < desired_total(floor)]
+    floors = [
+        floor
+        for floor in thread.floors
+        if len(existing.get(floor.post_no, ())) < desired_total(floor)
+        and (only_floors is None or floor.post_no in only_floors)
+    ]
     if not floors:
         return
     if options.log:
@@ -593,10 +688,14 @@ def fill_comments_anon(thread: ThreadData, fetcher, options) -> None:
                 page = fetch_floor_page(fetcher, thread.meta.tid, floor.pid, pn, bduss="")
             except (CaptchaError, RateLimitError) as error:
                 thread.complete = False
+                if floor.post_no not in thread.failed_comment_floors:
+                    thread.failed_comment_floors.append(floor.post_no)
                 thread.warnings.append(f"第 {floor.post_no} 层楼中楼未抓完：{error}")
                 break
             except Exception as error:  # noqa: BLE001
                 thread.complete = False
+                if floor.post_no not in thread.failed_comment_floors:
+                    thread.failed_comment_floors.append(floor.post_no)
                 thread.warnings.append(f"第 {floor.post_no} 层楼中楼失败：{error}")
                 break
             for row in page["comments"]:
@@ -612,6 +711,8 @@ def fill_comments_anon(thread: ThreadData, fetcher, options) -> None:
             if not page["has_more"]:
                 break
             pn += 1
+        if len(result) >= need and floor.post_no in thread.failed_comment_floors:
+            thread.failed_comment_floors.remove(floor.post_no)
         return result
 
     rows = []
