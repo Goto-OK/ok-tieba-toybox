@@ -9548,6 +9548,8 @@ class App:
             return
         self._closing = True
         self.stop_event.set()
+        self._supplement_stop.set()
+        set_requests_paused(False)
         self._batch_cancel = True
         self.status_var.set("正在停止…")
         self._append_log("正在停止任务并保存已完成部分…", "muted")
