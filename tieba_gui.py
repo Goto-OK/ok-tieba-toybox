@@ -216,6 +216,7 @@ class App:
         self._manual_timing: Dict[str, float] = {}
         self._supplement_stop = threading.Event()
         self._guest_cookie: Dict[str, str] = {}
+        self._full_cookie_cache = ""
         self._webview_cookie_session = False
         self._tieba_uid_failed: set[str] = set()
         self._user_id_failed: set[str] = set()
@@ -857,6 +858,9 @@ class App:
         if not parse_cookie_input(raw).get("BDUSS"):
             messagebox.showwarning("Cookie 不完整", "完整 Cookie 里没有 BDUSS。", parent=self.root)
             return
+        self._full_cookie_cache = raw
+        self.login_method_var.set("cookie")
+        self._on_login_method_changed()
         if self.remember_cookie_var.get():
             if save_cookie(raw):
                 self.status_var.set("完整 Cookie 已加密保存")
@@ -883,7 +887,10 @@ class App:
         raw = self.cookie_var.get().strip()
         if not raw:
             return
-        value = parse_cookie_input(raw).get("BDUSS", "")
+        cookies = parse_cookie_input(raw)
+        value = cookies.get("BDUSS", "")
+        if value and set(cookies) != {"BDUSS"}:
+            self._full_cookie_cache = raw
         if value and self.bduss_var.get() != value:
             self.bduss_var.set(value)
 
@@ -899,10 +906,12 @@ class App:
         else:
             self.login_method_var.set("cookie")
             self.remember_cookie_var.set(True)
+            self._full_cookie_cache = raw
 
     def _clear_cookie(self) -> None:
         self.cookie_var.set("")
         self.bduss_var.set("")
+        self._full_cookie_cache = ""
         if clear_cookie():
             self._append_log("已清除本机保存的 Cookie。", "muted")
         else:
@@ -10206,12 +10215,43 @@ class App:
                 self._append_log("模拟验证码已结束，未发出请求。", "muted")
                 self._refresh_log_summary()
                 return
-            current_cookie_mode = (
-                self.mode_var.get() == "login" and self.login_method_var.get() == "cookie"
-            )
+            mode = self.mode_var.get()
+            current_cookie_mode = mode == "login" and self.login_method_var.get() == "cookie"
+            use_bduss = mode == "login" and self.login_method_var.get() == "bduss"
+            cached_cookie = bool(getattr(self, "_full_cookie_cache", ""))
+            if use_bduss and cached_cookie:
+                message = (
+                    "本次实际只发送了 BDUSS。\n"
+                    "软件检测到你之前保存过完整 Cookie，可能是仅 BDUSS 不够用。\n\n"
+                    "是否改用完整 Cookie 重试？"
+                )
+            elif use_bduss:
+                message = (
+                    "本次实际只发送了 BDUSS，且没有可用的完整 Cookie。\n"
+                    "验证码通常需要完整 Cookie。"
+                )
+            elif mode == "guest":
+                message = (
+                    "当前是游客模式。\n"
+                    "完成验证后软件会自动读取匿名 Cookie，不会读取 BDUSS/STOKEN。"
+                )
+            else:
+                message = (
+                    "当前请求需要完整 Cookie。\n"
+                    "完成验证后软件会读取完整 Cookie，仅用于本次抓取。"
+                )
             choices = []
+            if use_bduss and cached_cookie:
+                choices.append(("改用已保存的完整 Cookie", "cached_cookie"))
             if webview2.available():
-                choices.append(("打开内置验证窗口", "embedded"))
+                choices.append(
+                    (
+                        "打开内置验证（匿名 Cookie）"
+                        if mode == "guest"
+                        else "打开内置验证（完整 Cookie）",
+                        "embedded",
+                    )
+                )
             choices.extend(
                 [
                     (
@@ -10225,11 +10265,23 @@ class App:
             )
             choice = self._ask_choice(
                 "被安全验证拦截",
-                "当前请求需要完整 Cookie。\n"
-                "请用浏览器打开帖子完成验证，复制 tieba.baidu.com 的完整 Cookie 后粘贴回软件。",
+                message,
                 choices,
                 default=0,
             )
+            if choice == "cached_cookie":
+                self.login_method_var.set("cookie")
+                self.cookie_var.set(self._full_cookie_cache)
+                self._on_login_method_changed()
+                self.cookie_entry.focus_set()
+                self._append_log("已改用缓存的完整 Cookie，请重新开始。", "ok")
+                messagebox.showinfo(
+                    "已切换完整 Cookie",
+                    "已改用之前保存的完整 Cookie。请重新开始统计。",
+                    parent=self.root,
+                )
+                self._refresh_log_summary()
+                return
             if choice == "login":
                 self.mode_var.set("login")
                 self.login_method_var.set("cookie")
@@ -10321,7 +10373,9 @@ class App:
                 )
             else:
                 self._webview_cookie_session = True
-                self.cookie_var.set("; ".join(f"{k}={v}" for k, v in cookies.items()))
+                cookie_text = "; ".join(f"{k}={v}" for k, v in cookies.items())
+                self.cookie_var.set(cookie_text)
+                self._full_cookie_cache = cookie_text
                 self.login_method_var.set("cookie")
                 self._on_login_method_changed()
                 self.cookie_entry.focus_set()
