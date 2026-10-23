@@ -184,6 +184,7 @@ Android 核心同步通过
 - 恢复后断点为空不误判完成；
 - 限流弹窗可按服务端 Retry-After 或手动暂停后继续当前帖子；
 - 可选 WebView2 验证窗口：安装 pywebview/pythonnet 且系统有 Evergreen Runtime 时启用；
+- WebView2 完成后按模式读取 Cookie：游客仅匿名 Cookie，登录才完整 Cookie；读取前二次确认，内存使用；
 - 未安装 WebView2 依赖/运行时不强制，继续走完整 Cookie；
 - 「详情再补」完成后自动切到参与者；参与者补全弹窗不再提供详情再补；
 - 补全选择框记住上次勾选状态，首次默认勾选；
