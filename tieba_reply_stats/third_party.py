@@ -56,12 +56,7 @@ def fetch_posts_page(
     path = "/getPosts" if use_old else "/getPostsNew"
     params = _identity(uid.strip(), username.strip(), nickname.strip())
     params["page"] = max(1, int(page))
-    try:
-        data = _get(path, params)
-    except Exception:
-        if use_old:
-            raise
-        return fetch_posts_page(uid, username, page, use_old=True, nickname=nickname)
+    data = _get(path, params)
     posts = data.get("posts")
     if not isinstance(posts, list):
         posts = []
@@ -80,9 +75,7 @@ def fetch_posts_page(
                 "source": "old" if use_old else "new",
             }
         )
-    if not items and not use_old:
-        return fetch_posts_page(uid, username, page, use_old=True, nickname=nickname)
-    has_next = bool(data.get("hasNext")) if not use_old else False
+    has_next = bool(data.get("hasNext")) if not use_old else bool(items)
     return {"items": items, "has_next": has_next, "source": "old" if use_old else "new", "message": str(data.get("msg") or "")}
 
 

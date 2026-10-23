@@ -2267,6 +2267,10 @@ class App:
         self.lookup_posts_btn = ttk.Button(
             bottom, text="导出发言", command=self._export_lookup_posts, width=10
         )
+        self.lookup_open_profile_btn = ttk.Button(
+            bottom, text="打开主页", command=self._open_lookup_profile, width=10
+        )
+        self.lookup_open_profile_btn.pack(side="left", padx=(6, 0))
         self.lookup_probe_btn = ttk.Button(
             bottom, text="探测候选关注", command=self._probe_lookup_forums, width=14
         )
@@ -2389,6 +2393,20 @@ class App:
         for _var in (self.lookup_count_var, self.lookup_prefer_var):
             _var.trace_add("write", lambda *_: self._on_lookup_date_changed())
         self._toggle_lookup_dates()
+
+    def _open_lookup_profile(self) -> None:
+        profile = getattr(self, "_last_lookup_profile", None)
+        if not profile:
+            messagebox.showinfo("还没有资料", "先查询一个用户。", parent=self.root)
+            return
+        username = str(profile.get("username") or "")
+        portrait = str(profile.get("portrait") or "").split("?")[0]
+        if username:
+            webbrowser.open("https://tieba.baidu.com/home/main?un=" + quote(username))
+        elif portrait:
+            webbrowser.open("https://tieba.baidu.com/home/main?id=" + quote(portrait))
+        else:
+            messagebox.showinfo("无法打开主页", "这个用户缺少用户名和头像标识。", parent=self.root)
 
     def _open_lookup_forum(self) -> None:
         selection = self.lookup_forum_tree.selection()
@@ -3647,24 +3665,34 @@ class App:
         top.pack(fill="x")
         row = tk.Frame(top, bg="#ffffff")
         row.pack(fill="x")
-        tk.Label(row, text="方式：", bg="#ffffff", fg="#475569", font=("Microsoft YaHei UI", 9)).pack(side="left")
-        self.love_mode_var = tk.StringVar(value="自动")
+        tk.Label(row, text="查询方式：", bg="#ffffff", fg="#475569", font=("Microsoft YaHei UI", 9)).pack(side="left")
+        self.love_mode_var = tk.StringVar(value="用户名")
         ttk.Combobox(
             row,
-            values=("自动", "昵称"),
+            values=("用户名", "贴吧ID", "昵称"),
             textvariable=self.love_mode_var,
-            width=6,
+            width=7,
+            state="readonly",
+        ).pack(side="left", padx=(0, 6))
+        tk.Label(row, text="接口：", bg="#ffffff", fg="#475569", font=("Microsoft YaHei UI", 9)).pack(side="left")
+        self.love_api_var = tk.StringVar(value="查发言（新）")
+        ttk.Combobox(
+            row,
+            values=("查发言（新）", "查发言（旧）"),
+            textvariable=self.love_api_var,
+            width=10,
             state="readonly",
         ).pack(side="left", padx=(0, 6))
         tk.Label(row, text="内容：", bg="#ffffff", fg="#475569", font=("Microsoft YaHei UI", 9)).pack(side="left")
         self.love_query_var = tk.StringVar()
-        self.love_entry = ttk.Entry(row, textvariable=self.love_query_var, width=30)
+        self.love_entry = ttk.Entry(row, textvariable=self.love_query_var, width=24)
         self.love_entry.pack(side="left")
         self.love_auto_var = tk.BooleanVar(value=False)
         ttk.Checkbutton(row, text="自动连续翻页", variable=self.love_auto_var).pack(side="left", padx=(8, 0))
         ttk.Button(row, text="抓取", command=self._start_love).pack(side="left", padx=(8, 0))
         ttk.Button(row, text="下一页", command=self._next_love).pack(side="left", padx=(4, 0))
         ttk.Button(row, text="停止", command=self._stop_love).pack(side="left", padx=(4, 0))
+        ttk.Button(row, text="打开主页", command=self._open_love_profile).pack(side="left", padx=(8, 0))
         ttk.Button(row, text="打开选中链接", command=self._open_love_link).pack(side="left", padx=(8, 0))
         ttk.Button(row, text="导出已加载", command=self._export_love).pack(side="left", padx=(8, 0))
         self.love_status = tk.Label(
@@ -3733,6 +3761,38 @@ class App:
         selection = self.love_tree.selection()
         return self._love_urls.get(selection[0], "") if selection else ""
 
+    def _open_love_profile(self) -> None:
+        query = self.love_query_var.get().strip()
+        if not query:
+            self.love_status.configure(text="先输入用户名 / 贴吧ID / 昵称")
+            return
+        mode = self.love_mode_var.get()
+        username = ""
+        portrait = ""
+        if mode == "用户名":
+            username = query
+        else:
+            try:
+                fetcher = Fetcher(cookie={}, delay=0.2, verbose=False)
+                if mode == "贴吧ID":
+                    info = profile_pb.fetch_profile_by_tieba_uid(fetcher, query)
+                    username = str(info.get("username") or "")
+                    portrait = str(info.get("portrait") or "")
+                else:
+                    info = resolve_user(fetcher, query, "昵称")
+                    username = str(info.get("username") or "")
+                    portrait = str(info.get("portrait") or "")
+            except Exception as error:  # noqa: BLE001
+                self.love_status.configure(text=f"解析主页失败：{error}")
+                return
+        if not username and not portrait:
+            self.love_status.configure(text="没有解析到可打开的主页")
+            return
+        if username:
+            webbrowser.open("https://tieba.baidu.com/home/main?un=" + quote(username))
+        else:
+            webbrowser.open("https://tieba.baidu.com/home/main?id=" + quote(portrait))
+
     def _open_love_link(self) -> None:
         url = self._selected_love_url()
         if url:
@@ -3770,24 +3830,12 @@ class App:
         self._love_has_next = True
         for item in self.love_tree.get_children():
             self.love_tree.delete(item)
-        uid = query if query.isdigit() else ""
-        username = "" if uid else query
-        if self.love_mode_var.get() == "昵称":
-            try:
-                info = resolve_user(
-                    Fetcher(cookie={}, delay=0.2, verbose=False),
-                    query,
-                    "昵称",
-                )
-            except Exception as error:  # noqa: BLE001
-                self.love_status.configure(text=f"昵称解析失败：{error}")
-                return
-            if not info.get("uid") and not info.get("username"):
-                self.love_status.configure(text="昵称没有唯一匹配，请改用用户名或贴吧ID")
-                return
-            uid = str(info.get("uid") or "")
-            username = str(info.get("username") or "")
-        self._love_identity = (uid, username)
+        mode = self.love_mode_var.get()
+        uid = query if mode == "贴吧ID" else ""
+        username = query if mode == "用户名" else ""
+        nickname = query if mode == "昵称" else ""
+        self._love_identity = (uid, username, nickname)
+        self._love_use_old = self.love_api_var.get() == "查发言（旧）"
         self._load_love_page()
 
     def _next_love(self) -> None:
@@ -3798,8 +3846,8 @@ class App:
     def _load_love_page(self) -> None:
         if self._love_running:
             return
-        uid, username = getattr(self, "_love_identity", ("", ""))
-        if not uid and not username:
+        uid, username, nickname = getattr(self, "_love_identity", ("", "", ""))
+        if not uid and not username and not nickname:
             return
         self._love_running = True
         self._love_stop.clear()
@@ -3809,7 +3857,13 @@ class App:
         def worker():
             try:
                 fetcher = Fetcher(cookie={}, delay=0.3, verbose=False)
-                data = third_party.fetch_posts_page(uid, username, next_page)
+                data = third_party.fetch_posts_page(
+                    uid,
+                    username,
+                    next_page,
+                    use_old=bool(getattr(self, "_love_use_old", False)),
+                    nickname=nickname,
+                )
                 items = data.get("items") or []
                 hrefs = "\n".join(str(item.get("href") or "") for item in items)
                 parsed = parse_links(hrefs, fetcher, should_stop=self._love_stop.is_set) if hrefs.strip() else {"rows": [], "errors": []}
@@ -6442,7 +6496,7 @@ class App:
             self.grid_hint.configure(
                 text="表格可排序、双击打开链接、Ctrl+C 复制 · 界面直接显示单色 emoji，导出保留原样"
             )
-        self._add_compare_tab()
+        # 参与者对比已确认砍掉，不再创建入口。
 
     def _add_compare_tab(self) -> None:
         frame = tk.Frame(self.grid_nb)
