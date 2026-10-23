@@ -512,6 +512,7 @@ def enrich_tieba_uids(
     log(f"  贴吧ID补全：{len(todo)} 位用户需要查询（并发 {concurrency}）…")
 
     results: Dict[str, Dict] = {}
+    failed_uids: List[str] = []
     done = 0
 
     def one(item: Dict) -> tuple[str, Dict]:
@@ -519,15 +520,19 @@ def enrich_tieba_uids(
         return item["uid"], profile
 
     with ThreadPoolExecutor(max_workers=max(1, concurrency)) as pool:
-        futures = [pool.submit(one, item) for item in todo]
+        futures = {pool.submit(one, item): item["uid"] for item in todo}
         for future in as_completed(futures):
             _check_stop(options)
+            uid = futures[future]
             try:
-                uid, profile = future.result()
+                _, profile = future.result()
             except Exception:  # noqa: BLE001
-                continue
-            if profile.get("tieba_uid"):
-                results[uid] = profile
+                failed_uids.append(uid)
+            else:
+                if profile.get("tieba_uid"):
+                    results[uid] = profile
+                else:
+                    failed_uids.append(uid)
             done += 1
             if progress is not None:
                 progress(done, len(todo))
@@ -543,9 +548,9 @@ def enrich_tieba_uids(
                 obj.author_name = str(profile.get("username") or "")
             if not obj.portrait and profile.get("portrait"):
                 obj.portrait = str(profile.get("portrait") or "")
-    failed = len(todo) - len(results)
+    failed = len(failed_uids)
     log(f"  贴吧ID补全完成：{len(results)} 位成功，{failed} 位失败")
-    return {"total": len(by_uid), "failed": failed}
+    return {"total": len(by_uid), "failed": failed, "failed_uids": failed_uids}
 
 
 def enrich_identities(thread: ThreadData, fetcher: Fetcher, options: CollectOptions, log) -> None:
