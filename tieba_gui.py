@@ -216,6 +216,7 @@ class App:
         self._manual_timing: Dict[str, float] = {}
         self._supplement_stop = threading.Event()
         self._guest_cookie: Dict[str, str] = {}
+        self._webview_cookie_session = False
         self._tieba_uid_failed: set[str] = set()
         self._user_id_failed: set[str] = set()
         self._profile_topic_limit = 50
@@ -9417,6 +9418,9 @@ class App:
             return
         if mode == "guest":
             self._append_log("本次使用免登录模式：公开帖子，楼中楼按设置补全", "muted")
+        elif getattr(self, "_webview_cookie_session", False):
+            self._append_log("本次完整 Cookie 来自内置验证，不自动保存到本机。", "muted")
+            self._webview_cookie_session = False
         elif self._remember_current_login():
             if save_cookie(self._current_cookie_text()):
                 self._append_log("已记住登录信息（本机加密保存），下次会自动填入。", "muted")
@@ -10303,6 +10307,7 @@ class App:
                     parent=self.root,
                 )
             else:
+                self._webview_cookie_session = True
                 self.cookie_var.set("; ".join(f"{k}={v}" for k, v in cookies.items()))
                 self.login_method_var.set("cookie")
                 self._on_login_method_changed()
