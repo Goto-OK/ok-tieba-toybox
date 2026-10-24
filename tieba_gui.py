@@ -240,6 +240,7 @@ class App:
         self._login_source = ""
         self._login_profile_match: Optional[bool] = None
         webview2.cleanup_profile_backup()
+        webview2.clear_switch_profile()
 
         self._build_ui()
         self._apply_window_icon()
@@ -506,6 +507,7 @@ class App:
 
         delay_row = tk.Frame(options)
         delay_row.grid(row=3, column=0, columnspan=3, sticky="w", pady=(6, 0))
+        self.delay_row = delay_row
         tk.Label(delay_row, text="请求间隔：").pack(side="left")
         self.delay_var = tk.StringVar(value="0.8")
         ttk.Spinbox(
@@ -4954,10 +4956,12 @@ class App:
             if has_login and webview2.login_profile_exists() and source in (
                 "手动粘贴",
                 "已保存 Cookie",
+                "内置浏览器",
             ):
-                match = webview2.match_profile_fingerprint(
-                    parse_cookie_input(self.cookie_var.get())
-                )
+                current_cookies = parse_cookie_input(self.cookie_var.get())
+                if source == "内置浏览器" and self._full_cookie_cache:
+                    current_cookies = parse_cookie_input(self._full_cookie_cache)
+                match = webview2.match_profile_fingerprint(current_cookies)
             self._login_profile_match = match
             self.login_source_label.unbind("<Button-1>")
             if match is False:
@@ -5058,6 +5062,12 @@ class App:
             target,
             url="https://passport.baidu.com/v2/?login",
         )
+
+    def _save_login_fingerprint(self, cookies: dict) -> None:
+        if not webview2.login_profile_exists():
+            return
+        if not webview2.save_profile_fingerprint(cookies):
+            self._append_log("登录来源指纹保存失败，下次可能无法判断是否同一会话。", "warn")
 
     def _adopt_webview_login(self, cookies: dict, target: str) -> None:
         full = "; ".join(f"{key}={value}" for key, value in cookies.items())
@@ -6936,6 +6946,14 @@ class App:
             comment_concurrency = 1
         if comment_concurrency > 1:
             names.append(f"楼中楼并发 {comment_concurrency}")
+        try:
+            delay = float(self.delay_var.get() or 0.8)
+        except (TypeError, ValueError):
+            delay = 0.8
+        if abs(delay - 0.8) > 0.001:
+            names.append(f"请求间隔 {delay:g} 秒")
+        if str(self.comment_depth_var.get() or "全部") != "全部":
+            names.append(f"楼中楼：{self.comment_depth_var.get()}")
         return names
 
     def _refresh_advanced_summary(self) -> None:
@@ -6993,6 +7011,8 @@ class App:
         self.lookup_fill_var.set(False)
         self.lookup_fill_all_var.set(False)
         self.comment_concurrency_var.set("1")
+        self.delay_var.set("0.8")
+        self.comment_depth_var.set("全部")
         self.settings.update(
             {
                 "follow_load_mode": "auto",
@@ -7008,36 +7028,67 @@ class App:
         )
         save_settings(self.settings)
 
+    def _capture_ui_pack_state(self) -> None:
+        if hasattr(self, "_ui_pack_widgets"):
+            return
+        widgets = [
+            self.follow_load_row,
+            self.proxy_row,
+            self.batch_row,
+            self.lookup_fill_box,
+            self.cache_box,
+            self.log_box,
+            self.encrypt_check,
+            self.old_result_buttons,
+        ]
+        options: Dict[Any, Dict[str, Any]] = {}
+        next_widgets: Dict[Any, Any] = {}
+        for widget in widgets:
+            info = dict(widget.pack_info())
+            info.pop("in", None)
+            info.pop("in_", None)
+            options[widget] = info
+            siblings = widget.master.pack_slaves()
+            try:
+                index = siblings.index(widget)
+            except ValueError:
+                continue
+            next_widgets[widget] = siblings[index + 1] if index + 1 < len(siblings) else None
+        self._ui_pack_widgets = widgets
+        self._ui_pack_options = options
+        self._ui_pack_next = next_widgets
+
+    def _restore_ui_pack_widgets(self) -> None:
+        self._capture_ui_pack_state()
+        for widget in reversed(self._ui_pack_widgets):
+            info = dict(self._ui_pack_options.get(widget) or {})
+            if not info:
+                continue
+            next_widget = self._ui_pack_next.get(widget)
+            while next_widget is not None and not next_widget.winfo_manager():
+                next_widget = self._ui_pack_next.get(next_widget)
+            if next_widget is not None and next_widget.winfo_manager():
+                widget.pack(**info, before=next_widget)
+            else:
+                widget.pack(**info)
+
     def _apply_ui_mode(self, persist: bool = True) -> None:
         simple = self.ui_mode_var.get() != "advanced"
         self.settings["ui_mode"] = "simple" if simple else "advanced"
         if persist:
             save_settings(self.settings)
+        self._capture_ui_pack_state()
+        pack_widgets = getattr(self, "_ui_pack_widgets", [])
 
         if simple:
             self.identity_row.grid_remove()
-            self.follow_load_row.pack_forget()
-            self.proxy_row.pack_forget()
-            self.batch_row.pack_forget()
-            self.lookup_fill_box.pack_forget()
-            self.cache_box.pack_forget()
-            self.log_box.pack_forget()
-            self.encrypt_check.pack_forget()
-            self.old_result_buttons.pack_forget()
+            self.delay_row.grid_remove()
+            for widget in pack_widgets:
+                widget.pack_forget()
         else:
             self.identity_row.grid()
-            self.follow_load_row.pack(anchor="w", padx=8, pady=(4, 6))
-            self.batch_row.pack(anchor="w", fill="x", padx=8, pady=(4, 0))
-            self.proxy_row.pack(
-                anchor="w", fill="x", padx=8, pady=(4, 0), before=self.batch_row
-            )
-            self.lookup_fill_box.pack(fill="x", pady=(0, 6))
-            self.cache_box.pack(fill="x", pady=(0, 6))
-            self.log_box.pack(fill="x", pady=(0, 6), before=self.cache_box)
-            self.encrypt_check.pack(
-                anchor="w", padx=8, pady=(2, 0), before=self.save_restore_row
-            )
-            self.old_result_buttons.pack(fill="x", padx=8, pady=(2, 4))
+            self.delay_row.grid()
+            self._restore_ui_pack_widgets()
         self._refresh_advanced_summary()
 
     def _on_ui_mode_selected(self) -> None:
@@ -11703,8 +11754,7 @@ class App:
                     return
                 self._webview_cookie_session = True
                 self._login_source = "内置浏览器"
-                if webview2.login_profile_exists():
-                    webview2.save_profile_fingerprint(cookies)
+                self._save_login_fingerprint(cookies)
                 cookie_text = "; ".join(f"{k}={v}" for k, v in cookies.items())
                 self.cookie_var.set(cookie_text)
                 self._full_cookie_cache = cookie_text
@@ -11760,8 +11810,7 @@ class App:
                 self._refresh_log_summary()
                 return
             self._login_source = "内置浏览器"
-            if webview2.login_profile_exists():
-                webview2.save_profile_fingerprint(cookies)
+            self._save_login_fingerprint(cookies)
             cookie_text = "; ".join(f"{k}={v}" for k, v in cookies.items())
             self._full_cookie_cache = cookie_text
             if target == "bduss":
@@ -11822,7 +11871,7 @@ class App:
             try:
                 if remember:
                     webview2.replace_login_profile(webview2.switch_profile_dir())
-                    webview2.save_profile_fingerprint(cookies)
+                    self._save_login_fingerprint(cookies)
                 else:
                     webview2.clear_switch_profile()
             except Exception as switch_error:  # noqa: BLE001

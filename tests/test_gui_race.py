@@ -68,14 +68,30 @@ def test_ui_mode_hides_advanced_settings(root_app, monkeypatch):
     app.ui_mode_var.set("simple")
     app.batch_concurrency_var.set("3")
     app.settings["batch_concurrency"] = 3
+    app.delay_var.set("0.5")
     app._apply_ui_mode(persist=False)
     assert app.identity_row.winfo_manager() == ""
+    assert app.delay_row.winfo_manager() == ""
     assert app.cache_box.winfo_manager() == ""
     assert "红绿灯并发 3" in app._hidden_advanced_settings()
+    assert "请求间隔 0.5 秒" in app._hidden_advanced_settings()
     app.ui_mode_var.set("advanced")
     app._apply_ui_mode(persist=False)
     assert app.identity_row.winfo_manager() == "grid"
+    assert app.delay_row.winfo_manager() == "grid"
     assert app.cache_box.winfo_manager() == "pack"
+
+
+def test_login_source_conflict_is_visible(root_app, monkeypatch):
+    _root, app = root_app
+    app._set_mode("login")
+    app.login_method_var.set("cookie")
+    app.cookie_var.set("BDUSS=test; TIEBAUID=test; TIEBA_SID=test")
+    app._login_source = "手动粘贴"
+    monkeypatch.setattr(tieba_gui.webview2, "login_profile_exists", lambda: True)
+    monkeypatch.setattr(tieba_gui.webview2, "match_profile_fingerprint", lambda _cookies: False)
+    app._refresh_webview_status()
+    assert "可能不是同一会话" in app.login_source_label.cget("text")
 
 
 def test_login_button_text_follows_method(root_app):
@@ -103,6 +119,34 @@ def test_login_baidu_uses_current_method(root_app, monkeypatch):
     app.login_method_var.set("cookie")
     app._login_baidu()
     assert captured["target"] == "cookie"
+
+
+def test_switch_login_done_replaces_profile(root_app, monkeypatch, tmp_path):
+    _root, app = root_app
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
+    profile = tieba_gui.webview2.login_profile_dir()
+    import os
+
+    os.makedirs(profile)
+    open(os.path.join(profile, "old.txt"), "w", encoding="utf-8").write("old")
+    temp = tieba_gui.webview2.prepare_switch_profile()
+    open(os.path.join(temp, "new.txt"), "w", encoding="utf-8").write("new")
+    app.settings["webview_remember_login"] = True
+    app._set_mode("login")
+    app.login_method_var.set("cookie")
+    monkeypatch.setattr(tieba_gui, "save_cookie", lambda _value: True)
+    monkeypatch.setattr(app, "_offer_retry_incomplete", lambda *_args: None)
+    app._handle_message(
+        (
+            "switch_login_done",
+            {"BDUSS": "new", "TIEBAUID": "new-uid", "TIEBA_SID": "new-sid"},
+            "",
+            "",
+        )
+    )
+    assert os.path.isfile(os.path.join(profile, "new.txt"))
+    assert "BDUSS=new" in app.cookie_var.get()
+    assert app._login_source == "内置浏览器"
 
 
 def test_fetch_body_has_mousewheel_scroll(root_app):
