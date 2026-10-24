@@ -6,12 +6,15 @@
 
 from __future__ import annotations
 
+import hashlib
 import importlib.util
 import json
 import os
+import secrets
 import shutil
 import subprocess
 import sys
+import time
 import winreg
 from pathlib import Path
 from urllib.parse import urlsplit
@@ -64,6 +67,148 @@ def clear_login_profile() -> bool:
         return True
     except OSError:
         return False
+
+
+PROFILE_META_NAME = "profile-meta.json"
+
+
+def _profile_meta_path() -> str:
+    return os.path.join(login_profile_dir(), PROFILE_META_NAME)
+
+
+def _normalized_cookies(cookies) -> dict:
+    if not isinstance(cookies, dict):
+        return {}
+    return {str(key).upper(): str(value) for key, value in cookies.items() if value}
+
+
+def _fingerprint_identity(cookies) -> tuple[str, str]:
+    values = _normalized_cookies(cookies)
+    uid = values.get("TIEBAUID") or ""
+    bduss = values.get("BDUSS") or ""
+    sid = values.get("TIEBA_SID") or ""
+    if uid:
+        return "TIEBAUID", f"TIEBAUID={uid}"
+    if bduss:
+        return "BDUSS", f"BDUSS={bduss}"
+    if sid:
+        return "TIEBA_SID", f"TIEBA_SID={sid}"
+    return "", ""
+
+
+def _fingerprint_hash(salt: str, identity: str) -> str:
+    return hashlib.sha256(f"{salt}\n{identity}".encode("utf-8")).hexdigest()
+
+
+def save_profile_fingerprint(cookies) -> bool:
+    """保存 profile 的加盐指纹；不保存原始 Cookie。"""
+    kind, identity = _fingerprint_identity(cookies)
+    if not identity:
+        return False
+    profile = login_profile_dir()
+    try:
+        Path(profile).mkdir(parents=True, exist_ok=True)
+        salt = secrets.token_hex(16)
+        payload = {
+            "version": 1,
+            "kind": kind,
+            "salt": salt,
+            "hash": _fingerprint_hash(salt, identity),
+            "updated_at": int(time.time()),
+        }
+        with open(_profile_meta_path(), "w", encoding="utf-8", newline="\n") as handle:
+            json.dump(payload, handle, ensure_ascii=False)
+        return True
+    except OSError:
+        return False
+
+
+def match_profile_fingerprint(cookies) -> bool | None:
+    """返回 True/False；无指纹、类型不同或无法生成时返回 None。"""
+    kind, identity = _fingerprint_identity(cookies)
+    if not identity:
+        return None
+    try:
+        with open(_profile_meta_path(), encoding="utf-8") as handle:
+            payload = json.load(handle)
+        stored_kind = str(payload.get("kind") or "")
+        salt = str(payload.get("salt") or "")
+        expected = str(payload.get("hash") or "")
+        if not salt or not expected:
+            return None
+        if stored_kind and stored_kind != kind:
+            return None
+        return secrets.compare_digest(expected, _fingerprint_hash(salt, identity))
+    except (OSError, ValueError, TypeError):
+        return None
+
+
+def switch_profile_dir() -> str:
+    base = os.environ.get("LOCALAPPDATA") or os.environ.get("APPDATA") or str(Path.home())
+    return str(Path(base) / "TiebaReplyStats" / "webview2-switch")
+
+
+def prepare_switch_profile() -> str:
+    path = switch_profile_dir()
+    try:
+        shutil.rmtree(path)
+    except OSError:
+        pass
+    Path(path).mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def clear_switch_profile() -> None:
+    try:
+        shutil.rmtree(switch_profile_dir())
+    except OSError:
+        pass
+
+
+def cleanup_profile_backup() -> None:
+    target = login_profile_dir()
+    backup = target + ".bak"
+    try:
+        if os.path.isdir(target):
+            shutil.rmtree(backup)
+        elif os.path.isdir(backup):
+            os.replace(backup, target)
+    except OSError:
+        pass
+
+
+def replace_login_profile(temp_dir: str) -> None:
+    """用临时 profile 替换正式 profile；失败时回滚。"""
+    source = os.path.abspath(temp_dir)
+    target = os.path.abspath(login_profile_dir())
+    backup = target + ".bak"
+    if not os.path.isdir(source):
+        raise RuntimeError("临时登录目录不存在")
+    cleanup_profile_backup()
+    try:
+        if os.path.isdir(target):
+            os.replace(target, backup)
+        os.replace(source, target)
+    except OSError:
+        try:
+            if os.path.isdir(target):
+                shutil.rmtree(target)
+            if os.path.isdir(backup) and not os.path.isdir(target):
+                os.replace(backup, target)
+        except OSError:
+            pass
+        raise RuntimeError("内置登录目录被占用，旧登录已保留")
+    try:
+        shutil.rmtree(backup)
+    except OSError:
+        pass
+
+
+def clear_profile_fingerprint() -> None:
+    try:
+        os.remove(_profile_meta_path())
+    except OSError:
+        pass
 
 
 ALLOWED_HOSTS = (
@@ -121,6 +266,7 @@ def _run_window(
     read_cookies: bool = True,
     persistent: bool = False,
     require_login: bool = False,
+    profile_dir: str = "",
 ):
     if not available():
         raise RuntimeError("WebView2 不可用")
@@ -131,9 +277,10 @@ def _run_window(
         extra.append("--no-cookie")
     if require_login:
         extra.append("--require-login")
-    if persistent:
-        Path(login_profile_dir()).mkdir(parents=True, exist_ok=True)
-        extra.extend(["--profile-dir", login_profile_dir()])
+    if persistent or profile_dir:
+        target_profile = profile_dir or login_profile_dir()
+        Path(target_profile).mkdir(parents=True, exist_ok=True)
+        extra.extend(["--profile-dir", target_profile])
     if getattr(sys, "frozen", False):
         command = [sys.executable, "--webview2-verify", url, *extra]
     else:
@@ -164,6 +311,7 @@ def open_verification(
     center=None,
     persistent: bool = False,
     require_login: bool = False,
+    profile_dir: str = "",
 ):
     """真实验证码窗口；返回 WebView2 Cookie 列表，由调用方按权限过滤。"""
     completed = _run_window(
@@ -172,6 +320,7 @@ def open_verification(
         center=center,
         persistent=persistent,
         require_login=require_login,
+        profile_dir=profile_dir,
     )
     marker = "__TIEBA_COOKIES__"
     for line in completed.stdout.splitlines():

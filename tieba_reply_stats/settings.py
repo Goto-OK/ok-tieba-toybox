@@ -28,6 +28,7 @@ DEFAULTS: Dict[str, Any] = {
     "identity_remember_choice": True,
     "identity_concurrency": 3,
     "webview_remember_login": False,
+    "ui_mode": "simple",
     "lookup_fill_threads": False,
     "lookup_fill_pages": "1",
     "lookup_fill_limit": 50,
@@ -94,6 +95,8 @@ def load_settings() -> Dict[str, Any]:
         result["batch_concurrency"] = 1
     if result["page_size"] not in (100, 500, 1000, 2000):
         result["page_size"] = 1000
+    if result.get("ui_mode") not in ("simple", "advanced"):
+        result["ui_mode"] = "simple"
     result["post_cache_limit_mb"] = max(50, min(2000, int(result.get("post_cache_limit_mb") or 200)))
     return result
 
@@ -106,6 +109,8 @@ def save_settings(data: Dict[str, Any]) -> bool:
         payload["batch_concurrency"] = 1
     if payload["page_size"] not in (100, 500, 1000, 2000):
         payload["page_size"] = 1000
+    if payload.get("ui_mode") not in ("simple", "advanced"):
+        payload["ui_mode"] = "simple"
     payload["post_cache_limit_mb"] = max(50, min(2000, int(payload.get("post_cache_limit_mb") or 200)))
     try:
         os.makedirs(APP_DIR, exist_ok=True)

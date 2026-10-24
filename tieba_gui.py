@@ -237,6 +237,9 @@ class App:
             str(self.settings.get("accent", "blue")),
         )
         self.mode_var = tk.StringVar(value="guest")
+        self._login_source = ""
+        self._login_profile_match: Optional[bool] = None
+        webview2.cleanup_profile_backup()
 
         self._build_ui()
         self._apply_window_icon()
@@ -269,6 +272,7 @@ class App:
         if saved:
             self.cookie_var.set(saved)
             self._sync_login_from_cookie()
+            self._login_source = "已保存 Cookie"
             self._append_log("已自动填入上次保存的登录信息（如果失效，请重新粘贴一次）。", "muted")
         if self.settings.get("follow_enhance"):
             self.mode_var.set("login")
@@ -413,7 +417,20 @@ class App:
         self.post_nb.add(self.tab_people, text="  参与者  ")
         self.post_nb.add(self.tab_grid, text="  表格查看  ")
 
+        self.fetch_advanced_summary = tk.Label(
+            self.tab_fetch,
+            text="",
+            anchor="w",
+            bg="#fff7e6",
+            fg="#92400e",
+            font=("Microsoft YaHei UI", 8),
+            padx=8,
+            pady=3,
+        )
+        self.fetch_advanced_summary.pack(fill="x", padx=8, pady=(4, 0))
+        self.fetch_advanced_summary.pack_forget()
         fetch_page, body = self._make_scrollable_settings_page(self.tab_fetch)
+        self.fetch_page = fetch_page
         fetch_page.pack(fill="both", expand=True)
         body.configure(padx=16, pady=8)
         fetch_canvas = next(
@@ -518,6 +535,7 @@ class App:
 
         identity_row = tk.Frame(options)
         identity_row.grid(row=4, column=0, columnspan=3, sticky="w", pady=(6, 2))
+        self.identity_row = identity_row
         tk.Label(identity_row, text="抓取完成后：").pack(side="left")
         self.identity_strategy_var = tk.StringVar(
             value={
@@ -605,14 +623,25 @@ class App:
         login_header = tk.Frame(cookie_box, bg="#eef1f5")
         login_header.grid(row=0, column=0, columnspan=4, sticky="ew", pady=(2, 2))
         self.login_summary_var = tk.StringVar(value="登录信息未配置")
+        summary_frame = tk.Frame(login_header, bg="#eef1f5")
+        summary_frame.pack(side="left", fill="x", expand=True)
         tk.Label(
-            login_header,
+            summary_frame,
             textvariable=self.login_summary_var,
             bg="#eef1f5",
             fg="#334155",
             font=("Microsoft YaHei UI", 9),
             anchor="w",
-        ).pack(side="left", fill="x", expand=True)
+        ).pack(anchor="w")
+        self.login_source_label = tk.Label(
+            summary_frame,
+            text="",
+            bg="#eef1f5",
+            fg="#b45309",
+            font=("Microsoft YaHei UI", 8),
+            anchor="w",
+        )
+        self.login_source_label.pack(anchor="w")
         self.login_baidu_btn = ttk.Button(
             login_header,
             text="登录百度并获取",
@@ -715,8 +744,29 @@ class App:
             variable=self.remember_cookie_var,
         ).grid(row=1, column=0, columnspan=6, sticky="w", pady=(3, 0))
         self.cookie_frame.grid_remove()
+        self.login_switch_row = tk.Frame(cookie_box, bg="#eef1f5")
+        self.login_switch_row.grid(row=3, column=0, columnspan=4, sticky="ew", pady=(4, 0))
+        ttk.Button(
+            self.login_switch_row,
+            text="切换百度账号",
+            command=self._switch_baidu_account,
+            width=14,
+        ).pack(side="left")
+        tk.Label(
+            self.login_switch_row,
+            text="会替换当前登录；旧登录在新账号成功前保留。",
+            bg="#eef1f5",
+            fg="#8a94a6",
+            font=("Microsoft YaHei UI", 8),
+        ).pack(side="left", padx=(8, 0))
+        self.login_switch_row.grid_remove()
         self.login_method_row = method_row
-        self.login_fields_widgets = [method_row, self.bduss_frame, self.cookie_frame]
+        self.login_fields_widgets = [
+            method_row,
+            self.bduss_frame,
+            self.cookie_frame,
+            self.login_switch_row,
+        ]
         self._login_fields_expanded = False
         self.cookie_controls = [
             self.login_bduss_radio,
@@ -829,6 +879,7 @@ class App:
         self._build_links_tab()
         self._build_love_tab()
         self._build_settings_tab()
+        self._apply_ui_mode(persist=False)
 
         self.url_text.focus_set()
         self.root.update_idletasks()
@@ -897,6 +948,7 @@ class App:
             return
         self.bduss_var.set(value)
         self.cookie_var.set(f"BDUSS={value}")
+        self._login_source = "手动粘贴"
         if self.remember_bduss_var.get():
             if save_cookie(self.cookie_var.get()):
                 self.status_var.set("BDUSS 已加密保存")
@@ -905,6 +957,7 @@ class App:
         else:
             clear_cookie()
             self.status_var.set("BDUSS 仅本次使用")
+        self._refresh_webview_status()
         self._append_log("登录方式：仅 BDUSS", "muted")
 
     def _apply_cookie(self) -> None:
@@ -921,6 +974,7 @@ class App:
             )
             return
         self._full_cookie_cache = raw
+        self._login_source = "手动粘贴"
         self.login_method_var.set("cookie")
         self._on_login_method_changed()
         if self.remember_cookie_var.get():
@@ -931,6 +985,7 @@ class App:
         else:
             clear_cookie()
             self.status_var.set("完整 Cookie 仅本次使用")
+        self._refresh_webview_status()
         self._append_log("登录方式：完整 Cookie", "muted")
 
     def _remember_current_login(self) -> bool:
@@ -974,6 +1029,7 @@ class App:
         self.cookie_var.set("")
         self.bduss_var.set("")
         self._full_cookie_cache = ""
+        self._login_source = ""
         if clear_cookie():
             self._append_log("已清除本机保存的 Cookie。", "muted")
         else:
@@ -3927,6 +3983,7 @@ class App:
             return
         if self._login_fields_expanded:
             self.login_method_row.grid()
+            self.login_switch_row.grid()
             if self.login_method_var.get() == "bduss":
                 self.bduss_frame.grid()
                 self.cookie_frame.grid_remove()
@@ -3938,6 +3995,7 @@ class App:
             self.login_method_row.grid_remove()
             self.bduss_frame.grid_remove()
             self.cookie_frame.grid_remove()
+            self.login_switch_row.grid_remove()
             self.login_toggle_btn.configure(text="展开")
 
     def _set_mode(self, mode: str, persist: bool = True) -> None:
@@ -4534,6 +4592,41 @@ class App:
         inner = tk.Frame(wrap, bg="#eef1f5")
         inner.pack(side="left", fill="both", expand=True)
         self.settings_inner = inner
+        mode_bar = tk.Frame(inner, bg="#eef1f5", padx=10, pady=6)
+        mode_bar.pack(fill="x")
+        tk.Label(
+            mode_bar,
+            text="界面模式：",
+            bg="#eef1f5",
+            fg="#475569",
+            font=("Microsoft YaHei UI", 9),
+        ).pack(side="left")
+        self.ui_mode_var = tk.StringVar(
+            value="advanced" if self.settings.get("ui_mode") == "advanced" else "simple"
+        )
+        ttk.Radiobutton(
+            mode_bar,
+            text="简洁模式",
+            value="simple",
+            variable=self.ui_mode_var,
+            command=self._on_ui_mode_selected,
+        ).pack(side="left", padx=(4, 8))
+        ttk.Radiobutton(
+            mode_bar,
+            text="高级模式",
+            value="advanced",
+            variable=self.ui_mode_var,
+            command=self._on_ui_mode_selected,
+        ).pack(side="left")
+        self.ui_mode_hint = tk.Label(
+            mode_bar,
+            text="简洁模式隐藏调参和高风险操作",
+            bg="#eef1f5",
+            fg="#8a94a6",
+            font=("Microsoft YaHei UI", 8),
+        )
+        self.ui_mode_hint.pack(side="left", padx=(12, 0))
+
         self.tab_general_page, self.tab_general = self._make_scrollable_settings_page(inner)
         self.tab_login_page, self.tab_login = self._make_scrollable_settings_page(inner)
         self.tab_appearance_page, self.tab_appearance = self._make_scrollable_settings_page(inner)
@@ -4748,6 +4841,7 @@ class App:
         self.follow_enhance_status.pack(anchor="w", padx=28, pady=(2, 0))
         mode_row = tk.Frame(enhance_box, bg="#eef1f5")
         mode_row.pack(anchor="w", padx=8, pady=(4, 6))
+        self.follow_load_row = mode_row
         tk.Label(mode_row, text="关注加载：", bg="#eef1f5", fg="#475569").pack(side="left")
         self.follow_load_mode_var = tk.StringVar(
             value="手动" if self.settings.get("follow_load_mode") == "manual" else "自动"
@@ -4764,6 +4858,7 @@ class App:
 
         note_box = ttk.LabelFrame(box, text=" 说明 ")
         note_box.pack(fill="x", pady=(0, 6))
+        self.follow_note_box = note_box
         tk.Label(
             note_box,
             text="游客的匿名 Cookie 只在内存中，不写入本机。\n"
@@ -4824,13 +4919,26 @@ class App:
             f"当前模式：{mode}\n当前登录信息：{login_info}\n内置登录：{login_state}"
         )
         if hasattr(self, "login_baidu_btn"):
-            self.login_baidu_btn.configure(
-                text=(
-                    "登录百度并获取 BDUSS"
-                    if self.login_method_var.get() == "bduss"
-                    else "登录百度并获取完整 Cookie"
-                )
+            use_saved = (
+                is_login
+                and not has_login
+                and webview2.login_profile_exists()
+                and bool(self.settings.get("webview_remember_login", False))
             )
+            if use_saved:
+                self.login_baidu_btn.configure(
+                    text="使用已保存的内置登录",
+                    command=self._reuse_internal_login,
+                )
+            else:
+                self.login_baidu_btn.configure(
+                    text=(
+                        "登录百度并获取 BDUSS"
+                        if self.login_method_var.get() == "bduss"
+                        else "登录百度并获取完整 Cookie"
+                    ),
+                    command=self._login_baidu,
+                )
         if hasattr(self, "login_summary_var"):
             if not is_login:
                 summary = "游客模式 · 匿名 Cookie"
@@ -4839,6 +4947,38 @@ class App:
             else:
                 summary = f"{login_info} · 已就绪"
             self.login_summary_var.set(summary)
+        if hasattr(self, "login_source_label"):
+            source = str(getattr(self, "_login_source", "") or "")
+            match: Optional[bool] = None
+            if has_login and webview2.login_profile_exists() and source in (
+                "手动粘贴",
+                "已保存 Cookie",
+            ):
+                match = webview2.match_profile_fingerprint(
+                    parse_cookie_input(self.cookie_var.get())
+                )
+            self._login_profile_match = match
+            self.login_source_label.unbind("<Button-1>")
+            if match is False:
+                self.login_source_label.configure(
+                    text=(
+                        f"当前登录来源：{source} · "
+                        "内置登录：可能不是同一会话（点此沿用）"
+                    ),
+                    fg="#b45309",
+                    cursor="hand2",
+                )
+                self.login_source_label.bind(
+                    "<Button-1>", lambda _event: self._reuse_internal_login()
+                )
+            elif source:
+                self.login_source_label.configure(
+                    text=f"当前登录来源：{source}",
+                    fg="#8a94a6",
+                    cursor="",
+                )
+            else:
+                self.login_source_label.configure(text="")
         can_open = available and is_login and not self._network_task_active()
         if hasattr(self, "webview_open_btn"):
             self.webview_open_btn.configure(state="normal" if can_open else "disabled")
@@ -4917,6 +5057,72 @@ class App:
             target,
             url="https://passport.baidu.com/v2/?login",
         )
+
+    def _adopt_webview_login(self, cookies: dict, target: str) -> None:
+        full = "; ".join(f"{key}={value}" for key, value in cookies.items())
+        if target == "bduss" and cookies.get("BDUSS"):
+            self.login_method_var.set("bduss")
+            self.bduss_var.set(str(cookies.get("BDUSS") or ""))
+            self.cookie_var.set(f"BDUSS={cookies.get('BDUSS') or ''}")
+        else:
+            self.login_method_var.set("cookie")
+            self.cookie_var.set(full)
+            self._full_cookie_cache = full
+        self._login_source = "内置浏览器"
+        self._on_login_method_changed()
+        self._set_login_fields_expanded(False)
+        if hasattr(self, "_refresh_webview_status"):
+            self._refresh_webview_status()
+
+    def _switch_baidu_account(self) -> None:
+        if not webview2.available():
+            messagebox.showwarning(
+                "WebView2 不可用",
+                "未检测到 WebView2 Runtime，无法切换百度账号。",
+                parent=self.root,
+            )
+            return
+        if self._network_task_active() or getattr(self, "_webview_running", False):
+            messagebox.showinfo("请稍后", "当前有任务或内置窗口正在运行。", parent=self.root)
+            return
+        if not messagebox.askyesno(
+            "切换百度账号",
+            "将打开一个临时干净的内置窗口登录新账号。\n"
+            "新账号成功登录前，旧登录和旧内置会话都会保留。\n\n继续？",
+            parent=self.root,
+            default=messagebox.NO,
+        ):
+            return
+        temp_profile = webview2.prepare_switch_profile()
+        self._webview_running = True
+        self.status_var.set("正在打开切换账号窗口…")
+        center = self._webview_center()
+
+        def worker():
+            try:
+                result = webview2.open_verification(
+                    "https://passport.baidu.com/v2/?login",
+                    center=center,
+                    persistent=True,
+                    require_login=True,
+                    profile_dir=temp_profile,
+                )
+                raw = result.get("cookies") if isinstance(result, dict) else result
+                cookies = webview2.filter_cookies(raw, anonymous=False)
+                if not webview2.has_login_cookie(cookies):
+                    raise RuntimeError("没有读取到登录 Cookie（BDUSS/TIEBA_SID），可能尚未登录")
+                self._post(("switch_login_done", cookies, "", ""))
+            except Exception as error:  # noqa: BLE001
+                self._post(("switch_login_done", {}, str(error), ""))
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _reuse_internal_login(self) -> None:
+        if self.mode_var.get() != "login":
+            self._set_mode("login")
+        target = "bduss" if self.login_method_var.get() == "bduss" else "cookie"
+        url = (getattr(self, "_current_urls", []) or ["https://tieba.baidu.com/"])[0]
+        self._auto_get_login(target, url=url)
 
     def _manual_fill_login(self) -> None:
         self._set_mode("login")
@@ -5520,14 +5726,16 @@ class App:
             command=self._on_save_result_toggle,
         ).pack(anchor="w", padx=8, pady=(4, 0))
         self.encrypt_var = tk.BooleanVar(value=bool(self.settings.get("encrypt_result", False)))
-        ttk.Checkbutton(
+        self.encrypt_check = ttk.Checkbutton(
             save_box,
             text="加密保存结果（DPAPI，仅当前 Windows 用户可读）",
             variable=self.encrypt_var,
             command=self._on_encrypt_toggle,
-        ).pack(anchor="w", padx=8, pady=(2, 0))
+        )
+        self.encrypt_check.pack(anchor="w", padx=8, pady=(2, 0))
         row = tk.Frame(save_box, bg="#eef1f5")
         row.pack(anchor="w", fill="x", padx=8, pady=(4, 2))
+        self.save_restore_row = row
         tk.Label(row, text="启动时恢复：", width=14, anchor="w", bg="#eef1f5", fg="#475569").pack(side="left")
         self.restore_mode_var = tk.StringVar(
             value="询问" if self.settings.get("restore_mode") == "ask" else "自动"
@@ -5549,6 +5757,7 @@ class App:
         ).pack(anchor="w", padx=8, pady=(2, 4))
         result_buttons = tk.Frame(save_box, bg="#eef1f5")
         result_buttons.pack(fill="x", padx=8, pady=(2, 4))
+        self.old_result_buttons = result_buttons
         ttk.Button(result_buttons, text="删除当前结果", command=self._clear_result, width=14).pack(side="left")
         ttk.Button(
             result_buttons, text="清理旧版本结果", command=self._cleanup_old_results, width=14
@@ -5561,6 +5770,7 @@ class App:
 
         log_box = ttk.LabelFrame(box, text=" 运行日志 ")
         log_box.pack(fill="x", pady=(0, 6))
+        self.log_box = log_box
         self.log_enabled_var = tk.BooleanVar(value=bool(self.settings.get("log_enabled", False)))
         ttk.Checkbutton(
             log_box,
@@ -5592,6 +5802,7 @@ class App:
 
         cache_box = ttk.LabelFrame(box, text=" 发言缓存 ")
         cache_box.pack(fill="x", pady=(0, 6))
+        self.cache_box = cache_box
         cache_row = tk.Frame(cache_box, bg="#eef1f5")
         cache_row.pack(fill="x", padx=8, pady=(6, 2))
         tk.Label(cache_row, text="上限：", bg="#eef1f5", fg="#475569").pack(side="left")
@@ -6359,6 +6570,7 @@ class App:
             return
         fake = {"BDUSS": "TEST_BDUSS", "TIEBA_SID": "TEST_TIEBA_SID", "STOKEN": "TEST_STOKEN"}
         text = "; ".join(f"{key}={value}" for key, value in fake.items())
+        self._login_source = "测试"
         self._full_cookie_cache = text
         if scenario == "bduss":
             self.login_method_var.set("bduss")
@@ -6677,6 +6889,194 @@ class App:
         if getattr(self, "_active_choice_window", None) is win:
             self._active_choice_window = None
         return result["value"]
+
+    def _hidden_advanced_settings(self) -> List[str]:
+        names: List[str] = []
+        if str(self.settings.get("follow_load_mode") or "auto") == "manual":
+            names.append("关注加载：手动")
+        strategy = str(self.settings.get("identity_strategy") or "full")
+        labels = {
+            "ask": "身份策略：询问",
+            "skip": "身份策略：跳过",
+            "user_id": "身份策略：只补用户ID",
+            "detail": "身份策略：详情再补",
+        }
+        if strategy in labels:
+            names.append(labels[strategy])
+        try:
+            concurrency = int(self.settings.get("identity_concurrency", 3))
+        except (TypeError, ValueError):
+            concurrency = 3
+        if concurrency != 3:
+            names.append(f"身份并发 {concurrency}")
+        try:
+            batch = int(self.settings.get("batch_concurrency", 1))
+        except (TypeError, ValueError):
+            batch = 1
+        if batch > 1:
+            names.append(f"红绿灯并发 {batch}")
+        if str(self.settings.get("proxy_mode") or "system") == "custom":
+            names.append("自定义代理")
+        if bool(self.settings.get("lookup_fill_threads")):
+            names.append("查用户回抓主题")
+        if bool(self.settings.get("log_enabled")):
+            names.append("运行日志")
+        if bool(self.settings.get("encrypt_result")):
+            names.append("结果加密")
+        try:
+            cache_mb = int(self.settings.get("post_cache_limit_mb", DEFAULT_LIMIT_MB))
+        except (TypeError, ValueError):
+            cache_mb = DEFAULT_LIMIT_MB
+        if cache_mb != DEFAULT_LIMIT_MB:
+            names.append(f"缓存上限 {cache_mb} MB")
+        try:
+            comment_concurrency = int(self.comment_concurrency_var.get() or 1)
+        except (TypeError, ValueError):
+            comment_concurrency = 1
+        if comment_concurrency > 1:
+            names.append(f"楼中楼并发 {comment_concurrency}")
+        return names
+
+    def _refresh_advanced_summary(self) -> None:
+        if not hasattr(self, "ui_mode_var"):
+            return
+        simple = self.ui_mode_var.get() != "advanced"
+        names = self._hidden_advanced_settings() if simple else []
+        if not simple or not names:
+            self.fetch_advanced_summary.pack_forget()
+            self.fetch_advanced_summary.unbind("<Button-1>")
+            self.ui_mode_hint.configure(
+                text="简洁模式隐藏调参和高风险操作", cursor=""
+            )
+            self.ui_mode_hint.unbind("<Button-1>")
+            return
+        shown = "、".join(names[:2])
+        if len(names) > 2:
+            shown += f" 等 {len(names)} 项"
+        text = f"高级设置生效中：{shown}  [管理]"
+        self.fetch_advanced_summary.configure(text=text)
+        self.fetch_advanced_summary.pack(
+            fill="x", padx=8, pady=(4, 0), before=self.fetch_page
+        )
+        self.fetch_advanced_summary.configure(cursor="hand2")
+        self.fetch_advanced_summary.bind(
+            "<Button-1>", lambda _event: self._manage_advanced_settings()
+        )
+        self.ui_mode_hint.configure(text=text, cursor="hand2")
+        self.ui_mode_hint.bind(
+            "<Button-1>", lambda _event: self._manage_advanced_settings()
+        )
+
+    def _manage_advanced_settings(self) -> None:
+        if self.ui_mode_var.get() == "advanced":
+            self.notebook.select(self.tab_settings)
+            return
+        if not messagebox.askyesno(
+            "开启高级模式",
+            "高级模式会显示更多选项和高风险操作。\n不会自动改变现有设置。\n\n继续？",
+            parent=self.root,
+            default=messagebox.NO,
+        ):
+            return
+        self.ui_mode_var.set("advanced")
+        self._apply_ui_mode()
+
+    def _reset_hidden_behavior_settings(self) -> None:
+        self.follow_load_mode_var.set("自动")
+        self.identity_strategy_var.set("补全用户ID + 贴吧ID")
+        self.identity_timing_var.set(False)
+        self.identity_concurrency_var.set("3")
+        self.batch_concurrency_var.set("1")
+        self.proxy_mode_var.set("跟随系统")
+        self.proxy_url_var.set("")
+        self.lookup_fill_var.set(False)
+        self.lookup_fill_all_var.set(False)
+        self.comment_concurrency_var.set("1")
+        self.settings.update(
+            {
+                "follow_load_mode": "auto",
+                "identity_strategy": "full",
+                "identity_timing": False,
+                "identity_concurrency": 3,
+                "batch_concurrency": 1,
+                "proxy_mode": "system",
+                "proxy_url": "",
+                "lookup_fill_threads": False,
+                "lookup_fill_all": False,
+            }
+        )
+        save_settings(self.settings)
+
+    def _apply_ui_mode(self, persist: bool = True) -> None:
+        simple = self.ui_mode_var.get() != "advanced"
+        self.settings["ui_mode"] = "simple" if simple else "advanced"
+        if persist:
+            save_settings(self.settings)
+
+        if simple:
+            self.identity_row.grid_remove()
+            self.follow_load_row.pack_forget()
+            self.proxy_row.pack_forget()
+            self.batch_row.pack_forget()
+            self.lookup_fill_box.pack_forget()
+            self.cache_box.pack_forget()
+            self.log_box.pack_forget()
+            self.encrypt_check.pack_forget()
+            self.old_result_buttons.pack_forget()
+        else:
+            self.identity_row.grid()
+            self.follow_load_row.pack(anchor="w", padx=8, pady=(4, 6))
+            self.batch_row.pack(anchor="w", fill="x", padx=8, pady=(4, 0))
+            self.proxy_row.pack(
+                anchor="w", fill="x", padx=8, pady=(4, 0), before=self.batch_row
+            )
+            self.lookup_fill_box.pack(fill="x", pady=(0, 6))
+            self.cache_box.pack(fill="x", pady=(0, 6))
+            self.log_box.pack(fill="x", pady=(0, 6), before=self.cache_box)
+            self.encrypt_check.pack(
+                anchor="w", padx=8, pady=(2, 0), before=self.save_restore_row
+            )
+            self.old_result_buttons.pack(fill="x", padx=8, pady=(2, 4))
+        self._refresh_advanced_summary()
+
+    def _on_ui_mode_selected(self) -> None:
+        target = self.ui_mode_var.get()
+        current = "advanced" if self.settings.get("ui_mode") == "advanced" else "simple"
+        if target == current:
+            return
+        if target == "advanced":
+            if not messagebox.askyesno(
+                "开启高级模式",
+                "高级模式会显示更多选项和高风险操作。\n不会自动改变现有设置。\n\n继续？",
+                parent=self.root,
+                default=messagebox.NO,
+            ):
+                self.ui_mode_var.set(current)
+                return
+            self._apply_ui_mode()
+            return
+
+        names = self._hidden_advanced_settings()
+        if names:
+            detail = "\n".join(f"- {name}" for name in names)
+            choice = self._ask_choice(
+                "切回简洁模式",
+                "以下高级设置仍在生效：\n\n"
+                + detail
+                + "\n\n切回简洁模式不会自动关闭它们。",
+                [
+                    ("保留设置并切换", "keep"),
+                    ("关闭行为类设置并切换", "close"),
+                    ("取消", "cancel"),
+                ],
+                default=0,
+            )
+            if not choice or choice == "cancel":
+                self.ui_mode_var.set(current)
+                return
+            if choice == "close":
+                self._reset_hidden_behavior_settings()
+        self._apply_ui_mode()
 
     def _open_usage_window(self) -> None:
         existing = getattr(self, "_usage_window", None)
@@ -7018,6 +7418,7 @@ class App:
         self.removed_action_var.trace_add("write", lambda *_: self._on_fetch_settings_changed())
         proxy_row = tk.Frame(fetch_box, bg="#eef1f5")
         proxy_row.pack(anchor="w", fill="x", padx=8, pady=(4, 0))
+        self.proxy_row = proxy_row
         tk.Label(proxy_row, text="网络代理：", width=18, anchor="w", bg="#eef1f5", fg="#475569").pack(side="left")
         self.proxy_mode_var = tk.StringVar(
             value={"system": "跟随系统", "none": "不使用", "custom": "自定义"}.get(
@@ -7037,6 +7438,7 @@ class App:
         self.proxy_url_var.trace_add("write", lambda *_: self._on_proxy_changed())
         batch_row = tk.Frame(fetch_box, bg="#eef1f5")
         batch_row.pack(anchor="w", fill="x", padx=8, pady=(4, 0))
+        self.batch_row = batch_row
         tk.Label(batch_row, text="一键红绿灯并发：", width=18, anchor="w", bg="#eef1f5", fg="#475569").pack(side="left")
         self.batch_concurrency_var = tk.StringVar(value=str(self.settings.get("batch_concurrency", 1)))
         ttk.Combobox(
@@ -7053,6 +7455,7 @@ class App:
 
         fill_box = ttk.LabelFrame(box, text=" 查用户补全主题 ")
         fill_box.pack(fill="x", pady=(0, 6))
+        self.lookup_fill_box = fill_box
         self.lookup_fill_var = tk.BooleanVar(value=bool(self.settings.get("lookup_fill_threads", False)))
         ttk.Checkbutton(
             fill_box,
@@ -11298,6 +11701,9 @@ class App:
                     self._refresh_log_summary()
                     return
                 self._webview_cookie_session = True
+                self._login_source = "内置浏览器"
+                if webview2.login_profile_exists():
+                    webview2.save_profile_fingerprint(cookies)
                 cookie_text = "; ".join(f"{k}={v}" for k, v in cookies.items())
                 self.cookie_var.set(cookie_text)
                 self._full_cookie_cache = cookie_text
@@ -11352,6 +11758,9 @@ class App:
                 self._refresh_webview_status()
                 self._refresh_log_summary()
                 return
+            self._login_source = "内置浏览器"
+            if webview2.login_profile_exists():
+                webview2.save_profile_fingerprint(cookies)
             cookie_text = "; ".join(f"{k}={v}" for k, v in cookies.items())
             self._full_cookie_cache = cookie_text
             if target == "bduss":
@@ -11390,6 +11799,59 @@ class App:
                     warning + "\n\nCookie 已填入，但开始抓取后仍可能被拦截。",
                     parent=self.root,
                 )
+            self._offer_retry_incomplete("登录信息")
+            self._refresh_webview_status()
+            self._refresh_log_summary()
+        elif kind == "switch_login_done":
+            _, cookies, error, warning = message
+            self._webview_running = False
+            if error or not cookies:
+                webview2.clear_switch_profile()
+                self.status_var.set("切换账号失败")
+                self._append_log(f"切换账号失败：{error or '没有可用 Cookie'}", "err")
+                messagebox.showwarning(
+                    "切换账号失败",
+                    (error or "没有读取到可用 Cookie。")
+                    + "\n旧登录和旧内置会话已保留。",
+                    parent=self.root,
+                )
+                self._refresh_webview_status()
+                return
+            remember = bool(self.settings.get("webview_remember_login", False))
+            try:
+                if remember:
+                    webview2.replace_login_profile(webview2.switch_profile_dir())
+                    webview2.save_profile_fingerprint(cookies)
+                else:
+                    webview2.clear_switch_profile()
+            except Exception as switch_error:  # noqa: BLE001
+                webview2.clear_switch_profile()
+                self.status_var.set("切换账号失败")
+                self._append_log(f"切换账号失败：{switch_error}", "err")
+                messagebox.showwarning(
+                    "切换账号失败",
+                    f"{switch_error}\n旧登录和旧内置会话已保留。",
+                    parent=self.root,
+                )
+                self._refresh_webview_status()
+                return
+            target = "bduss" if self.login_method_var.get() == "bduss" else "cookie"
+            self._adopt_webview_login(cookies, target)
+            if self._remember_current_login():
+                save_cookie(self._current_cookie_text())
+            if not remember and webview2.login_profile_exists():
+                if messagebox.askyesno(
+                    "清除旧内置登录",
+                    "新账号已登录，但“记住内置登录”未开启。\n"
+                    "旧的内置登录仍是旧账号。是否清除旧内置登录？",
+                    parent=self.root,
+                    default=messagebox.YES,
+                ):
+                    webview2.clear_login_profile()
+            self.status_var.set("已切换百度账号")
+            self._append_log("已切换百度账号并更新当前登录。", "ok")
+            if warning:
+                self._append_log(f"登录预检警告：{warning}", "warn")
             self._offer_retry_incomplete("登录信息")
             self._refresh_webview_status()
             self._refresh_log_summary()

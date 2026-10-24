@@ -62,6 +62,22 @@ def test_login_result_text_for_first_time_and_existing(root_app):
     assert "不会重抓" in app._login_result_text("已读取完整 Cookie")
 
 
+def test_ui_mode_hides_advanced_settings(root_app, monkeypatch):
+    _root, app = root_app
+    monkeypatch.setattr(tieba_gui, "save_settings", lambda *_args, **_kwargs: True)
+    app.ui_mode_var.set("simple")
+    app.batch_concurrency_var.set("3")
+    app.settings["batch_concurrency"] = 3
+    app._apply_ui_mode(persist=False)
+    assert app.identity_row.winfo_manager() == ""
+    assert app.cache_box.winfo_manager() == ""
+    assert "红绿灯并发 3" in app._hidden_advanced_settings()
+    app.ui_mode_var.set("advanced")
+    app._apply_ui_mode(persist=False)
+    assert app.identity_row.winfo_manager() == "grid"
+    assert app.cache_box.winfo_manager() == "pack"
+
+
 def test_login_button_text_follows_method(root_app):
     _root, app = root_app
     app._set_mode("login")
