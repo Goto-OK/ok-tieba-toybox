@@ -121,6 +121,18 @@ def test_login_baidu_uses_current_method(root_app, monkeypatch):
     assert captured["target"] == "cookie"
 
 
+def test_builtin_temp_login_flags_profile_conflict(root_app, monkeypatch):
+    _root, app = root_app
+    app._set_mode("login")
+    app.login_method_var.set("cookie")
+    app.cookie_var.set("BDUSS=temp; TIEBA_SID=temp")
+    app._login_source = "内置浏览器"
+    app._last_webview_match = False
+    monkeypatch.setattr(tieba_gui.webview2, "login_profile_exists", lambda: True)
+    app._refresh_webview_status()
+    assert "可能不是同一会话" in app.login_source_label.cget("text")
+
+
 def test_switch_login_done_replaces_profile(root_app, monkeypatch, tmp_path):
     _root, app = root_app
     monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))

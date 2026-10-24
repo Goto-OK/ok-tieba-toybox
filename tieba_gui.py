@@ -238,7 +238,7 @@ class App:
         )
         self.mode_var = tk.StringVar(value="guest")
         self._login_source = ""
-        self._login_profile_match: Optional[bool] = None
+        self._last_webview_match: Optional[bool] = None
         webview2.cleanup_profile_backup()
         webview2.clear_switch_profile()
 
@@ -951,7 +951,9 @@ class App:
             return
         self.bduss_var.set(value)
         self.cookie_var.set(f"BDUSS={value}")
+        self._full_cookie_cache = ""
         self._login_source = "手动粘贴"
+        self._last_webview_match = None
         if self.remember_bduss_var.get():
             if save_cookie(self.cookie_var.get()):
                 self.status_var.set("BDUSS 已加密保存")
@@ -978,6 +980,7 @@ class App:
             return
         self._full_cookie_cache = raw
         self._login_source = "手动粘贴"
+        self._last_webview_match = None
         self.login_method_var.set("cookie")
         self._on_login_method_changed()
         if self.remember_cookie_var.get():
@@ -1033,6 +1036,7 @@ class App:
         self.bduss_var.set("")
         self._full_cookie_cache = ""
         self._login_source = ""
+        self._last_webview_match = None
         if clear_cookie():
             self._append_log("已清除本机保存的 Cookie。", "muted")
         else:
@@ -4958,11 +4962,13 @@ class App:
                 "已保存 Cookie",
                 "内置浏览器",
             ):
-                current_cookies = parse_cookie_input(self.cookie_var.get())
-                if source == "内置浏览器" and self._full_cookie_cache:
-                    current_cookies = parse_cookie_input(self._full_cookie_cache)
-                match = webview2.match_profile_fingerprint(current_cookies)
-            self._login_profile_match = match
+                if source == "内置浏览器" and self._last_webview_match is not None:
+                    match = self._last_webview_match
+                else:
+                    current_cookies = parse_cookie_input(self.cookie_var.get())
+                    if source == "内置浏览器" and self._full_cookie_cache:
+                        current_cookies = parse_cookie_input(self._full_cookie_cache)
+                    match = webview2.match_profile_fingerprint(current_cookies)
             self.login_source_label.unbind("<Button-1>")
             if match is False:
                 self.login_source_label.configure(
@@ -5063,8 +5069,10 @@ class App:
             url="https://passport.baidu.com/v2/?login",
         )
 
-    def _save_login_fingerprint(self, cookies: dict) -> None:
+    def _save_login_fingerprint(self, cookies: dict, force: bool = False) -> None:
         if not webview2.login_profile_exists():
+            return
+        if not force and not bool(self.settings.get("webview_remember_login", False)):
             return
         if not webview2.save_profile_fingerprint(cookies):
             self._append_log("登录来源指纹保存失败，下次可能无法判断是否同一会话。", "warn")
@@ -5072,13 +5080,15 @@ class App:
     def _adopt_webview_login(self, cookies: dict, target: str) -> None:
         full = "; ".join(f"{key}={value}" for key, value in cookies.items())
         if target == "bduss" and cookies.get("BDUSS"):
+            self._full_cookie_cache = ""
             self.login_method_var.set("bduss")
             self.bduss_var.set(str(cookies.get("BDUSS") or ""))
             self.cookie_var.set(f"BDUSS={cookies.get('BDUSS') or ''}")
         else:
+            self._full_cookie_cache = full
             self.login_method_var.set("cookie")
             self.cookie_var.set(full)
-            self._full_cookie_cache = full
+            self._webview_cookie_session = True
         self._login_source = "内置浏览器"
         self._on_login_method_changed()
         self._set_login_fields_expanded(False)
@@ -11754,6 +11764,11 @@ class App:
                     return
                 self._webview_cookie_session = True
                 self._login_source = "内置浏览器"
+                self._last_webview_match = (
+                    webview2.match_profile_fingerprint(cookies)
+                    if webview2.login_profile_exists()
+                    else None
+                )
                 self._save_login_fingerprint(cookies)
                 cookie_text = "; ".join(f"{k}={v}" for k, v in cookies.items())
                 self.cookie_var.set(cookie_text)
@@ -11810,6 +11825,11 @@ class App:
                 self._refresh_log_summary()
                 return
             self._login_source = "内置浏览器"
+            self._last_webview_match = (
+                webview2.match_profile_fingerprint(cookies)
+                if webview2.login_profile_exists()
+                else None
+            )
             self._save_login_fingerprint(cookies)
             cookie_text = "; ".join(f"{k}={v}" for k, v in cookies.items())
             self._full_cookie_cache = cookie_text
@@ -11871,9 +11891,15 @@ class App:
             try:
                 if remember:
                     webview2.replace_login_profile(webview2.switch_profile_dir())
-                    self._save_login_fingerprint(cookies)
+                    self._save_login_fingerprint(cookies, force=True)
+                    self._last_webview_match = None
                 else:
                     webview2.clear_switch_profile()
+                    self._last_webview_match = (
+                        webview2.match_profile_fingerprint(cookies)
+                        if webview2.login_profile_exists()
+                        else None
+                    )
             except Exception as switch_error:  # noqa: BLE001
                 webview2.clear_switch_profile()
                 self.status_var.set("切换账号失败")
@@ -11897,7 +11923,9 @@ class App:
                     parent=self.root,
                     default=messagebox.YES,
                 ):
-                    if not webview2.clear_login_profile():
+                    if webview2.clear_login_profile():
+                        self._last_webview_match = None
+                    else:
                         messagebox.showwarning(
                             "旧内置登录未清除",
                             "旧内置登录目录仍被占用；当前账号已切换，旧目录保留。",
