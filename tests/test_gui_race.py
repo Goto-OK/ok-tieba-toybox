@@ -62,6 +62,11 @@ def test_login_result_text_for_first_time_and_existing(root_app):
     assert "不会重抓" in app._login_result_text("已读取完整 Cookie")
 
 
+def test_fetch_body_has_mousewheel_scroll(root_app):
+    _root, app = root_app
+    assert app.fetch_body.bind("<MouseWheel>")
+
+
 def test_login_fields_default_collapsed(root_app):
     _root, app = root_app
     assert app._login_fields_expanded is False

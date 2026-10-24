@@ -419,7 +419,17 @@ class App:
         fetch_canvas = next(
             child for child in fetch_page.winfo_children() if isinstance(child, tk.Canvas)
         )
+        self.fetch_body = body
+        self.fetch_canvas = fetch_canvas
+        body.bind(
+            "<Enter>",
+            lambda _event: self._bind_mousewheel_tree(self.fetch_body, self.fetch_canvas),
+            add="+",
+        )
         self._bind_mousewheel_tree(body, fetch_canvas)
+        self.root.after_idle(
+            lambda: self._bind_mousewheel_tree(self.fetch_body, self.fetch_canvas)
+        )
         body.columnconfigure(0, weight=1)
         body.rowconfigure(1, weight=0)
         body.rowconfigure(5, weight=1)
@@ -3985,6 +3995,9 @@ class App:
         return outer, body
 
     def _bind_mousewheel_tree(self, widget, canvas) -> None:
+        if isinstance(widget, (tk.Text, tk.Listbox, ttk.Treeview)):
+            return
+
         def on_wheel(event) -> str:
             first, last = canvas.yview()
             if (event.delta > 0 and first <= 0.0) or (event.delta < 0 and last >= 1.0):
