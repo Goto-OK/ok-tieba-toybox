@@ -11847,7 +11847,12 @@ class App:
                     parent=self.root,
                     default=messagebox.YES,
                 ):
-                    webview2.clear_login_profile()
+                    if not webview2.clear_login_profile():
+                        messagebox.showwarning(
+                            "旧内置登录未清除",
+                            "旧内置登录目录仍被占用；当前账号已切换，旧目录保留。",
+                            parent=self.root,
+                        )
             self.status_var.set("已切换百度账号")
             self._append_log("已切换百度账号并更新当前登录。", "ok")
             if warning:

@@ -177,6 +177,17 @@ def cleanup_profile_backup() -> None:
         pass
 
 
+def _replace_with_retry(source: str, target: str, attempts: int = 3) -> None:
+    for attempt in range(attempts):
+        try:
+            os.replace(source, target)
+            return
+        except OSError:
+            if attempt + 1 >= attempts:
+                raise
+            time.sleep(1)
+
+
 def replace_login_profile(temp_dir: str) -> None:
     """用临时 profile 替换正式 profile；失败时回滚。"""
     source = os.path.abspath(temp_dir)
@@ -187,14 +198,14 @@ def replace_login_profile(temp_dir: str) -> None:
     cleanup_profile_backup()
     try:
         if os.path.isdir(target):
-            os.replace(target, backup)
-        os.replace(source, target)
+            _replace_with_retry(target, backup)
+        _replace_with_retry(source, target)
     except OSError:
         try:
             if os.path.isdir(target):
                 shutil.rmtree(target)
             if os.path.isdir(backup) and not os.path.isdir(target):
-                os.replace(backup, target)
+                _replace_with_retry(backup, target)
         except OSError:
             pass
         raise RuntimeError("内置登录目录被占用，旧登录已保留")
