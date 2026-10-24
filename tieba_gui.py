@@ -413,8 +413,13 @@ class App:
         self.post_nb.add(self.tab_people, text="  参与者  ")
         self.post_nb.add(self.tab_grid, text="  表格查看  ")
 
-        body = tk.Frame(self.tab_fetch, bg="#eef1f5", padx=16, pady=8)
-        body.pack(fill="both", expand=True)
+        fetch_page, body = self._make_scrollable_settings_page(self.tab_fetch)
+        fetch_page.pack(fill="both", expand=True)
+        body.configure(padx=16, pady=8)
+        fetch_canvas = next(
+            child for child in fetch_page.winfo_children() if isinstance(child, tk.Canvas)
+        )
+        self._bind_mousewheel_tree(body, fetch_canvas)
         body.columnconfigure(0, weight=1)
         body.rowconfigure(1, weight=0)
         body.rowconfigure(5, weight=1)
