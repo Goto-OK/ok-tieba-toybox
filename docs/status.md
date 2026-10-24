@@ -229,6 +229,7 @@ Android 核心同步通过
 - 测试中心增加游客/完整 Cookie/仅 BDUSS 三种可继续操作的模拟，使用假 Cookie 且不联网；
 - 验证码中断保存已完成结果；
 - `CaptchaError` 可携带当前帖子的 partial ThreadData；登录翻页被拦截时保存已抓楼层；
+- 登录模式支持基于 partial 的断点续抓，只补 failed_pages 并合并楼层/评论；
 - WebView2 标题检测、0.5 秒自动关闭；
 - 登录模式要求 BDUSS 后才自动关闭；
 - 持久 WebView2 登录默认关闭，使用独立 profile；

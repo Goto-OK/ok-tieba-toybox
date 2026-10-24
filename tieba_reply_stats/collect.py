@@ -87,6 +87,85 @@ def total_comment_url(tid: str, fid: str, pn: int) -> str:
     return f"https://tieba.baidu.com/p/totalComment?tid={tid}&fid={fid or 0}&pn={pn}&see_lz=0"
 
 
+def _resume_login_thread(
+    source_url: str,
+    tid: str,
+    fetcher: Fetcher,
+    options: CollectOptions,
+    thread: ThreadData,
+    log,
+) -> ThreadData:
+    """登录模式断点续抓：只补 failed_pages，合并楼层和评论。"""
+    thread.complete = False
+    thread.warnings = list(thread.warnings)
+    meta = thread.meta
+    total = int(meta.total_page or 0)
+    failed = sorted({int(pn) for pn in thread.failed_pages if int(pn) >= 2})
+    if total:
+        failed = [pn for pn in failed if pn <= total]
+    if failed:
+        pages = failed
+    else:
+        pages = list(range(max(2, int(thread.pages_fetched) + 1), total + 1)) if total else []
+    floors_by_no = {floor.post_no: floor for floor in thread.floors}
+    failed_after: List[int] = []
+    fetched = int(thread.pages_fetched or 1)
+    for pn in pages:
+        _check_stop(options)
+        try:
+            response = fetcher.get(thread_page_url(tid, pn), name=f"thread_{tid}_p{pn}")
+            _page_meta, items = parse_thread_page(response.text, source_url, tid)
+            for floor in items:
+                floors_by_no[floor.post_no] = floor
+            fetched = max(fetched, pn)
+            log(f"  续抓第 {pn} 页：{len(items)} 层")
+        except CaptchaError as error:
+            failed_after.extend(range(pn, (total or pn) + 1))
+            thread.floors = sorted(floors_by_no.values(), key=lambda item: item.post_no)
+            thread.pages_fetched = fetched
+            thread.failed_pages = failed_after
+            thread.warnings.append(f"第 {pn} 页仍未完成：{error}")
+            thread.complete = False
+            error.partial = thread
+            raise
+        except ThreadGoneError:
+            thread.warnings.append(f"第 {pn} 页返回 404，停止续抓")
+            failed_after.append(pn)
+            break
+        except Exception as error:  # noqa: BLE001
+            failed_after.append(pn)
+            thread.warnings.append(f"第 {pn} 页续抓失败：{error}")
+            log(f"  ! 第 {pn} 页续抓失败：{error}")
+
+    thread.floors = sorted(floors_by_no.values(), key=lambda item: item.post_no)
+    thread.pages_fetched = fetched
+    thread.failed_pages = failed_after
+    thread.complete = not failed_after
+    if options.include_comments:
+        try:
+            comments = _collect_comments(
+                tid,
+                thread,
+                {floor.pid: 1 for floor in thread.floors},
+                fetcher,
+                options,
+                log,
+            )
+        except CaptchaError as error:
+            thread.complete = False
+            error.partial = thread
+            raise
+        by_pid = {comment.pid: comment for comment in thread.comments if comment.pid}
+        for comment in comments:
+            if comment.pid:
+                by_pid[comment.pid] = comment
+        thread.comments = sorted(
+            by_pid.values(),
+            key=lambda item: (item.floor_no, item.posted_at or datetime.min),
+        )
+    return thread
+
+
 def collect_thread(
     url: str,
     fetcher: Fetcher,
@@ -119,8 +198,17 @@ def collect_thread(
             )
         data.meta.mode = "guest"
         return data
-    if not fetcher.cookie_dict().get("BDUSS"):
-        raise CollectError("登录模式需要 Cookie（至少包含 BDUSS）。请切换到免登录模式，或先填写 Cookie。")
+    cookies = fetcher.cookie_dict()
+    if not any(cookies.get(name) for name in ("BDUSS", "TIEBA_SID")):
+        raise CollectError(
+            "登录模式需要 Cookie（至少包含 BDUSS 或 TIEBA_SID）。"
+            "请切换到免登录模式，或先填写 Cookie。"
+        )
+    if resume_thread is not None:
+        log("  模式：登录断点续抓（只补失败页/失败部分）")
+        return _resume_login_thread(
+            source_url, tid, fetcher, options, resume_thread, log
+        )
     log("  模式：登录（完整楼中楼 / 关注 / 等级）")
     first = fetcher.get(thread_page_url(tid, 1), name=f"thread_{tid}_p1")
     meta, floors = parse_thread_page(first.text, source_url, tid)

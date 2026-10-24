@@ -1926,13 +1926,18 @@ class App:
         if not targets:
             messagebox.showinfo("没有失败部分", "当前帖子都是完整的。", parent=self.root)
             return
-        if self.mode_var.get() != "guest":
-            messagebox.showinfo(
-                "暂不支持",
-                "断点续抓目前只支持游客模式。登录模式请重新抓取。",
-                parent=self.root,
-            )
-            return
+        mode = self.mode_var.get()
+        if mode == "login":
+            cookie = self._request_cookie()
+            if not webview2.has_login_cookie(cookie):
+                messagebox.showwarning(
+                    "需要登录 Cookie",
+                    "登录模式续抓需要 BDUSS/TIEBA_SID，请先重新获取登录信息。",
+                    parent=self.root,
+                )
+                return
+        else:
+            cookie = {}
         resume_requests()
         configure_gate(float(self.delay_var.get() or 0.8))
         self._set_supplement_running(True)
@@ -1943,9 +1948,9 @@ class App:
 
         def worker():
             try:
-                fetcher = Fetcher(cookie={}, delay=0, verbose=False)
+                fetcher = Fetcher(cookie=cookie, delay=0, verbose=False)
                 options = CollectOptions(
-                    mode="guest",
+                    mode=mode,
                     include_comments=self.comments_var.get(),
                     comment_depth=self._comment_depth_value(),
                     comment_concurrency=max(
