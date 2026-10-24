@@ -239,6 +239,8 @@ class App:
         self.mode_var = tk.StringVar(value="guest")
         self._login_source = ""
         self._last_webview_match: Optional[bool] = None
+        self._active_choice_window: Optional[tk.Toplevel] = None
+        self._usage_window: Optional[tk.Toplevel] = None
         webview2.cleanup_profile_backup()
         webview2.clear_switch_profile()
 
@@ -3538,9 +3540,9 @@ class App:
         for thread in getattr(self, "last_threads", []):
             for item in list(thread.floors) + list(thread.comments):
                 uid = str(getattr(item, "author_id", "") or "")
-                value = str(getattr(item, "tieba_uid", "") or "")
-                if uid and value:
-                    by_uid[uid] = value
+                tieba_uid_value = str(getattr(item, "tieba_uid", "") or "")
+                if uid and tieba_uid_value:
+                    by_uid[uid] = tieba_uid_value
         if not by_uid:
             return
         tree = getattr(self, "people_tree", None)
@@ -6794,8 +6796,14 @@ class App:
         ]
         if allow_detail:
             choices.append(("详情再补", "detail"))
+        def make_command(value: str) -> Callable[[], None]:
+            def command() -> None:
+                choose(value)
+
+            return command
+
         for text, strategy in choices:
-            ttk.Button(frame, text=text, command=lambda value=strategy: choose(value)).pack(
+            ttk.Button(frame, text=text, command=make_command(str(strategy))).pack(
                 fill="x", pady=2
             )
         tk.Label(
@@ -11547,13 +11555,13 @@ class App:
                 self._simulated_captcha = False
                 mode = self.mode_var.get()
                 if mode == "guest":
-                    message = (
+                    dialog_text = (
                         "当前是游客模式。\n"
                         "真实流程会读取匿名 Cookie，不读取 BDUSS/STOKEN。"
                     )
                 elif self.login_method_var.get() == "bduss":
                     cached = bool(getattr(self, "_full_cookie_cache", ""))
-                    message = (
+                    dialog_text = (
                         "本次实际只发送了 BDUSS。\n"
                         + (
                             "真实流程会提示改用已保存的完整 Cookie。"
@@ -11562,13 +11570,13 @@ class App:
                         )
                     )
                 else:
-                    message = (
+                    dialog_text = (
                         "当前使用完整 Cookie。\n"
                         "真实流程会读取完整 Cookie，并检查 BDUSS。"
                     )
                 self._ask_choice(
                     "模拟验证码",
-                    message
+                    dialog_text
                     + "\n\n模拟模式：不打开 WebView2、不读取 Cookie、不修改登录状态。",
                     [("结束模拟", "stop")],
                 )
@@ -11588,29 +11596,29 @@ class App:
             use_bduss = mode == "login" and self.login_method_var.get() == "bduss"
             cached_cookie = bool(getattr(self, "_full_cookie_cache", ""))
             if use_bduss and cached_cookie:
-                message = (
+                dialog_text = (
                     "本次实际只发送了 BDUSS。\n"
                     "软件检测到你之前保存过完整 Cookie，可能是仅 BDUSS 不够用。\n\n"
                     "是否改用完整 Cookie 重试？"
                 )
             elif use_bduss:
-                message = (
+                dialog_text = (
                     "本次实际只发送了 BDUSS，且没有可用的完整 Cookie。\n"
                     "验证码通常需要完整 Cookie。"
                 )
             elif mode == "guest":
                 if webview2.available():
-                    message = (
+                    dialog_text = (
                         "当前是游客模式。\n"
                         "完成验证后软件会自动读取匿名 Cookie，不会读取 BDUSS/STOKEN。"
                     )
                 else:
-                    message = (
+                    dialog_text = (
                         "当前是游客模式，且未检测到 WebView2 Runtime。\n"
                         "可以改用登录模式（完整 Cookie）继续。"
                     )
             else:
-                message = (
+                dialog_text = (
                     "当前请求需要完整 Cookie。\n"
                     "完成验证后软件会读取完整 Cookie，仅用于本次抓取。"
                 )
@@ -11643,7 +11651,7 @@ class App:
             )
             choice = self._ask_choice(
                 "被安全验证拦截",
-                message,
+                dialog_text,
                 choices,
                 default=0,
             )

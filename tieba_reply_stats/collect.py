@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional, cast
 from urllib.parse import urlparse
 
 from .fetch import CaptchaError, Fetcher, FetchError, ThreadGoneError
@@ -651,7 +651,7 @@ def enrich_tieba_uids(
     log,
     concurrency: int = 3,
     progress: Optional[Callable[[int, int], None]] = None,
-) -> Dict[str, int]:
+) -> Dict[str, Any]:
     """对已抓帖子的唯一用户补 tieba_uid；一次资料请求同时带回身份字段。"""
     from concurrent.futures import ThreadPoolExecutor, as_completed
 
@@ -660,24 +660,28 @@ def enrich_tieba_uids(
     by_uid: Dict[str, Dict] = {}
     for thread in threads:
         for obj in list(thread.floors) + list(thread.comments):
-            uid = str(getattr(obj, "author_id", "") or "")
+            obj_any = cast(Any, obj)
+            uid = str(obj_any.author_id or "")
             if not uid:
                 continue
+            tieba_uid = str(obj_any.tieba_uid or "")
+            username = str(obj_any.author_name or "")
+            portrait = str(obj_any.portrait or "")
             item = by_uid.setdefault(
                 uid,
                 {
                     "uid": uid,
-                    "tieba_uid": getattr(obj, "tieba_uid", "") or "",
-                    "username": getattr(obj, "author_name", "") or "",
-                    "portrait": getattr(obj, "portrait", "") or "",
+                    "tieba_uid": tieba_uid,
+                    "username": username,
+                    "portrait": portrait,
                 },
             )
-            if not item["tieba_uid"] and getattr(obj, "tieba_uid", ""):
-                item["tieba_uid"] = obj.tieba_uid
-            if not item["username"] and getattr(obj, "author_name", ""):
-                item["username"] = obj.author_name
-            if not item["portrait"] and getattr(obj, "portrait", ""):
-                item["portrait"] = obj.portrait
+            if not item["tieba_uid"] and tieba_uid:
+                item["tieba_uid"] = tieba_uid
+            if not item["username"] and username:
+                item["username"] = username
+            if not item["portrait"] and portrait:
+                item["portrait"] = portrait
     todo = [item for item in by_uid.values() if not item.get("tieba_uid")]
     if not todo:
         log("  贴吧ID补全：所有人都已有 tieba_uid")
@@ -713,14 +717,14 @@ def enrich_tieba_uids(
     for thread in threads:
         for obj in list(thread.floors) + list(thread.comments):
             uid = str(getattr(obj, "author_id", "") or "")
-            profile = results.get(uid)
-            if not profile:
+            found = results.get(uid)
+            if not found:
                 continue
-            obj.tieba_uid = str(profile.get("tieba_uid") or obj.tieba_uid or "")
-            if not obj.author_name and profile.get("username"):
-                obj.author_name = str(profile.get("username") or "")
-            if not obj.portrait and profile.get("portrait"):
-                obj.portrait = str(profile.get("portrait") or "")
+            obj.tieba_uid = str(found.get("tieba_uid") or obj.tieba_uid or "")
+            if not obj.author_name and found.get("username"):
+                obj.author_name = str(found.get("username") or "")
+            if not obj.portrait and found.get("portrait"):
+                obj.portrait = str(found.get("portrait") or "")
     failed = len(failed_uids)
     log(f"  贴吧ID补全完成：{len(results)} 位成功，{failed} 位失败")
     return {"total": len(by_uid), "failed": failed, "failed_uids": failed_uids}

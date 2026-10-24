@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import re
-from typing import Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional
 
 from .collect import CollectOptions, collect_thread
 from .models import ThreadData
@@ -85,7 +85,12 @@ def parse_links(
 ) -> Dict:
     """解析一批链接；同一 tid 只抓一次主题。"""
     links = extract_links(raw)[:max_links]
-    result = {"rows": [], "errors": [], "threads": 0, "links": len(links)}
+    result: Dict[str, Any] = {
+        "rows": [],
+        "errors": [],
+        "threads": 0,
+        "links": len(links),
+    }
     grouped: Dict[str, List[Dict[str, str]]] = {}
     for link in links:
         parsed = parse_link(link)

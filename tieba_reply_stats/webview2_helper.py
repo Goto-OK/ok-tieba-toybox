@@ -92,8 +92,10 @@ def main() -> int:
         on_top=True,
         text_select=False,
     )
+    if window is None:
+        raise RuntimeError("WebView2 窗口创建失败")
     read_cookies = "--no-cookie" not in sys.argv
-    cookies = []
+    cookies: list[dict] = []
     state = {
         "captcha_seen": False,
         "normal_since": 0.0,

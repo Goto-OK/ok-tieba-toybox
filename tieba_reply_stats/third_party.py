@@ -54,7 +54,7 @@ def fetch_posts_page(
     返回 ``{"items": [...], "has_next": bool, "source": "new"/"old"}``。
     """
     path = "/getPosts" if use_old else "/getPostsNew"
-    params = _identity(uid.strip(), username.strip(), nickname.strip())
+    params: Dict[str, object] = dict(_identity(uid.strip(), username.strip(), nickname.strip()))
     params["page"] = max(1, int(page))
     data = _get(path, params)
     posts = data.get("posts")
@@ -83,7 +83,7 @@ def fetch_level(uid: str, fname: str, username: str = "") -> Optional[Dict]:
     """查询已知吧等级；uid 必须是 tieba_uid。"""
     if not fname:
         return None
-    params = _identity(uid.strip(), username.strip())
+    params: Dict[str, object] = dict(_identity(uid.strip(), username.strip()))
     params["fname"] = fname
     data = _get("/getLevel", params)
     result = data.get("result")
