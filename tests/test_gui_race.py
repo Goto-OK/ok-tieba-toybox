@@ -62,6 +62,24 @@ def test_login_result_text_for_first_time_and_existing(root_app):
     assert "不会重抓" in app._login_result_text("已读取完整 Cookie")
 
 
+def test_login_baidu_uses_current_method(root_app, monkeypatch):
+    _root, app = root_app
+    captured = {}
+    monkeypatch.setattr(tieba_gui.webview2, "available", lambda: True)
+    monkeypatch.setattr(
+        app,
+        "_auto_get_login",
+        lambda target, url="": captured.update(target=target, url=url),
+    )
+    app._set_mode("login")
+    app.login_method_var.set("bduss")
+    app._login_baidu()
+    assert captured["target"] == "bduss"
+    app.login_method_var.set("cookie")
+    app._login_baidu()
+    assert captured["target"] == "cookie"
+
+
 def test_fetch_body_has_mousewheel_scroll(root_app):
     _root, app = root_app
     assert app.fetch_body.bind("<MouseWheel>")

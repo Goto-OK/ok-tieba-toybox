@@ -4918,8 +4918,9 @@ class App:
         if self.mode_var.get() != "login":
             self._set_mode("login")
         self._set_login_fields_expanded(True)
-        self._start_webview_cookie_flow(
-            anonymous=False,
+        target = "bduss" if self.login_method_var.get() == "bduss" else "cookie"
+        self._auto_get_login(
+            target,
             url="https://passport.baidu.com/v2/?login",
         )
 
@@ -4972,7 +4973,7 @@ class App:
             target_url = (getattr(self, "_current_urls", []) or ["https://tieba.baidu.com/"])[0]
         self._start_webview_cookie_flow(anonymous=False, url=target_url)
 
-    def _auto_get_login(self, target: str) -> None:
+    def _auto_get_login(self, target: str, url: str = "") -> None:
         if self.mode_var.get() != "login":
             messagebox.showinfo("仅登录模式可用", "请先切换到登录模式。", parent=self.root)
             return
@@ -4996,11 +4997,12 @@ class App:
             default=messagebox.NO,
         ):
             return
-        url = (getattr(self, "_current_urls", []) or ["https://tieba.baidu.com/"])[0]
-        if not webview2.is_allowed_url(url):
-            url = "https://tieba.baidu.com/"
+        target_url = url or (getattr(self, "_current_urls", []) or ["https://tieba.baidu.com/"])[0]
+        if not webview2.is_allowed_url(target_url):
+            target_url = "https://tieba.baidu.com/"
         self._webview_running = True
         self.status_var.set("正在打开内置登录…")
+        url = target_url
         center = self._webview_center()
         persistent = bool(self.settings.get("webview_remember_login", False))
         target_value = target
