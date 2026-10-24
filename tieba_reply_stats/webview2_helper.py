@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import ctypes
 import json
+import os
 import sys
 import threading
 import time
@@ -56,11 +57,104 @@ def _close_window() -> None:
         user32.PostMessageW(outer, 0x0010, 0, 0)  # WM_CLOSE
 
 
+def _install_clr_loader_path_workaround() -> None:
+    """让 pythonnet 从纯 ASCII 路径加载 Python.Runtime.dll。
+
+    .NET Framework 在部分系统上无法从中文路径加载该程序集；这既不是
+    Python 编码问题，也不能靠改 UTF-8/GBK 彻底解决。这里只复制运行时
+    程序集到 ASCII 临时目录，不改第三方包。
+    """
+    try:
+        import shutil
+        from pathlib import Path
+
+        import clr_loader.netfx as netfx
+
+        cache_root = Path(os.environ.get("PUBLIC", r"C:\Users\Public")) / "TiebaReplyStats"
+        cache_dir = cache_root / "webview2-clr"
+        cache_dir.mkdir(parents=True, exist_ok=True)
+        if getattr(netfx.NetFx._get_callable, "_tieba_patched", False):
+            return
+
+        def _ascii_assembly_path(assembly_path) -> Path:
+            source = Path(assembly_path)
+            try:
+                for item in source.parent.iterdir():
+                    if not item.is_file():
+                        continue
+                    target = cache_dir / item.name
+                    if not target.exists():
+                        shutil.copy2(item, target)
+                return cache_dir / source.name
+            except OSError:
+                return source
+
+        def _get_callable(self, assembly_path, typename: str, function: str):
+            load_path = _ascii_assembly_path(assembly_path)
+            func = netfx._FW.pyclr_get_function(
+                self._domain,
+                str(load_path).encode("utf-8"),
+                typename.encode("utf-8"),
+                function.encode("utf-8"),
+            )
+            if func == netfx.ffi.NULL:
+                raise RuntimeError(
+                    f"Failed to resolve {typename}.{function} from {load_path}"
+                )
+            return func
+
+        _get_callable._tieba_patched = True  # type: ignore[attr-defined]
+        netfx.NetFx._get_callable = _get_callable  # type: ignore[method-assign]
+
+        import webview.util as webview_util
+
+        source_lib = Path(webview_util.__file__).parent / "lib"
+        ascii_lib = cache_root / "webview2-lib"
+        ascii_lib.mkdir(parents=True, exist_ok=True)
+        for item in source_lib.rglob("*"):
+            if not item.is_file():
+                continue
+            target = ascii_lib / item.relative_to(source_lib)
+            target.parent.mkdir(parents=True, exist_ok=True)
+            if not target.exists():
+                shutil.copy2(item, target)
+
+        def _interop_dll_path(dll_name: str) -> str:
+            if dll_name == "WebBrowserInterop.dll":
+                dll_name = (
+                    "WebBrowserInterop.x64.dll"
+                    if ctypes.sizeof(ctypes.c_void_p) == 8
+                    else "WebBrowserInterop.x86.dll"
+                )
+            return str(ascii_lib / dll_name)
+
+        webview_util.interop_dll_path = _interop_dll_path
+    except Exception:  # noqa: BLE001
+        pass
+
+
+def _trace(text: str) -> None:
+    try:
+        import tempfile
+        from pathlib import Path
+
+        path = Path(tempfile.gettempdir()) / "tieba_helper_trace.log"
+        with path.open("a", encoding="utf-8") as handle:
+            handle.write(text + "\n")
+    except OSError:
+        pass
+
+
 def main() -> int:
+    _trace(f"main args={sys.argv!r}")
     if len(sys.argv) < 2:
         return 2
     url = sys.argv[1]
+    _install_clr_loader_path_workaround()
+    _trace("patched")
     import webview
+
+    _trace("webview imported")
 
     width, height = 980, 760
     x, y = _center(width, height)
