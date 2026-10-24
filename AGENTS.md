@@ -75,6 +75,22 @@
 4. 涉及 UI/Emoji/DPI 的问题，优先源码复现，再打包确认；
 5. 测试记录写入 `docs/test-cases.md`。
 
+## 更新文档维护
+
+- 每次改代码后，在 `CHANGELOG.md` 的 `[未发布]` 下追加用户能看懂的条目；
+- 只写行为变化，不写 commit hash、函数名或内部重构；
+- 一个功能只写一条，合并重复项；
+- 版本发布时：
+  1. 更新 `tieba_reply_stats/version.py`；
+  2. 运行 `python scripts/write_version_info.py`；
+  3. 把 `[未发布]` 整理为 `[x.y.z] - YYYY-MM-DD（未打包/已打包）`；
+  4. 新建 `docs/release-notes-vx.y.z.md`；
+  5. 更新 `docs/status.md`；
+- `CHANGELOG.md` 只保留最近 2~3 个版本，旧版本移到 `docs/changelog-archive.md`；
+- 用户版更新说明写“用户会感知的变化”，技术版写接口/内部修复；
+- 纯规范改动不进入用户版更新说明，除非影响用户行为；
+- 未验证/未实现项必须写进“已知限制”，不得写成已完成。
+
 ## 常用检查
 
 ```bash
