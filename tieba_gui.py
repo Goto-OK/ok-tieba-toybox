@@ -281,6 +281,7 @@ class App:
         else:
             self.mode_var.set("guest")
         self._apply_mode_ui()
+        self._refresh_webview_status()
         self._apply_risk_ui()
         self._apply_proxy()
         self._restore_last_result()
