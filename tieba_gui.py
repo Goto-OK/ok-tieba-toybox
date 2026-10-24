@@ -6009,20 +6009,20 @@ class App:
 
         ttk.Button(
             win,
-            text="模拟游客验证码",
-            command=lambda: run(lambda: self._simulate_captcha(scenario="guest")),
+            text="模拟游客验证码（可继续操作）",
+            command=lambda: run(lambda: self._show_test_captcha_dialog("guest")),
             width=38,
         ).pack(fill="x", padx=16, pady=2)
         ttk.Button(
             win,
-            text="模拟登录：完整 Cookie",
-            command=lambda: run(lambda: self._simulate_captcha(scenario="cookie")),
+            text="模拟登录：完整 Cookie（可继续操作）",
+            command=lambda: run(lambda: self._show_test_captcha_dialog("cookie")),
             width=38,
         ).pack(fill="x", padx=16, pady=2)
         ttk.Button(
             win,
-            text="模拟登录：仅 BDUSS",
-            command=lambda: run(lambda: self._simulate_captcha(scenario="bduss")),
+            text="模拟登录：仅 BDUSS（可继续操作）",
+            command=lambda: run(lambda: self._show_test_captcha_dialog("bduss")),
             width=38,
         ).pack(fill="x", padx=16, pady=2)
         ttk.Button(
@@ -6051,6 +6051,89 @@ class App:
         win.geometry(f"{width}x{height}+{x}+{y}")
         win.lift()
         win.focus_force()
+
+    def _show_test_captcha_dialog(self, scenario: str) -> None:
+        """测试模式：展示真实按钮，用假 Cookie 走后续界面，不联网。"""
+        if scenario == "guest":
+            message = (
+                "当前是游客模式（测试）。\n"
+                "真实流程会读取匿名 Cookie，不读取 BDUSS/STOKEN。"
+            )
+            choices = [
+                ("模拟读取匿名 Cookie", "guest_embed"),
+                ("改用登录模式（完整 Cookie）", "login"),
+                ("停止本次", "stop"),
+            ]
+        elif scenario == "bduss":
+            cached = bool(getattr(self, "_full_cookie_cache", ""))
+            message = (
+                "本次实际只发送了 BDUSS（测试）。\n"
+                + ("有完整 Cookie 缓存，可改用。" if cached else "当前没有完整 Cookie 缓存。")
+            )
+            choices = [("模拟读取完整 Cookie", "full_embed")]
+            if cached:
+                choices.append(("改用已保存的完整 Cookie", "cached"))
+            choices.extend([("手动粘贴完整 Cookie", "manual"), ("停止本次", "stop")])
+        else:
+            message = (
+                "当前使用完整 Cookie（测试）。\n"
+                "真实流程会读取完整 Cookie，并检查 BDUSS/TIEBA_SID。"
+            )
+            choices = [
+                ("模拟读取完整 Cookie", "full_embed"),
+                ("手动粘贴完整 Cookie", "manual"),
+                ("停止本次", "stop"),
+            ]
+        choice = self._ask_choice("被安全验证拦截（测试模式）", message, choices)
+        if not choice or choice == "stop":
+            return
+        if choice == "login":
+            self._set_mode("login", persist=False)
+            self.login_method_var.set("cookie")
+            self._on_login_method_changed()
+            self._append_log("测试：已切到登录模式，未写设置。", "muted")
+            self.cookie_entry.focus_set()
+            return
+        if choice == "manual":
+            self._set_mode("login", persist=False)
+            self.login_method_var.set("cookie")
+            self._on_login_method_changed()
+            self.cookie_entry.focus_set()
+            self._append_log("测试：请手动粘贴完整 Cookie。", "muted")
+            return
+        if choice == "cached":
+            self._set_mode("login", persist=False)
+            self.login_method_var.set("cookie")
+            self.cookie_var.set(self._full_cookie_cache)
+            self._on_login_method_changed()
+            self.cookie_entry.focus_set()
+            self._append_log("测试：已改用缓存的完整 Cookie。", "muted")
+            return
+        self._set_mode("guest" if choice == "guest_embed" else "login", persist=False)
+        if choice == "guest_embed":
+            self._guest_cookie = {"BAIDUID": "TEST_GUEST"}
+            self._append_log("测试：已写入假匿名 Cookie，保持游客。", "muted")
+            messagebox.showinfo("测试结果", "已模拟匿名 Cookie；不会联网。", parent=self.root)
+            return
+        fake = {"BDUSS": "TEST_BDUSS", "TIEBA_SID": "TEST_TIEBA_SID", "STOKEN": "TEST_STOKEN"}
+        text = "; ".join(f"{key}={value}" for key, value in fake.items())
+        self._full_cookie_cache = text
+        if scenario == "bduss":
+            self.login_method_var.set("bduss")
+            self.bduss_var.set(fake["BDUSS"])
+            self.cookie_var.set(f"BDUSS={fake['BDUSS']}")
+        else:
+            self.login_method_var.set("cookie")
+            self.cookie_var.set(text)
+            self.bduss_var.set(fake["BDUSS"])
+        self._on_login_method_changed()
+        self._webview_cookie_session = False
+        self._append_log("测试：已写入假完整 Cookie，未联网、未写设置。", "muted")
+        messagebox.showinfo(
+            "测试结果",
+            "已模拟完整 Cookie。\n不会预检、不会联网、不会自动开始抓取。",
+            parent=self.root,
+        )
 
     def _simulate_captcha(self, _event=None, scenario: str = "") -> None:
         """隐藏测试入口：不发网络请求，只走验证码处理流程。"""
