@@ -1927,6 +1927,11 @@ class App:
             finally:
                 self._person_popup.grab_release()
 
+    def _login_result_text(self, action: str) -> str:
+        if getattr(self, "last_threads", None):
+            return f"{action}。重新开始统计时，已完成的帖子不会重抓。"
+        return f"{action}。请回到抓取页，粘贴帖子链接后点「开始统计」。"
+
     def _offer_retry_incomplete(self, source: str) -> None:
         targets = [
             thread
@@ -11105,10 +11110,11 @@ class App:
                 self.cookie_var.set(self._full_cookie_cache)
                 self._on_login_method_changed()
                 self.cookie_entry.focus_set()
+                self.status_var.set("登录信息已就绪")
                 self._append_log("已改用缓存的完整 Cookie，请重新开始。", "ok")
                 messagebox.showinfo(
                     "已切换完整 Cookie",
-                    "已改用之前保存的完整 Cookie。请重新开始统计。",
+                    self._login_result_text("已改用之前保存的完整 Cookie"),
                     parent=self.root,
                 )
                 self._refresh_log_summary()
@@ -11178,6 +11184,7 @@ class App:
             _, cookies, error, warning = message
             self._webview_running = False
             if error or not cookies:
+                self.status_var.set("内置验证失败")
                 self._append_log(f"内置验证窗口失败：{error or '没有可用 Cookie'}", "err")
                 messagebox.showwarning(
                     "内置验证未完成",
@@ -11189,11 +11196,12 @@ class App:
                 return
             if self.mode_var.get() == "guest":
                 self._guest_cookie = dict(cookies)
+                self.status_var.set("游客验证会话已就绪")
                 self._append_log("已获取匿名验证会话，保持游客模式。", "ok")
                 messagebox.showinfo(
                     "游客验证会话已获取",
                     "已读取匿名 Cookie，未读取 BDUSS/STOKEN。\n"
-                    "模式仍为游客。请重新开始统计，已完成的帖子不会重抓。",
+                    + self._login_result_text("模式仍为游客"),
                     parent=self.root,
                 )
             else:
@@ -11218,10 +11226,11 @@ class App:
                 self.login_method_var.set("cookie")
                 self._on_login_method_changed()
                 self.cookie_entry.focus_set()
+                self.status_var.set("登录信息已就绪")
                 self._append_log("已从内置验证窗口读取完整 Cookie。", "ok")
                 messagebox.showinfo(
                     "验证完成",
-                    "已读取完整 Cookie。请重新开始统计，已完成的帖子不会重抓。",
+                    self._login_result_text("已读取完整 Cookie"),
                     parent=self.root,
                 )
                 if warning:
@@ -11275,7 +11284,7 @@ class App:
                 self._append_log("已自动获取 BDUSS。", "ok")
                 messagebox.showinfo(
                     "BDUSS 已获取",
-                    "已从内置登录提取 BDUSS。请重新开始统计。",
+                    self._login_result_text("已从内置登录提取 BDUSS"),
                     parent=self.root,
                 )
             else:
@@ -11287,7 +11296,7 @@ class App:
                 self._append_log("已自动获取完整 Cookie。", "ok")
                 messagebox.showinfo(
                     "完整 Cookie 已获取",
-                    "已从内置登录读取完整 Cookie。请重新开始统计。",
+                    self._login_result_text("已从内置登录读取完整 Cookie"),
                     parent=self.root,
                 )
             self.status_var.set(

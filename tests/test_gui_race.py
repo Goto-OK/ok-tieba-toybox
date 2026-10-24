@@ -54,6 +54,14 @@ def test_login_cookie_enables_follow_detection(root_app):
     assert str(app.follow_enhance_check.cget("state")) == "normal"
 
 
+def test_login_result_text_for_first_time_and_existing(root_app):
+    _root, app = root_app
+    app.last_threads = []
+    assert "开始统计" in app._login_result_text("已读取完整 Cookie")
+    app.last_threads = [object()]
+    assert "不会重抓" in app._login_result_text("已读取完整 Cookie")
+
+
 def test_offline_checks_have_no_failures(root_app):
     _root, app = root_app
     results = app._offline_checks()
