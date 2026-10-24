@@ -6666,18 +6666,19 @@ class App:
                     font=("Microsoft YaHei UI", 9, "bold"),
                 ).pack(side="right", padx=(8, 0))
             else:
-                ttk.Button(buttons, text=label, command=command(value), width=12).pack(
+                ttk.Button(buttons, text=label, command=command(value)).pack(
                     side="right", padx=(8, 0)
                 )
         win.bind("<Return>", lambda _event: finish(choices[default][1]))
         win.bind("<Escape>", lambda _event: finish(None))
         win.protocol("WM_DELETE_WINDOW", lambda: finish(None))
         win.update_idletasks()
-        width, height = win.winfo_reqwidth(), win.winfo_reqheight()
+        width = max(win.winfo_reqwidth(), buttons.winfo_reqwidth() + 40)
+        height = win.winfo_reqheight()
         x = self.root.winfo_rootx() + max(0, (self.root.winfo_width() - width) // 2)
         y = self.root.winfo_rooty() + max(0, (self.root.winfo_height() - height) // 2)
         self._theme_widget_tree(win)
-        win.geometry(f"+{x}+{y}")
+        win.geometry(f"{width}x{height}+{x}+{y}")
         self.root.wait_window(win)
         if getattr(self, "_active_choice_window", None) is win:
             self._active_choice_window = None
