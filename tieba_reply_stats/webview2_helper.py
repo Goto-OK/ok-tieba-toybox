@@ -75,6 +75,12 @@ def main() -> int:
             except ValueError:
                 pass
 
+    profile_dir = ""
+    for index, value in enumerate(sys.argv):
+        if value == "--profile-dir" and index + 1 < len(sys.argv):
+            profile_dir = sys.argv[index + 1]
+    require_login = "--require-login" in sys.argv
+
     window = webview.create_window(
         TITLE,
         url,
@@ -130,18 +136,25 @@ def main() -> int:
                     state["normal_since"] = time.monotonic()
                 stable = time.monotonic() - state["normal_since"]
                 if stable >= 0.5 and (state["captcha_seen"] or time.monotonic() - started >= 2.0):
-                    state["auto"] = True
                     capture_cookies()
+                    if require_login and not any(
+                        str(item.get("name") or "").upper() == "BDUSS"
+                        for item in cookies
+                        if isinstance(item, dict)
+                    ):
+                        state["normal_since"] = 0.0
+                        continue
+                    state["auto"] = True
                     _close_window()
                     return
-            if time.monotonic() - started >= 30.0:
+            if time.monotonic() - started >= (300.0 if require_login else 30.0):
                 capture_cookies()
                 _close_window()
                 return
 
     window.events.closed += on_closed
     threading.Thread(target=monitor, daemon=True).start()
-    webview.start(private_mode=True)
+    webview.start(private_mode=not profile_dir, storage_path=profile_dir or None)
     print(
         "__TIEBA_COOKIES__"
         + json.dumps({"cookies": cookies, "auto": state["auto"]}, ensure_ascii=False)

@@ -9,9 +9,11 @@ from __future__ import annotations
 import importlib.util
 import json
 import os
+import shutil
 import subprocess
 import sys
 import winreg
+from pathlib import Path
 
 
 def _runtime_installed() -> bool:
@@ -43,6 +45,26 @@ def available() -> bool:
     return _runtime_installed()
 
 
+def login_profile_dir() -> str:
+    base = os.environ.get("LOCALAPPDATA") or os.environ.get("APPDATA") or str(Path.home())
+    return str(Path(base) / "TiebaReplyStats" / "webview2-login")
+
+
+def login_profile_exists() -> bool:
+    return os.path.isdir(login_profile_dir())
+
+
+def clear_login_profile() -> bool:
+    path = login_profile_dir()
+    if not os.path.isdir(path):
+        return True
+    try:
+        shutil.rmtree(path)
+        return True
+    except OSError:
+        return False
+
+
 def filter_cookies(cookies, anonymous: bool) -> dict[str, str]:
     result: dict[str, str] = {}
     for item in cookies or []:
@@ -60,7 +82,14 @@ def filter_cookies(cookies, anonymous: bool) -> dict[str, str]:
     return result
 
 
-def _run_window(url: str, timeout: int = 600, center=None, read_cookies: bool = True):
+def _run_window(
+    url: str,
+    timeout: int = 600,
+    center=None,
+    read_cookies: bool = True,
+    persistent: bool = False,
+    require_login: bool = False,
+):
     if not available():
         raise RuntimeError("WebView2 不可用")
     extra = []
@@ -68,6 +97,11 @@ def _run_window(url: str, timeout: int = 600, center=None, read_cookies: bool = 
         extra = ["--x", str(int(center[0])), "--y", str(int(center[1]))]
     if not read_cookies:
         extra.append("--no-cookie")
+    if require_login:
+        extra.append("--require-login")
+    if persistent:
+        Path(login_profile_dir()).mkdir(parents=True, exist_ok=True)
+        extra.extend(["--profile-dir", login_profile_dir()])
     if getattr(sys, "frozen", False):
         command = [sys.executable, "--webview2-verify", url, *extra]
     else:
@@ -92,9 +126,21 @@ def open_window(url: str, timeout: int = 600, center=None) -> None:
     _run_window(url, timeout=timeout, center=center, read_cookies=False)
 
 
-def open_verification(url: str, timeout: int = 600, center=None):
+def open_verification(
+    url: str,
+    timeout: int = 600,
+    center=None,
+    persistent: bool = False,
+    require_login: bool = False,
+):
     """真实验证码窗口；返回 WebView2 Cookie 列表，由调用方按权限过滤。"""
-    completed = _run_window(url, timeout=timeout, center=center)
+    completed = _run_window(
+        url,
+        timeout=timeout,
+        center=center,
+        persistent=persistent,
+        require_login=require_login,
+    )
     marker = "__TIEBA_COOKIES__"
     for line in completed.stdout.splitlines():
         if line.startswith(marker):

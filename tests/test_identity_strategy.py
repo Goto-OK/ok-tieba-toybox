@@ -1,3 +1,5 @@
+import os
+
 import pytest
 
 from tieba_reply_stats import page_pb, profile_pb, settings, webview2
@@ -177,6 +179,17 @@ def test_filter_uses_dash_for_failed_tieba_uid():
     assert filter_users(users, keyword="待补充", field="贴吧ID") == [users[1]]
 
 
+def test_webview2_login_profile_can_be_cleared(tmp_path, monkeypatch):
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
+    path = webview2.login_profile_dir()
+    assert path.startswith(str(tmp_path))
+    assert webview2.clear_login_profile() is True
+    os.makedirs(path)
+    assert webview2.login_profile_exists() is True
+    assert webview2.clear_login_profile() is True
+    assert webview2.login_profile_exists() is False
+
+
 def test_webview2_guest_cookie_filter_drops_login_tokens():
     raw = [
         {"name": "BAIDUID", "value": "a", "domain": ".baidu.com"},
@@ -190,6 +203,10 @@ def test_webview2_guest_cookie_filter_drops_login_tokens():
         "BDUSS": "b",
         "STOKEN": "c",
     }
+
+
+def test_webview_login_is_opt_in():
+    assert settings.DEFAULTS["webview_remember_login"] is False
 
 
 def test_identity_defaults():

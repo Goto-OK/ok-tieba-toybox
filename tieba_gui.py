@@ -262,7 +262,7 @@ class App:
         self.root.after(120, self._poll_queue)
         self.root.protocol("WM_DELETE_WINDOW", self._on_close)
         self.root.bind("<F1>", lambda _event: self._open_usage_window())
-        self.root.bind("<Control-Shift-C>", self._simulate_captcha)
+        self.root.bind("<Control-Shift-C>", self._show_test_center)
         self.root.bind("<Escape>", self._on_escape)
 
         saved = load_cookie()
@@ -3823,6 +3823,8 @@ class App:
             self.settings["mode"] = mode
             save_settings(self.settings)
         self._apply_mode_ui()
+        if hasattr(self, "_refresh_webview_status"):
+            self._refresh_webview_status()
 
     def _make_scrollable_settings_page(self, parent) -> tuple:
         outer = tk.Frame(parent, bg="#eef1f5")
@@ -4406,12 +4408,14 @@ class App:
         inner.pack(side="left", fill="both", expand=True)
         self.settings_inner = inner
         self.tab_general_page, self.tab_general = self._make_scrollable_settings_page(inner)
+        self.tab_login_page, self.tab_login = self._make_scrollable_settings_page(inner)
         self.tab_appearance_page, self.tab_appearance = self._make_scrollable_settings_page(inner)
         self.tab_blacklist_page, self.tab_blacklist = self._make_scrollable_settings_page(inner)
         self.tab_storage_page, self.tab_storage = self._make_scrollable_settings_page(inner)
         self.tab_about_page, self.tab_about = self._make_scrollable_settings_page(inner)
         self.settings_pages = [
             self.tab_general_page,
+            self.tab_login_page,
             self.tab_appearance_page,
             self.tab_blacklist_page,
             self.tab_storage_page,
@@ -4424,10 +4428,11 @@ class App:
             for page in self.settings_pages
         }
         self._build_general_tab()
+        self._build_login_tab()
         self._build_appearance_tab()
         self._build_storage_tab()
         self._build_about_tab()
-        for label in ("常规", "外观", "本地标记", "结果与存储", "关于 / 帮助"):
+        for label in ("常规", "登录与验证", "外观", "本地标记", "结果与存储", "关于 / 帮助"):
             self.settings_nav.insert("end", f"  {label}")
         self.settings_nav.bind("<<ListboxSelect>>", self._on_settings_nav)
         self.settings_nav.selection_set(0)
@@ -4466,6 +4471,7 @@ class App:
         self.settings_hint.pack(side="left", padx=(10, 0))
         for page, body in (
             (self.tab_general_page, self.tab_general),
+            (self.tab_login_page, self.tab_login),
             (self.tab_appearance_page, self.tab_appearance),
             (self.tab_blacklist_page, self.tab_blacklist),
             (self.tab_storage_page, self.tab_storage),
@@ -4479,7 +4485,7 @@ class App:
                 page.pack(fill="both", expand=True)
             else:
                 page.pack_forget()
-        self._set_cache_stats_timer(index == 3)
+        self._set_cache_stats_timer(index == 4)
 
     def _on_settings_start_changed(self) -> None:
         self.settings["settings_start"] = "last" if self.settings_start_var.get() == "上次分类" else "general"
@@ -4509,13 +4515,207 @@ class App:
 
     def _show_local_marks_page(self) -> None:
         self.settings_nav.selection_clear(0, "end")
-        self.settings_nav.selection_set(2)
-        self._last_settings_index = 2
-        self._show_settings_page(2)
+        self.settings_nav.selection_set(3)
+        self._last_settings_index = 3
+        self._show_settings_page(3)
         editor = self.blacklist_editors.get("safe")
         if editor is not None:
             editor.focus_set()
             editor.see("1.0")
+
+    def _build_login_tab(self) -> None:
+        box = tk.Frame(self.tab_login, bg="#eef1f5", padx=14, pady=10)
+        box.pack(fill="both", expand=True)
+
+        status_box = ttk.LabelFrame(box, text=" 内置登录 ")
+        status_box.pack(fill="x", pady=(0, 6))
+        self.webview_status_var = tk.StringVar(value="")
+        tk.Label(
+            status_box,
+            textvariable=self.webview_status_var,
+            justify="left",
+            anchor="w",
+            bg="#eef1f5",
+            fg="#334155",
+            font=("Microsoft YaHei UI", 9),
+            wraplength=720,
+        ).pack(fill="x", padx=8, pady=(6, 4))
+        button_row = tk.Frame(status_box, bg="#eef1f5")
+        button_row.pack(fill="x", padx=8, pady=(0, 4))
+        self.webview_open_btn = ttk.Button(
+            button_row,
+            text="打开内置登录",
+            command=self._open_internal_login,
+            width=18,
+        )
+        self.webview_open_btn.pack(side="left")
+        self.webview_clear_btn = ttk.Button(
+            button_row,
+            text="清除 WebView2 保存的登录",
+            command=self._clear_internal_login,
+            width=26,
+        )
+        self.webview_clear_btn.pack(side="left", padx=(8, 0))
+        self.webview_remember_var = tk.BooleanVar(
+            value=bool(self.settings.get("webview_remember_login", False))
+        )
+        ttk.Checkbutton(
+            status_box,
+            text="记住内置登录（本机）",
+            variable=self.webview_remember_var,
+            command=self._on_webview_remember_changed,
+        ).pack(anchor="w", padx=8, pady=(2, 0))
+        tk.Label(
+            status_box,
+            text="只影响本软件的 WebView2，不影响系统浏览器；共享电脑不要开启。",
+            bg="#eef1f5",
+            fg="#8a94a6",
+            font=("Microsoft YaHei UI", 8),
+        ).pack(anchor="w", padx=28, pady=(0, 6))
+
+        enhance_box = ttk.LabelFrame(box, text=" 抓取增强（可选） ")
+        enhance_box.pack(fill="x", pady=(0, 6))
+        self.follow_enhance_var = tk.BooleanVar(value=bool(self.settings.get("follow_enhance", False)))
+        ttk.Checkbutton(
+            enhance_box,
+            text="启用公开关注 / 隐藏关注检测（需要登录）",
+            variable=self.follow_enhance_var,
+            command=self._on_follow_toggle,
+        ).pack(anchor="w")
+        tk.Label(
+            enhance_box,
+            text="默认关闭；开启后红绿灯可选“包含关注（慢）”。",
+            bg="#eef1f5",
+            fg="#8a94a6",
+            font=("Microsoft YaHei UI", 8),
+        ).pack(anchor="w", padx=20, pady=(2, 0))
+        mode_row = tk.Frame(enhance_box, bg="#eef1f5")
+        mode_row.pack(anchor="w", padx=20, pady=(4, 0))
+        tk.Label(mode_row, text="关注加载：", bg="#eef1f5", fg="#475569").pack(side="left")
+        self.follow_load_mode_var = tk.StringVar(
+            value="手动" if self.settings.get("follow_load_mode") == "manual" else "自动"
+        )
+        ttk.Combobox(
+            mode_row,
+            values=("自动", "手动"),
+            textvariable=self.follow_load_mode_var,
+            width=6,
+            state="readonly",
+        ).pack(side="left")
+        self.follow_load_mode_var.trace_add("write", lambda *_: self._on_follow_load_mode_changed())
+
+        note_box = ttk.LabelFrame(box, text=" 说明 ")
+        note_box.pack(fill="x", pady=(0, 6))
+        tk.Label(
+            note_box,
+            text="游客的匿名 Cookie 只在内存中，不写入本机。\n"
+            "登录模式开启“记住内置登录”后，WebView2 登录态才会写入本机独立目录。\n"
+            "清除内置登录只影响本软件，不影响系统浏览器。",
+            justify="left",
+            anchor="w",
+            bg="#eef1f5",
+            fg="#475569",
+            font=("Microsoft YaHei UI", 8),
+            wraplength=720,
+        ).pack(fill="x", padx=8, pady=6)
+        self.mode_var.trace_add("write", lambda *_: self._refresh_webview_status())
+        self._refresh_webview_status()
+
+    def _refresh_webview_status(self) -> None:
+        if not hasattr(self, "webview_status_var"):
+            return
+        mode = "游客" if self.mode_var.get() == "guest" else "登录"
+        available = webview2.available()
+        if not available:
+            login_state = "WebView2 不可用"
+        elif webview2.login_profile_exists():
+            login_state = "已保存本机登录态"
+        else:
+            login_state = "未保存本机登录态"
+        self.webview_status_var.set(
+            f"当前模式：{mode}\n内置登录：{login_state}\n"
+            "打开内置登录仅在登录模式可用；游客验证码仍可临时读取匿名 Cookie。"
+        )
+        can_open = available and self.mode_var.get() == "login" and not self._network_task_active()
+        if hasattr(self, "webview_open_btn"):
+            self.webview_open_btn.configure(state="normal" if can_open else "disabled")
+        if hasattr(self, "webview_clear_btn"):
+            can_clear = available and not self._network_task_active()
+            self.webview_clear_btn.configure(state="normal" if can_clear else "disabled")
+
+    def _on_webview_remember_changed(self) -> None:
+        enabled = bool(self.webview_remember_var.get())
+        if not enabled and webview2.login_profile_exists():
+            if messagebox.askyesno(
+                "关闭记住内置登录",
+                "关闭后不会自动复用已保存的登录态。\n是否现在一并清除 WebView2 登录？",
+                parent=self.root,
+                default=messagebox.NO,
+            ):
+                if not webview2.clear_login_profile():
+                    messagebox.showwarning(
+                        "暂未清除",
+                        "WebView2 登录目录可能正在使用，请稍后手动清除。",
+                        parent=self.root,
+                    )
+                    enabled = True
+                    self.webview_remember_var.set(True)
+            else:
+                enabled = True
+                self.webview_remember_var.set(True)
+        self.settings["webview_remember_login"] = enabled
+        save_settings(self.settings)
+        self._refresh_webview_status()
+
+    def _open_internal_login(self) -> None:
+        if self.mode_var.get() != "login":
+            messagebox.showinfo(
+                "仅登录模式可用",
+                "请先在抓取页切换到登录模式，或从游客验证码选择改用登录。",
+                parent=self.root,
+            )
+            return
+        if not webview2.available():
+            messagebox.showwarning(
+                "WebView2 不可用",
+                "未检测到 WebView2 Runtime，请改用手动完整 Cookie。",
+                parent=self.root,
+            )
+            return
+        self._start_webview_cookie_flow(anonymous=False)
+
+    def _clear_internal_login(self) -> None:
+        if self._network_task_active() or getattr(self, "_webview_running", False):
+            messagebox.showinfo("请稍后", "抓取、补全或内置窗口进行中，暂时不能清除内置登录。", parent=self.root)
+            return
+        choice = self._ask_choice(
+            "清除 WebView2 保存的登录",
+            "只清除内置 WebView2 的百度登录态。\n"
+            "当前 Cookie 输入框和缓存是否一并清除，请选择。",
+            [
+                ("只清除 WebView2 登录态", "webview"),
+                ("同时清除当前登录信息", "all"),
+                ("取消", "cancel"),
+            ],
+            default=0,
+        )
+        if not choice or choice == "cancel":
+            return
+        if not webview2.clear_login_profile():
+            messagebox.showerror(
+                "清除失败",
+                "WebView2 登录目录可能正在使用。请关闭内置窗口和本软件后重试。",
+                parent=self.root,
+            )
+            return
+        if choice == "all":
+            self._clear_cookie()
+            self._guest_cookie = {}
+            self.cookie_var.set("")
+            self.bduss_var.set("")
+            self._full_cookie_cache = ""
+        self._append_log("已清除 WebView2 保存的登录。", "ok")
+        self._refresh_webview_status()
 
     def _build_appearance_tab(self) -> None:
         box = tk.Frame(self.tab_appearance, bg="#eef1f5", padx=14, pady=10)
@@ -5610,6 +5810,60 @@ class App:
         except tk.TclError:
             return 0, 0
 
+    def _show_test_center(self, _event=None) -> None:
+        if self._network_task_active() or getattr(self, "_active_choice_window", None):
+            return
+        win = tk.Toplevel(self.root)
+        win.title("测试中心")
+        win.configure(bg="#eef1f5")
+        win.resizable(False, False)
+        win.transient(self.root)
+        win.grab_set()
+        tk.Label(
+            win,
+            text="测试中心（不会写设置、不会覆盖结果）",
+            bg="#eef1f5",
+            fg="#1f2937",
+            font=("Microsoft YaHei UI", 11, "bold"),
+        ).pack(anchor="w", padx=16, pady=(14, 4))
+        tk.Label(
+            win,
+            text="真实百度验证码无法自动触发；模拟测试不联网。",
+            bg="#eef1f5",
+            fg="#64748b",
+            font=("Microsoft YaHei UI", 8),
+        ).pack(anchor="w", padx=16, pady=(0, 10))
+
+        def run(action) -> None:
+            win.grab_release()
+            win.destroy()
+            action()
+
+        ttk.Button(
+            win,
+            text="模拟验证码（离线，不读取 Cookie）",
+            command=lambda: run(self._simulate_captcha),
+            width=38,
+        ).pack(fill="x", padx=16, pady=2)
+        ttk.Button(
+            win,
+            text="测试内置验证窗口（不读取 Cookie）",
+            command=lambda: run(self._test_embedded_verification),
+            width=38,
+        ).pack(fill="x", padx=16, pady=2)
+        ttk.Button(
+            win,
+            text="打开内置登录（仅登录模式）",
+            command=lambda: run(self._open_internal_login),
+            width=38,
+        ).pack(fill="x", padx=16, pady=2)
+        ttk.Button(
+            win,
+            text="关闭",
+            command=win.destroy,
+            width=38,
+        ).pack(fill="x", padx=16, pady=(10, 14))
+
     def _simulate_captcha(self, _event=None) -> None:
         """隐藏测试入口：不发网络请求，只走验证码处理流程。"""
         if self._network_task_active() or getattr(self, "_active_choice_window", None):
@@ -5620,7 +5874,11 @@ class App:
         self.root.after(
             20,
             lambda: self._handle_message(
-                ("captcha", "模拟验证码：未发出网络请求，仅用于测试界面流程。")
+                (
+                    "captcha",
+                    "模拟验证码：未发出网络请求，仅用于测试界面流程。",
+                    [],
+                )
             ),
         )
 
@@ -5630,10 +5888,17 @@ class App:
             if anonymous
             else "读取完整 Cookie，可能包含 BDUSS/STOKEN"
         )
+        storage = (
+            "Cookie 只在内存中使用，不写日志、不导出。"
+            if anonymous
+            else "Cookie 默认只在内存中使用；若开启“记住内置登录”，"
+            "WebView2 登录态会写入本机独立目录。"
+        )
         if not messagebox.askyesno(
             "读取验证 Cookie？",
             "内置验证完成后，软件将" + scope + "。\n"
-            "Cookie 只在内存中使用，不写日志、不导出。\n\n继续？",
+            + storage
+            + "\n\n继续？",
             parent=self.root,
             default=messagebox.NO,
         ):
@@ -5646,7 +5911,13 @@ class App:
 
         def worker():
             try:
-                result = webview2.open_verification(url, center=center)
+                result = webview2.open_verification(
+                    url,
+                    center=center,
+                    persistent=(not anonymous)
+                    and bool(self.settings.get("webview_remember_login", False)),
+                    require_login=not anonymous,
+                )
                 raw_cookies = result.get("cookies") if isinstance(result, dict) else result
                 cookies = webview2.filter_cookies(raw_cookies, anonymous=anonymous)
                 if not cookies:
@@ -5959,6 +6230,10 @@ class App:
             self.follow_load_mode_var.set(
                 "手动" if settings.get("follow_load_mode") == "manual" else "自动"
             )
+        if hasattr(self, "webview_remember_var"):
+            self.webview_remember_var.set(bool(settings.get("webview_remember_login", False)))
+        if hasattr(self, "_refresh_webview_status"):
+            self._refresh_webview_status()
         if hasattr(self, "auto_refresh_var"):
             self.auto_refresh_var.set(bool(settings.get("auto_refresh_old", False)))
         if hasattr(self, "identity_strategy_var"):
@@ -6062,9 +6337,11 @@ class App:
             return
         keep_onboarding = bool(self.settings.get("onboarding_seen"))
         keep_geometry = self.settings.get("window_geometry", "")
+        keep_webview_remember = bool(self.settings.get("webview_remember_login", False))
         self.settings = load_settings()
         self.settings["onboarding_seen"] = keep_onboarding
         self.settings["window_geometry"] = keep_geometry
+        self.settings["webview_remember_login"] = keep_webview_remember
         save_settings(self.settings)
         self._apply_settings_to_ui()
         self._append_log("设置已恢复默认（结果、标记、BDUSS 保留）。", "muted")
@@ -6072,12 +6349,24 @@ class App:
     def _clear_all_data(self) -> None:
         if not messagebox.askyesno(
             "清空软件数据（不会删除导出文件）",
-            "会删除：最近结果、保存的 BDUSS、本地标记、设置、临时文件、日志。\n"
-            "不会删除：导出的 Excel、Markdown 或你保存到其他位置的文件。\n\n继续？",
+            "会删除：最近结果、保存的 BDUSS、本地标记、设置、临时文件、日志、"
+            "内置 WebView2 登录态。\n"
+            "不会删除：导出的 Excel、Markdown、你保存到其他位置的文件，"
+            "以及系统浏览器里的百度登录。\n\n继续？",
             parent=self.root,
         ):
             return
+        if self._network_task_active() or getattr(self, "_webview_running", False):
+            messagebox.showinfo("请稍后", "抓取、补全或内置窗口进行中，暂时不能清空。", parent=self.root)
+            return
         if simpledialog.askstring("确认清空", "输入“清空”后继续：", parent=self.root) != "清空":
+            return
+        if not webview2.clear_login_profile():
+            messagebox.showerror(
+                "清空失败",
+                "WebView2 登录目录正在使用，无法删除。请关闭内置窗口后重试。",
+                parent=self.root,
+            )
             return
         clear_stored_result()
         clear_post_cache()
@@ -6105,12 +6394,17 @@ class App:
         self.last_threads = []
         self.last_output = None
         self.cookie_var.set("")
+        self.bduss_var.set("")
+        self._guest_cookie = {}
+        self._full_cookie_cache = ""
+        self._webview_cookie_session = False
         self._last_lookup_profile = None
         self._profile_user = None
         self._profile_data = None
         self._lookup_cache.clear()
         self._profile_cache.clear()
         self._apply_settings_to_ui()
+        self._refresh_webview_status()
         self._set_lookup_text("软件数据已清空。")
         self.open_btn.configure(state="disabled")
         for key, editor in getattr(self, "blacklist_editors", {}).items():
@@ -6141,37 +6435,6 @@ class App:
             fg="#8a94a6",
             font=("Microsoft YaHei UI", 8),
         ).pack(anchor="w", padx=20, pady=(2, 0))
-
-        enhance_box = ttk.LabelFrame(box, text=" 抓取增强（可选） ")
-        enhance_box.pack(fill="x", pady=(0, 6))
-        self.follow_enhance_var = tk.BooleanVar(value=bool(self.settings.get("follow_enhance", False)))
-        ttk.Checkbutton(
-            enhance_box,
-            text="启用公开关注 / 隐藏关注检测（需要 BDUSS）",
-            variable=self.follow_enhance_var,
-            command=self._on_follow_toggle,
-        ).pack(anchor="w")
-        tk.Label(
-            enhance_box,
-            text="默认关闭；开启后红绿灯可选“包含关注（慢）”。",
-            bg="#eef1f5",
-            fg="#8a94a6",
-            font=("Microsoft YaHei UI", 8),
-        ).pack(anchor="w", padx=20, pady=(2, 0))
-        mode_row = tk.Frame(enhance_box, bg="#eef1f5")
-        mode_row.pack(anchor="w", padx=20, pady=(4, 0))
-        tk.Label(mode_row, text="关注加载：", bg="#eef1f5", fg="#475569").pack(side="left")
-        self.follow_load_mode_var = tk.StringVar(
-            value="手动" if self.settings.get("follow_load_mode") == "manual" else "自动"
-        )
-        ttk.Combobox(
-            mode_row,
-            values=("自动", "手动"),
-            textvariable=self.follow_load_mode_var,
-            width=6,
-            state="readonly",
-        ).pack(side="left")
-        self.follow_load_mode_var.trace_add("write", lambda *_: self._on_follow_load_mode_changed())
 
         fetch_box = ttk.LabelFrame(box, text=" 抓取行为 ")
         fetch_box.pack(fill="x", pady=(0, 6))
@@ -6372,9 +6635,9 @@ class App:
             font=("Microsoft YaHei UI", 9),
         )
         self.general_hint.pack(anchor="w", pady=(10, 0))
-        for block in (risk_box, color_box, fetch_box, enhance_box, ui_box, default_box, backup_box):
+        for block in (risk_box, color_box, fetch_box, ui_box, default_box, backup_box):
             block.pack_forget()
-        for block in (risk_box, color_box, fetch_box, enhance_box, ui_box, default_box, backup_box):
+        for block in (risk_box, color_box, fetch_box, ui_box, default_box, backup_box):
             block.pack(fill="x", pady=(0, 6), before=self.general_hint)
 
     def _apply_proxy(self) -> None:
@@ -9881,7 +10144,14 @@ class App:
                 self._post(("done", None, len(final_threads), list(final_threads), dict(timings)))
         except CaptchaError as error:
             self._write_log("error", error="CaptchaError")
-            self._post(("captcha", str(error)))
+            partial = []
+            if completed:
+                by_tid = {str(thread.meta.tid): thread for thread in (base_threads or [])}
+                for thread in completed:
+                    by_tid[str(thread.meta.tid)] = thread
+                partial = list(by_tid.values())
+                self._persist_result(partial)
+            self._post(("captcha", str(error), list(partial)))
         except RateLimitError as error:
             self._write_log("error", error="RateLimitError")
             self._post(("rate_limit", str(error), float(error.retry_after or 0)))
@@ -10233,7 +10503,16 @@ class App:
             self._append_log("\n已停止，没有生成文件。", "err")
             self._refresh_log_summary()
         elif kind == "captcha":
-            _, detail = message
+            _, detail, partial = message
+            if partial:
+                self.last_threads = self._merge_threads(partial)
+                self._persist_result(self.last_threads)
+                self._refresh_people()
+                self._refresh_grid()
+                self._append_log(
+                    f"验证码中断：已保留 {len(self.last_threads)} 个已完成帖子。",
+                    "warn",
+                )
             self._set_running(False)
             self.status_var.set("被安全验证拦截")
             self._append_log("抓取失败：" + detail, "err")
@@ -10287,7 +10566,11 @@ class App:
                     (
                         "打开内置验证（自动读匿名 Cookie）"
                         if mode == "guest"
-                        else "打开内置验证（完整 Cookie）",
+                        else (
+                            "重新打开内置验证并更新完整 Cookie"
+                            if current_cookie_mode
+                            else "打开内置验证并读取完整 Cookie"
+                        ),
                         "embedded",
                     )
                 )
@@ -10329,7 +10612,7 @@ class App:
                         "选择获取完整 Cookie 的方式。\n"
                         "内置验证会读取完整 Cookie；手动方式只打开浏览器，不自动读取。",
                         [
-                            ("打开内置验证（读取完整 Cookie）", "embedded"),
+                            ("打开内置验证并读取完整 Cookie", "embedded"),
                             ("手动粘贴完整 Cookie", "manual"),
                         ],
                         default=0,
@@ -10405,6 +10688,17 @@ class App:
                     parent=self.root,
                 )
             else:
+                if not cookies.get("BDUSS"):
+                    self._append_log("内置窗口未登录百度账号：没有读取到 BDUSS。", "err")
+                    messagebox.showwarning(
+                        "尚未登录",
+                        "没有读取到 BDUSS，不能当作完整 Cookie 登录成功。\n"
+                        "请重新打开内置登录并登录百度账号。",
+                        parent=self.root,
+                    )
+                    self._refresh_webview_status()
+                    self._refresh_log_summary()
+                    return
                 self._webview_cookie_session = True
                 cookie_text = "; ".join(f"{k}={v}" for k, v in cookies.items())
                 self.cookie_var.set(cookie_text)
@@ -10418,6 +10712,7 @@ class App:
                     "已读取完整 Cookie。请重新开始统计，已完成的帖子不会重抓。",
                     parent=self.root,
                 )
+            self._refresh_webview_status()
             self._refresh_log_summary()
         elif kind == "rate_limit_ask":
             _, detail, retry_after, _url = message
