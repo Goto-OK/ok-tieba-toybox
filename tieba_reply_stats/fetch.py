@@ -145,7 +145,11 @@ class FetchError(RuntimeError):
 
 
 class CaptchaError(FetchError):
-    """被百度安全验证拦截。"""
+    """被百度安全验证拦截；可携带当前帖子的部分数据。"""
+
+    def __init__(self, message: str = "被安全验证拦截", partial=None) -> None:
+        super().__init__(message)
+        self.partial = partial
 
 
 class ThreadGoneError(FetchError):

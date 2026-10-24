@@ -5,7 +5,7 @@ import pytest
 from tieba_reply_stats import page_pb, profile_pb, settings, webview2
 from tieba_reply_stats.collect import CollectOptions, enrich_tieba_uids
 from tieba_reply_stats.export import _tieba_cell
-from tieba_reply_stats.fetch import FetchError, RequestGate
+from tieba_reply_stats.fetch import CaptchaError, FetchError, RequestGate
 from tieba_reply_stats.filters import filter_users
 from tieba_reply_stats.models import Floor, ThreadData, ThreadMeta
 from tieba_reply_stats.storage import thread_from_dict, thread_to_dict
@@ -188,6 +188,13 @@ def test_webview2_login_profile_can_be_cleared(tmp_path, monkeypatch):
     assert webview2.login_profile_exists() is True
     assert webview2.clear_login_profile() is True
     assert webview2.login_profile_exists() is False
+
+
+def test_captcha_error_can_carry_partial_thread():
+    marker = object()
+    error = CaptchaError("拦截", partial=marker)
+    assert error.partial is marker
+    assert str(error) == "拦截"
 
 
 def test_webview2_allowed_url():

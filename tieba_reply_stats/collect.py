@@ -146,12 +146,32 @@ def collect_thread(
         limit = options.max_pages or HARD_PAGE_LIMIT
     log(f"  共 {total_page or '未知'} 页，计划抓取 {limit} 页")
 
+    def partial_thread() -> ThreadData:
+        return ThreadData(
+            meta=ThreadMeta(
+                tid=tid,
+                fid=meta.fid,
+                title=meta.title,
+                forum=meta.forum,
+                url=source_url,
+                total_page=total_page or pages_fetched,
+                reply_num=meta.reply_num,
+                mode="login",
+            ),
+            floors=sorted(floors_by_no.values(), key=lambda item: item.post_no),
+            pages_fetched=pages_fetched,
+            failed_pages=list(range(pn, limit + 1)),
+            warnings=list(warnings),
+            complete=False,
+        )
+
     pn = 2
     while pn <= limit:
         _check_stop(options)
         try:
             response = fetcher.get(thread_page_url(tid, pn), name=f"thread_{tid}_p{pn}")
-        except CaptchaError:
+        except CaptchaError as error:
+            error.partial = partial_thread()
             raise
         except ThreadGoneError:
             warnings.append(f"第 {pn} 页返回 404，后续页不再抓取")
@@ -202,7 +222,12 @@ def collect_thread(
         thread.warnings.append(f"只抓到 {pages_fetched}/{total_page} 页")
 
     if options.include_comments:
-        thread.comments = _collect_comments(tid, thread, floor_page, fetcher, options, log)
+        try:
+            thread.comments = _collect_comments(tid, thread, floor_page, fetcher, options, log)
+        except CaptchaError as error:
+            thread.complete = False
+            error.partial = thread
+            raise
         if any("实际抓到" in item for item in thread.warnings):
             thread.complete = False
     else:
@@ -298,7 +323,13 @@ def _collect_comments(
         try:
             payload = fetcher.get_json(total_comment_url(tid, thread.meta.fid, pn), name=f"total_{tid}_{pn}")
             got = parse_total_comment(payload, floors_by_pid)
-        except CaptchaError:
+        except CaptchaError as error:
+            thread.comments = sorted(
+                collected.values(),
+                key=lambda item: (item.floor_no, item.posted_at or datetime.min),
+            )
+            thread.complete = False
+            error.partial = thread
             raise
         except Exception as error:  # noqa: BLE001 - JSON 解析失败等，后面逐楼补齐
             got = {}
@@ -316,7 +347,18 @@ def _collect_comments(
         _check_stop(options)
         have = floor_have.get(floor.post_no, 0)
         if have < floor.reply_num:
-            more = _fetch_floor_comments(tid, floor, fetcher, options, log, set(collected.keys()), have)
+            try:
+                more = _fetch_floor_comments(
+                    tid, floor, fetcher, options, log, set(collected.keys()), have
+                )
+            except CaptchaError as error:
+                thread.comments = sorted(
+                    collected.values(),
+                    key=lambda item: (item.floor_no, item.posted_at or datetime.min),
+                )
+                thread.complete = False
+                error.partial = thread
+                raise
             for comment in more:
                 if comment.pid and comment.pid not in collected:
                     collected[comment.pid] = comment

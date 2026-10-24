@@ -10524,9 +10524,12 @@ class App:
         except CaptchaError as error:
             self._write_log("error", error="CaptchaError")
             partial = []
-            if completed:
+            items = list(completed)
+            if getattr(error, "partial", None) is not None:
+                items.append(error.partial)
+            if items:
                 by_tid = {str(thread.meta.tid): thread for thread in (base_threads or [])}
-                for thread in completed:
+                for thread in items:
                     by_tid[str(thread.meta.tid)] = thread
                 partial = list(by_tid.values())
                 self._persist_result(partial)

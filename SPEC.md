@@ -493,6 +493,7 @@ Evergreen Runtime
 仅 BDUSS 失败提示改用缓存
 完整 Cookie 自动提取 BDUSS
 验证码中断保存已完成结果
+CaptchaError 携带 partial ThreadData（登录翻页/取消评论阶段）
 登录模式无 BDUSS 不写入登录态
 WebView2 标题检测 + 0.5 秒自动关闭
 WebView2 读取前二次确认
@@ -509,7 +510,7 @@ Ctrl+Shift+C 测试中心最小版
 待实现：
 
 ```text
-1. 验证码中断后当前帖子的页面级 partial 续抓
+1. 第一页尚未解析就遇到验证码时，没有 partial 可保存
 2. 验证码弹窗文案与按钮宽度人工验收
 3. 清除数据/恢复默认/备份交互的人工验收
 4. 真实登录、持久登录跨重启、真实验证码的人工验收
