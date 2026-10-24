@@ -4799,7 +4799,7 @@ class App:
         )
         ttk.Checkbutton(
             login_box,
-            text="登录后记住内置登录（本机）",
+            text="登录后记住内置登录（本机，高风险：会保存登录态）",
             variable=self.webview_remember_var,
             command=self._on_webview_remember_changed,
         ).pack(anchor="w", padx=8, pady=(2, 0))
@@ -4833,7 +4833,7 @@ class App:
         self.follow_enhance_var = tk.BooleanVar(value=bool(self.settings.get("follow_enhance", False)))
         self.follow_enhance_check = ttk.Checkbutton(
             enhance_box,
-            text="启用公开关注 / 隐藏关注检测",
+            text="启用公开关注 / 隐藏关注检测（高风险）",
             variable=self.follow_enhance_var,
             command=self._on_follow_toggle,
         )

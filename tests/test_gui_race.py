@@ -82,6 +82,36 @@ def test_ui_mode_hides_advanced_settings(root_app, monkeypatch):
     assert app.cache_box.winfo_manager() == "pack"
 
 
+def test_ui_mode_switch_cancel_keeps_advanced(root_app, monkeypatch):
+    _root, app = root_app
+    app.settings["ui_mode"] = "advanced"
+    app.ui_mode_var.set("advanced")
+    app.batch_concurrency_var.set("3")
+    app.settings["batch_concurrency"] = 3
+    app.ui_mode_var.set("simple")
+    monkeypatch.setattr(app, "_ask_choice", lambda *_args, **_kwargs: None)
+    app._on_ui_mode_selected()
+    assert app.ui_mode_var.get() == "advanced"
+    assert app.settings["ui_mode"] == "advanced"
+
+
+def test_ui_mode_switch_close_resets_behavior_only(root_app, monkeypatch):
+    _root, app = root_app
+    monkeypatch.setattr(tieba_gui, "save_settings", lambda *_args, **_kwargs: True)
+    app.settings["ui_mode"] = "advanced"
+    app.ui_mode_var.set("advanced")
+    app.batch_concurrency_var.set("3")
+    app.settings["batch_concurrency"] = 3
+    app.settings["log_enabled"] = True
+    app.ui_mode_var.set("simple")
+    monkeypatch.setattr(app, "_ask_choice", lambda *_args, **_kwargs: "close")
+    app._on_ui_mode_selected()
+    assert app.ui_mode_var.get() == "simple"
+    assert app.settings["ui_mode"] == "simple"
+    assert app.batch_concurrency_var.get() == "1"
+    assert app.settings["log_enabled"] is True
+
+
 def test_login_source_conflict_is_visible(root_app, monkeypatch):
     _root, app = root_app
     app._set_mode("login")
@@ -119,6 +149,16 @@ def test_login_baidu_uses_current_method(root_app, monkeypatch):
     app.login_method_var.set("cookie")
     app._login_baidu()
     assert captured["target"] == "cookie"
+
+
+def test_apply_bduss_drops_full_cookie_cache(root_app, monkeypatch):
+    _root, app = root_app
+    app._full_cookie_cache = "BDUSS=old; TIEBAUID=old"
+    app.bduss_var.set("new-bduss")
+    app.remember_bduss_var.set(False)
+    monkeypatch.setattr(tieba_gui, "clear_cookie", lambda: True)
+    app._apply_bduss()
+    assert app._full_cookie_cache == ""
 
 
 def test_builtin_temp_login_flags_profile_conflict(root_app, monkeypatch):
