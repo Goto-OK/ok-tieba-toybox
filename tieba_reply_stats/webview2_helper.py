@@ -94,7 +94,13 @@ def main() -> int:
     )
     read_cookies = "--no-cookie" not in sys.argv
     cookies = []
-    state = {"captcha_seen": False, "normal_since": 0.0, "closed": False, "auto": False}
+    state = {
+        "captcha_seen": False,
+        "normal_since": 0.0,
+        "closed": False,
+        "auto": False,
+        "login_close_scheduled": False,
+    }
 
     def normalize_cookies(raw) -> list[dict]:
         result = []
@@ -183,8 +189,29 @@ def main() -> int:
             "tieba.baidu.com",
             "passport.baidu.com",
             "wappass.baidu.com",
+            "www.baidu.com",
         ):
             _close_window()
+            return
+        if require_login and read_cookies and not state["login_close_scheduled"]:
+            try:
+                raw = normalize_cookies(window.get_cookies())
+            except Exception:  # noqa: BLE001
+                return
+            if any(
+                str(item.get("name") or "") in ("BDUSS", "TIEBA_SID")
+                for item in raw
+                if isinstance(item, dict)
+            ):
+                state["login_close_scheduled"] = True
+
+                def close_after_login() -> None:
+                    time.sleep(0.8)
+                    capture_cookies()
+                    state["auto"] = True
+                    _close_window()
+
+                threading.Thread(target=close_after_login, daemon=True).start()
 
     window.events.closed += on_closed
     window.events.loaded += on_loaded

@@ -604,6 +604,7 @@ Ctrl+Shift+C 测试中心最小版
   tieba.baidu.com
   passport.baidu.com
   wappass.baidu.com
+  www.baidu.com
   ```
 - 禁止：
   ```text

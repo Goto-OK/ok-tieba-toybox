@@ -217,6 +217,7 @@ Android 核心同步通过
 - 仅 BDUSS 失败提示改用缓存；
 - 登录模式接受 `BDUSS` 或 `TIEBA_SID`，无登录 Cookie 不写入登录态；
 - 修复 pywebview `SimpleCookie` 序列化导致 Cookie 名称为空的问题；
+- 登录改走百度登录页；允许登录成功跳转 `www.baidu.com`，读取到 BDUSS 后自动关闭；
 - 自动获取预检未通过时仍填入 Cookie，但明确提示可能被拦截；
 - 抓取页 BDUSS / 完整 Cookie 自动获取按钮；
 - 启用抓取增强三选一；自动获取做一次轻量预检；

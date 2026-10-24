@@ -66,7 +66,12 @@ def clear_login_profile() -> bool:
         return False
 
 
-ALLOWED_HOSTS = ("tieba.baidu.com", "passport.baidu.com", "wappass.baidu.com")
+ALLOWED_HOSTS = (
+    "tieba.baidu.com",
+    "passport.baidu.com",
+    "wappass.baidu.com",
+    "www.baidu.com",
+)
 LOGIN_COOKIE_NAMES = ("BDUSS", "TIEBA_SID")
 
 

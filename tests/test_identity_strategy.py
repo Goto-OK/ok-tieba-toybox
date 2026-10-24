@@ -200,6 +200,7 @@ def test_captcha_error_can_carry_partial_thread():
 def test_webview2_allowed_url():
     assert webview2.is_allowed_url("https://tieba.baidu.com/p/1") is True
     assert webview2.is_allowed_url("https://passport.baidu.com/v2/?login") is True
+    assert webview2.is_allowed_url("https://www.baidu.com/") is True
     assert webview2.is_allowed_url("https://example.com/") is False
 
 
