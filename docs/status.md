@@ -215,7 +215,9 @@ Android 核心同步通过
 - 游客只读匿名 Cookie，登录读完整 Cookie；
 - 完整 Cookie 缓存、BDUSS 自动提取；
 - 仅 BDUSS 失败提示改用缓存；
-- 登录模式无 BDUSS 不写入登录态；
+- 登录模式接受 `BDUSS` 或 `TIEBA_SID`，无登录 Cookie 不写入登录态；
+- 修复 pywebview `SimpleCookie` 序列化导致 Cookie 名称为空的问题；
+- 自动获取预检未通过时仍填入 Cookie，但明确提示可能被拦截；
 - 抓取页 BDUSS / 完整 Cookie 自动获取按钮；
 - 启用抓取增强三选一；自动获取做一次轻量预检；
 - 验证码中断保存已完成结果；

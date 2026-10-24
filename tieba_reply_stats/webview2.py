@@ -65,6 +65,18 @@ def clear_login_profile() -> bool:
         return False
 
 
+LOGIN_COOKIE_NAMES = ("BDUSS", "TIEBA_SID")
+
+
+def has_login_cookie(cookies) -> bool:
+    if isinstance(cookies, dict):
+        return any(cookies.get(name) for name in LOGIN_COOKIE_NAMES)
+    for item in cookies or []:
+        if isinstance(item, dict) and str(item.get("name") or "") in LOGIN_COOKIE_NAMES:
+            return True
+    return False
+
+
 def filter_cookies(cookies, anonymous: bool) -> dict[str, str]:
     result: dict[str, str] = {}
     for item in cookies or []:

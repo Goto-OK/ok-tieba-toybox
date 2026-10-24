@@ -871,8 +871,12 @@ class App:
             messagebox.showwarning("需要 Cookie", "请粘贴完整 Cookie。", parent=self.root)
             self.cookie_entry.focus_set()
             return
-        if not parse_cookie_input(raw).get("BDUSS"):
-            messagebox.showwarning("Cookie 不完整", "完整 Cookie 里没有 BDUSS。", parent=self.root)
+        if not webview2.has_login_cookie(parse_cookie_input(raw)):
+            messagebox.showwarning(
+                "Cookie 不完整",
+                "完整 Cookie 里没有 BDUSS/TIEBA_SID，无法确认登录态。",
+                parent=self.root,
+            )
             return
         self._full_cookie_cache = raw
         self.login_method_var.set("cookie")
@@ -4790,6 +4794,7 @@ class App:
         self.status_var.set("正在打开内置登录…")
         center = self._webview_center()
         persistent = bool(self.settings.get("webview_remember_login", False))
+        target_value = target
 
         def worker():
             try:
@@ -4801,20 +4806,28 @@ class App:
                 )
                 raw = result.get("cookies") if isinstance(result, dict) else result
                 cookies = webview2.filter_cookies(raw, anonymous=False)
-                if not cookies.get("BDUSS"):
-                    raise RuntimeError("没有读取到 BDUSS，可能尚未登录")
+                if not webview2.has_login_cookie(cookies):
+                    raise RuntimeError("没有读取到登录 Cookie（BDUSS/TIEBA_SID），可能尚未登录")
+                effective_target = (
+                    "cookie"
+                    if target_value == "bduss" and not cookies.get("BDUSS")
+                    else target_value
+                )
+                warning = ""
                 probe = Fetcher(cookie=cookies, delay=0, verbose=False)
                 try:
                     probe.get("https://tieba.baidu.com/")
-                except CaptchaError as error:
-                    raise RuntimeError("登录预检仍被验证码拦截") from error
+                except CaptchaError:
+                    warning = "预检仍被验证码拦截，Cookie 可能不可用"
                 except Exception as error:  # noqa: BLE001
-                    raise RuntimeError(f"登录预检失败：{error}") from error
+                    warning = f"预检失败：{error}"
                 finally:
                     probe.close()
-                self._post(("auto_login_done", target, cookies, ""))
+                self._post(
+                    ("auto_login_done", effective_target, cookies, "", warning)
+                )
             except Exception as error:  # noqa: BLE001
-                self._post(("auto_login_done", target, {}, str(error)))
+                self._post(("auto_login_done", target_value, {}, str(error), ""))
 
         threading.Thread(target=worker, daemon=True).start()
 
@@ -9862,16 +9875,22 @@ class App:
             if mode == "guest"
             else parse_cookie_input(self._current_cookie_text())
         )
-        if mode == "login" and not cookie.get("BDUSS"):
+        if mode == "login" and self.login_method_var.get() == "bduss" and not cookie.get("BDUSS"):
             messagebox.showwarning(
                 "需要 BDUSS",
-                "登录模式至少需要 BDUSS。请选择「仅 BDUSS」填写，或切换到「完整 Cookie」。",
+                "「仅 BDUSS」模式需要填写 BDUSS；也可以切换到「完整 Cookie」。",
                 parent=self.root,
             )
-            if self.login_method_var.get() == "bduss":
-                self.bduss_entry.focus_set()
-            else:
-                self.cookie_entry.focus_set()
+            self.bduss_entry.focus_set()
+            return
+        if mode == "login" and not webview2.has_login_cookie(cookie):
+            messagebox.showwarning(
+                "需要登录 Cookie",
+                "完整 Cookie 里没有 BDUSS/TIEBA_SID，无法确认登录态。\n"
+                "请重新获取完整 Cookie，或改用游客模式。",
+                parent=self.root,
+            )
+            self.cookie_entry.focus_set()
             return
         if mode == "guest":
             self._append_log("本次使用免登录模式：公开帖子，楼中楼按设置补全", "muted")
@@ -10852,11 +10871,14 @@ class App:
                     parent=self.root,
                 )
             else:
-                if not cookies.get("BDUSS"):
-                    self._append_log("内置窗口未登录百度账号：没有读取到 BDUSS。", "err")
+                if not webview2.has_login_cookie(cookies):
+                    self._append_log(
+                        "内置窗口未登录百度账号：没有读取到 BDUSS/TIEBA_SID。", "err"
+                    )
                     messagebox.showwarning(
                         "尚未登录",
-                        "没有读取到 BDUSS，不能当作完整 Cookie 登录成功。\n"
+                        "没有读取到登录 Cookie（BDUSS/TIEBA_SID），"
+                        "不能当作完整 Cookie 登录成功。\n"
                         "请重新打开内置登录并登录百度账号。",
                         parent=self.root,
                     )
@@ -10879,9 +10901,10 @@ class App:
             self._refresh_webview_status()
             self._refresh_log_summary()
         elif kind == "auto_login_done":
-            _, target, cookies, error = message
+            _, target, cookies, error, warning = message
             self._webview_running = False
             if error or not cookies:
+                self.status_var.set("登录信息获取失败")
                 self._append_log(f"自动获取登录失败：{error or '没有可用 Cookie'}", "err")
                 messagebox.showwarning(
                     "自动获取失败",
@@ -10916,6 +10939,16 @@ class App:
                 messagebox.showinfo(
                     "完整 Cookie 已获取",
                     "已从内置登录读取完整 Cookie。请重新开始统计。",
+                    parent=self.root,
+                )
+            self.status_var.set(
+                "登录信息已获取" if not warning else "登录信息已获取（预检未通过）"
+            )
+            if warning:
+                self._append_log(f"登录预检警告：{warning}", "warn")
+                messagebox.showwarning(
+                    "预检未通过",
+                    warning + "\n\nCookie 已填入，但开始抓取后仍可能被拦截。",
                     parent=self.root,
                 )
             self._refresh_webview_status()

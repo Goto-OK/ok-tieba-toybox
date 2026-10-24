@@ -95,13 +95,33 @@ def main() -> int:
     cookies = []
     state = {"captcha_seen": False, "normal_since": 0.0, "closed": False, "auto": False}
 
+    def normalize_cookies(raw) -> list[dict]:
+        result = []
+        for item in raw or []:
+            if isinstance(item, dict) and "name" in item:
+                result.append(item)
+                continue
+            try:
+                for name, morsel in item.items():
+                    result.append(
+                        {
+                            "name": name,
+                            "value": morsel.value,
+                            "domain": morsel["domain"] or "",
+                            "path": morsel["path"] or "/",
+                        }
+                    )
+            except Exception:  # noqa: BLE001
+                continue
+        return result
+
     def on_closed() -> None:
         nonlocal cookies
         state["closed"] = True
         if not read_cookies or cookies:
             return
         try:
-            cookies = window.get_cookies() or []
+            cookies = normalize_cookies(window.get_cookies())
         except Exception:  # noqa: BLE001
             cookies = []
 
@@ -110,7 +130,7 @@ def main() -> int:
         if not read_cookies:
             return
         try:
-            cookies = window.get_cookies() or []
+            cookies = normalize_cookies(window.get_cookies())
         except Exception:  # noqa: BLE001
             pass
 
@@ -138,7 +158,7 @@ def main() -> int:
                 if stable >= 0.5 and (state["captcha_seen"] or time.monotonic() - started >= 2.0):
                     capture_cookies()
                     if require_login and not any(
-                        str(item.get("name") or "").upper() == "BDUSS"
+                        str(item.get("name") or "").upper() in ("BDUSS", "TIEBA_SID")
                         for item in cookies
                         if isinstance(item, dict)
                     ):
