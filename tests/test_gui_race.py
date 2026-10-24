@@ -2,6 +2,7 @@ import tkinter as tk
 
 import pytest
 
+import tieba_gui
 from tieba_gui import App
 
 
@@ -35,3 +36,30 @@ def test_stop_closes_choice_dialog(root_app):
     assert getattr(app, "_active_choice_window", None) is None
     assert app.stop_event.is_set()
     app._set_running(False)
+
+
+def test_offline_checks_have_no_failures(root_app):
+    _root, app = root_app
+    results = app._offline_checks()
+    assert results
+    assert all(status == "PASS" for _name, status, _detail in results)
+
+
+def test_simulated_cookie_action_fills_fake_login(root_app, monkeypatch):
+    _root, app = root_app
+    monkeypatch.setattr(app, "_ask_choice", lambda *args, **kwargs: "full_embed")
+    monkeypatch.setattr(tieba_gui.messagebox, "showinfo", lambda *args, **kwargs: None)
+    app._show_test_captcha_dialog("cookie")
+    assert app.login_method_var.get() == "cookie"
+    assert "BDUSS=TEST_BDUSS" in app.cookie_var.get()
+    assert app.bduss_var.get() == "TEST_BDUSS"
+
+
+def test_simulated_guest_action_keeps_guest(root_app, monkeypatch):
+    _root, app = root_app
+    app._set_mode("guest")
+    monkeypatch.setattr(app, "_ask_choice", lambda *args, **kwargs: "guest_embed")
+    monkeypatch.setattr(tieba_gui.messagebox, "showinfo", lambda *args, **kwargs: None)
+    app._show_test_captcha_dialog("guest")
+    assert app.mode_var.get() == "guest"
+    assert app._guest_cookie.get("BAIDUID") == "TEST_GUEST"
