@@ -4540,6 +4540,24 @@ class App:
             font=("Microsoft YaHei UI", 9),
             wraplength=720,
         ).pack(fill="x", padx=8, pady=(6, 4))
+        mode_row = tk.Frame(status_box, bg="#eef1f5")
+        mode_row.pack(fill="x", padx=8, pady=(0, 4))
+        tk.Label(mode_row, text="当前模式：", bg="#eef1f5", fg="#475569").pack(side="left")
+        ttk.Radiobutton(
+            mode_row,
+            text="游客模式",
+            value="guest",
+            variable=self.mode_var,
+            command=self._on_settings_mode_selected,
+        ).pack(side="left", padx=(0, 8))
+        ttk.Radiobutton(
+            mode_row,
+            text="登录模式",
+            value="login",
+            variable=self.mode_var,
+            command=self._on_settings_mode_selected,
+        ).pack(side="left")
+
         button_row = tk.Frame(status_box, bg="#eef1f5")
         button_row.pack(fill="x", padx=8, pady=(0, 4))
         self.webview_open_btn = ttk.Button(
@@ -4619,6 +4637,24 @@ class App:
             wraplength=720,
         ).pack(fill="x", padx=8, pady=6)
         self.mode_var.trace_add("write", lambda *_: self._refresh_webview_status())
+        self._refresh_webview_status()
+
+    def _on_settings_mode_selected(self) -> None:
+        mode = self.mode_var.get()
+        if mode == "guest" and bool(self.settings.get("follow_enhance", False)):
+            if not messagebox.askyesno(
+                "切换到游客模式",
+                "游客模式不使用抓取增强。\n切换会关闭抓取增强，是否继续？",
+                parent=self.root,
+                default=messagebox.NO,
+            ):
+                self.mode_var.set("login")
+                return
+            self.settings["follow_enhance"] = False
+            if hasattr(self, "follow_enhance_var"):
+                self.follow_enhance_var.set(False)
+            save_settings(self.settings)
+        self._set_mode(mode)
         self._refresh_webview_status()
 
     def _refresh_webview_status(self) -> None:
@@ -5863,6 +5899,14 @@ class App:
             command=win.destroy,
             width=38,
         ).pack(fill="x", padx=16, pady=(10, 14))
+        win.update_idletasks()
+        width = max(420, win.winfo_reqwidth())
+        height = max(240, win.winfo_reqheight())
+        x = self.root.winfo_rootx() + max(0, (self.root.winfo_width() - width) // 2)
+        y = self.root.winfo_rooty() + max(0, (self.root.winfo_height() - height) // 2)
+        win.geometry(f"{width}x{height}+{x}+{y}")
+        win.lift()
+        win.focus_force()
 
     def _simulate_captcha(self, _event=None) -> None:
         """隐藏测试入口：不发网络请求，只走验证码处理流程。"""
@@ -10518,9 +10562,31 @@ class App:
             self._append_log("抓取失败：" + detail, "err")
             if getattr(self, "_simulated_captcha", False):
                 self._simulated_captcha = False
+                mode = self.mode_var.get()
+                if mode == "guest":
+                    message = (
+                        "当前是游客模式。\n"
+                        "真实流程会读取匿名 Cookie，不读取 BDUSS/STOKEN。"
+                    )
+                elif self.login_method_var.get() == "bduss":
+                    cached = bool(getattr(self, "_full_cookie_cache", ""))
+                    message = (
+                        "本次实际只发送了 BDUSS。\n"
+                        + (
+                            "真实流程会提示改用已保存的完整 Cookie。"
+                            if cached
+                            else "当前没有完整 Cookie 缓存。"
+                        )
+                    )
+                else:
+                    message = (
+                        "当前使用完整 Cookie。\n"
+                        "真实流程会读取完整 Cookie，并检查 BDUSS。"
+                    )
                 self._ask_choice(
                     "模拟验证码",
-                    "这是模拟流程，不打开 WebView2、不读取 Cookie、不修改登录状态。",
+                    message
+                    + "\n\n模拟模式：不打开 WebView2、不读取 Cookie、不修改登录状态。",
                     [("结束模拟", "stop")],
                 )
                 self.status_var.set("模拟验证码已结束（未联网）")
