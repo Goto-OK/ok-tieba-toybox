@@ -38,6 +38,22 @@ def test_stop_closes_choice_dialog(root_app):
     app._set_running(False)
 
 
+def test_follow_detection_requires_login(root_app):
+    _root, app = root_app
+    app._set_mode("guest")
+    app._refresh_webview_status()
+    assert str(app.follow_enhance_check.cget("state")) == "disabled"
+
+
+def test_login_cookie_enables_follow_detection(root_app):
+    _root, app = root_app
+    app._set_mode("login")
+    app.login_method_var.set("cookie")
+    app.cookie_var.set("BDUSS=test; TIEBA_SID=test")
+    app._refresh_webview_status()
+    assert str(app.follow_enhance_check.cget("state")) == "normal"
+
+
 def test_offline_checks_have_no_failures(root_app):
     _root, app = root_app
     results = app._offline_checks()

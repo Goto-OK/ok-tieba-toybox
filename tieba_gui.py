@@ -273,7 +273,7 @@ class App:
         if self.settings.get("follow_enhance"):
             self.mode_var.set("login")
             if not parse_cookie_input(self.cookie_var.get()).get("BDUSS"):
-                self._append_log("抓取增强已开启，但尚未填写 BDUSS；请先填写后再开始统计。", "muted")
+                self._append_log("关注检测已开启，但尚未完成登录；请先登录后再开始统计。", "muted")
         else:
             self.mode_var.set("guest")
         self._apply_mode_ui()
@@ -3764,38 +3764,26 @@ class App:
         enabled = bool(self.follow_enhance_var.get())
         if not enabled:
             self.settings["follow_enhance"] = False
-            self._set_mode("guest")
             save_settings(self.settings)
+            self._refresh_webview_status()
             return
-        has_login = bool(parse_cookie_input(self.cookie_var.get()).get("BDUSS"))
+        has_login = self.mode_var.get() == "login" and webview2.has_login_cookie(
+            self._request_cookie()
+        )
         if not has_login:
-            choice = self._ask_choice(
-                "启用抓取增强",
-                "抓取增强需要登录信息。请选择获取方式：\n"
-                "自动获取会打开内置登录窗口；手动方式只到抓取页填写。",
-                [
-                    ("自动获取完整 Cookie（推荐）", "cookie"),
-                    ("自动获取 BDUSS", "bduss"),
-                    ("手动填写", "manual"),
-                    ("取消", "cancel"),
-                ],
-                default=0,
+            self.follow_enhance_var.set(False)
+            self.settings["follow_enhance"] = False
+            save_settings(self.settings)
+            messagebox.showinfo(
+                "需要登录信息",
+                "请先点「登录百度」或「手动填写」完成登录，再启用关注检测。",
+                parent=self.root,
             )
-            if not choice or choice == "cancel":
-                self.follow_enhance_var.set(False)
-                self.settings["follow_enhance"] = False
-                save_settings(self.settings)
-                return
-        else:
-            choice = "manual"
+            self._refresh_webview_status()
+            return
         self.settings["follow_enhance"] = True
-        self._set_mode("login")
         save_settings(self.settings)
-        if choice in ("cookie", "bduss"):
-            self.root.after(50, lambda: self._auto_get_login(choice))
-        else:
-            self._go_to_login()
-            self.bduss_entry.focus_set()
+        self._refresh_webview_status()
 
     def _ask_go_fill_bduss(self) -> bool:
         win = tk.Toplevel(self.root)
@@ -3807,7 +3795,7 @@ class App:
         result = {"go": False}
         tk.Label(
             win,
-            text="抓取增强已开启，但还没有填写 BDUSS。现在去抓取页填写吗？",
+            text="关注检测已开启，但还没有完成登录。现在去抓取页填写吗？",
             bg="#eef1f5",
             fg="#334155",
             font=("Microsoft YaHei UI", 9),
@@ -4602,11 +4590,11 @@ class App:
         box = tk.Frame(self.tab_login, bg="#eef1f5", padx=14, pady=10)
         box.pack(fill="both", expand=True)
 
-        status_box = ttk.LabelFrame(box, text=" 内置登录 ")
-        status_box.pack(fill="x", pady=(0, 6))
+        login_box = ttk.LabelFrame(box, text=" 登录信息 ")
+        login_box.pack(fill="x", pady=(0, 6))
         self.webview_status_var = tk.StringVar(value="")
         tk.Label(
-            status_box,
+            login_box,
             textvariable=self.webview_status_var,
             justify="left",
             anchor="w",
@@ -4615,7 +4603,7 @@ class App:
             font=("Microsoft YaHei UI", 9),
             wraplength=720,
         ).pack(fill="x", padx=8, pady=(6, 4))
-        mode_row = tk.Frame(status_box, bg="#eef1f5")
+        mode_row = tk.Frame(login_box, bg="#eef1f5")
         mode_row.pack(fill="x", padx=8, pady=(0, 4))
         tk.Label(mode_row, text="当前模式：", bg="#eef1f5", fg="#475569").pack(side="left")
         ttk.Radiobutton(
@@ -4633,68 +4621,94 @@ class App:
             command=self._on_settings_mode_selected,
         ).pack(side="left")
 
-        button_row = tk.Frame(status_box, bg="#eef1f5")
+        button_row = tk.Frame(login_box, bg="#eef1f5")
         button_row.pack(fill="x", padx=8, pady=(0, 4))
         self.webview_open_btn = ttk.Button(
             button_row,
-            text="打开内置登录",
-            command=self._open_internal_login,
-            width=18,
+            text="登录百度",
+            command=self._login_baidu,
+            width=14,
         )
         self.webview_open_btn.pack(side="left")
-        self.webview_clear_btn = ttk.Button(
+        ttk.Button(
             button_row,
-            text="清除 WebView2 保存的登录",
-            command=self._clear_internal_login,
-            width=26,
-        )
-        self.webview_clear_btn.pack(side="left", padx=(8, 0))
+            text="手动填写",
+            command=self._manual_fill_login,
+            width=10,
+        ).pack(side="left", padx=(8, 0))
+        ttk.Button(
+            button_row,
+            text="清除当前登录信息",
+            command=self._clear_cookie,
+            width=16,
+        ).pack(side="left", padx=(8, 0))
+
         self.webview_remember_var = tk.BooleanVar(
             value=bool(self.settings.get("webview_remember_login", False))
         )
         ttk.Checkbutton(
-            status_box,
-            text="记住内置登录（本机）",
+            login_box,
+            text="登录后记住内置登录（本机）",
             variable=self.webview_remember_var,
             command=self._on_webview_remember_changed,
         ).pack(anchor="w", padx=8, pady=(2, 0))
         tk.Label(
-            status_box,
+            login_box,
             text="只影响本软件的 WebView2，不影响系统浏览器；共享电脑不要开启。",
             bg="#eef1f5",
             fg="#8a94a6",
             font=("Microsoft YaHei UI", 8),
         ).pack(anchor="w", padx=28, pady=(0, 6))
 
-        enhance_box = ttk.LabelFrame(box, text=" 抓取增强（可选） ")
-        enhance_box.pack(fill="x", pady=(0, 6))
-        self.follow_enhance_var = tk.BooleanVar(value=bool(self.settings.get("follow_enhance", False)))
-        ttk.Checkbutton(
-            enhance_box,
-            text="启用公开关注 / 隐藏关注检测（需要登录）",
-            variable=self.follow_enhance_var,
-            command=self._on_follow_toggle,
-        ).pack(anchor="w")
+        internal_box = ttk.LabelFrame(box, text=" 内置登录（WebView2） ")
+        internal_box.pack(fill="x", pady=(0, 6))
+        self.webview_clear_btn = ttk.Button(
+            internal_box,
+            text="清除 WebView2 保存的登录",
+            command=self._clear_internal_login,
+            width=26,
+        )
+        self.webview_clear_btn.pack(anchor="w", padx=8, pady=(6, 4))
         tk.Label(
-            enhance_box,
-            text="默认关闭；开启后红绿灯可选“包含关注（慢）”。",
+            internal_box,
+            text="只清除本软件 WebView2 的百度登录态；不影响系统浏览器。",
             bg="#eef1f5",
             fg="#8a94a6",
             font=("Microsoft YaHei UI", 8),
-        ).pack(anchor="w", padx=20, pady=(2, 0))
+        ).pack(anchor="w", padx=8, pady=(0, 6))
+
+        enhance_box = ttk.LabelFrame(box, text=" 关注检测（可选） ")
+        enhance_box.pack(fill="x", pady=(0, 6))
+        self.follow_enhance_var = tk.BooleanVar(value=bool(self.settings.get("follow_enhance", False)))
+        self.follow_enhance_check = ttk.Checkbutton(
+            enhance_box,
+            text="启用公开关注 / 隐藏关注检测",
+            variable=self.follow_enhance_var,
+            command=self._on_follow_toggle,
+        )
+        self.follow_enhance_check.pack(anchor="w", padx=8, pady=(6, 0))
+        self.follow_enhance_status = tk.Label(
+            enhance_box,
+            text="需要登录信息",
+            bg="#eef1f5",
+            fg="#8a94a6",
+            font=("Microsoft YaHei UI", 8),
+        )
+        self.follow_enhance_status.pack(anchor="w", padx=28, pady=(2, 0))
         mode_row = tk.Frame(enhance_box, bg="#eef1f5")
-        mode_row.pack(anchor="w", padx=20, pady=(4, 0))
+        mode_row.pack(anchor="w", padx=8, pady=(4, 6))
         tk.Label(mode_row, text="关注加载：", bg="#eef1f5", fg="#475569").pack(side="left")
         self.follow_load_mode_var = tk.StringVar(
             value="手动" if self.settings.get("follow_load_mode") == "manual" else "自动"
         )
-        ttk.Combobox(
+        self.follow_load_box = ttk.Combobox(
             mode_row,
             values=("自动", "手动"),
             textvariable=self.follow_load_mode_var,
             width=6,
             state="readonly",
-        ).pack(side="left")
+        )
+        self.follow_load_box.pack(side="left")
         self.follow_load_mode_var.trace_add("write", lambda *_: self._on_follow_load_mode_changed())
 
         note_box = ttk.LabelFrame(box, text=" 说明 ")
@@ -4703,7 +4717,7 @@ class App:
             note_box,
             text="游客的匿名 Cookie 只在内存中，不写入本机。\n"
             "登录模式开启“记住内置登录”后，WebView2 登录态才会写入本机独立目录。\n"
-            "清除内置登录只影响本软件，不影响系统浏览器。",
+            "关注检测需要登录信息；仅 BDUSS 可能不足以获取关注列表。",
             justify="left",
             anchor="w",
             bg="#eef1f5",
@@ -4719,7 +4733,7 @@ class App:
         if mode == "guest" and bool(self.settings.get("follow_enhance", False)):
             if not messagebox.askyesno(
                 "切换到游客模式",
-                "游客模式不使用抓取增强。\n切换会关闭抓取增强，是否继续？",
+                "游客模式不使用关注检测。\n切换会关闭关注检测，是否继续？",
                 parent=self.root,
                 default=messagebox.NO,
             ):
@@ -4735,7 +4749,8 @@ class App:
     def _refresh_webview_status(self) -> None:
         if not hasattr(self, "webview_status_var"):
             return
-        mode = "游客" if self.mode_var.get() == "guest" else "登录"
+        is_login = self.mode_var.get() == "login"
+        mode = "登录" if is_login else "游客"
         available = webview2.available()
         if not available:
             login_state = "WebView2 不可用"
@@ -4743,16 +4758,47 @@ class App:
             login_state = "已保存本机登录态"
         else:
             login_state = "未保存本机登录态"
+        if not is_login:
+            login_info = "游客匿名 Cookie"
+            has_login = False
+        elif self.login_method_var.get() == "bduss":
+            login_info = "仅 BDUSS" if self.bduss_var.get().strip() else "未填写"
+            has_login = bool(self.bduss_var.get().strip())
+        else:
+            has_login = webview2.has_login_cookie(
+                parse_cookie_input(self.cookie_var.get())
+            )
+            login_info = "完整 Cookie" if has_login else "未填写"
         self.webview_status_var.set(
-            f"当前模式：{mode}\n内置登录：{login_state}\n"
-            "打开内置登录仅在登录模式可用；游客验证码仍可临时读取匿名 Cookie。"
+            f"当前模式：{mode}\n当前登录信息：{login_info}\n内置登录：{login_state}"
         )
-        can_open = available and self.mode_var.get() == "login" and not self._network_task_active()
+        can_open = available and is_login and not self._network_task_active()
         if hasattr(self, "webview_open_btn"):
             self.webview_open_btn.configure(state="normal" if can_open else "disabled")
         if hasattr(self, "webview_clear_btn"):
             can_clear = available and not self._network_task_active()
             self.webview_clear_btn.configure(state="normal" if can_clear else "disabled")
+        if hasattr(self, "follow_enhance_check"):
+            self.follow_enhance_check.configure(
+                state="normal" if has_login and not self._network_task_active() else "disabled"
+            )
+        if hasattr(self, "follow_load_box"):
+            self.follow_load_box.configure(
+                state="readonly" if has_login and self.follow_enhance_var.get() else "disabled"
+            )
+        if hasattr(self, "follow_enhance_status"):
+            self.follow_enhance_status.configure(
+                text=(
+                    "已具备登录信息"
+                    if has_login
+                    else "需要登录信息：先点「登录百度」或「手动填写」"
+                )
+            )
+        if not has_login and getattr(self, "follow_enhance_var", None) is not None:
+            if self.follow_enhance_var.get():
+                self.follow_enhance_var.set(False)
+                self.settings["follow_enhance"] = False
+                save_settings(self.settings)
 
     def _on_webview_remember_changed(self) -> None:
         enabled = bool(self.webview_remember_var.get())
@@ -4777,6 +4823,33 @@ class App:
         self.settings["webview_remember_login"] = enabled
         save_settings(self.settings)
         self._refresh_webview_status()
+
+    def _login_baidu(self) -> None:
+        if not webview2.available():
+            messagebox.showwarning(
+                "WebView2 不可用",
+                "未检测到 WebView2 Runtime，请使用「手动填写」。",
+                parent=self.root,
+            )
+            return
+        if self.mode_var.get() != "login":
+            self._set_mode("login")
+        self._start_webview_cookie_flow(
+            anonymous=False,
+            url="https://passport.baidu.com/v2/?login",
+        )
+
+    def _manual_fill_login(self) -> None:
+        self._set_mode("login")
+        self.login_method_var.set("cookie")
+        self._on_login_method_changed()
+        try:
+            self.notebook.select(self.tab_posts)
+            self.post_nb.select(self.tab_fetch if hasattr(self, "tab_fetch") else 0)
+        except tk.TclError:
+            pass
+        self.cookie_entry.focus_set()
+        self._append_log("请手动粘贴完整 Cookie，然后点「应用」。", "muted")
 
     def _open_internal_login(self) -> None:
         if self.mode_var.get() != "login":
@@ -10227,7 +10300,7 @@ class App:
         if self.mode_var.get() == "login":
             items.append("登录抓取")
         if self.settings.get("follow_enhance"):
-            items.append("抓取增强")
+            items.append("关注检测")
         if getattr(self, "proxy_mode_var", None) is not None and self.proxy_mode_var.get() == "自定义":
             items.append("自定义代理")
         return items
@@ -11064,7 +11137,7 @@ class App:
                         self.follow_enhance_var.set(True)
                     save_settings(self.settings)
                     self._apply_risk_ui()
-                    self._append_log("已自动开启抓取增强。", "muted")
+                    self._append_log("已自动开启关注检测。", "muted")
                 if source == "embedded":
                     self._start_webview_cookie_flow(anonymous=False)
                 else:
@@ -11177,12 +11250,12 @@ class App:
                     save_settings(self.settings)
                     self._set_mode("guest")
                     rolled_back = True
-                    self._append_log("登录无效，已关闭抓取增强并切回游客。", "warn")
+                    self._append_log("登录无效，已关闭关注检测并切回游客。", "warn")
                 messagebox.showwarning(
                     "自动获取失败",
                     (error or "没有读取到可用 Cookie。")
                     + (
-                        "\n已关闭抓取增强并切回游客。"
+                        "\n已关闭关注检测并切回游客。"
                         if rolled_back
                         else "\n可以改用手动粘贴。"
                     ),
