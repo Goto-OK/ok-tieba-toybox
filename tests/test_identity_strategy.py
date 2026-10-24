@@ -190,10 +190,24 @@ def test_webview2_login_profile_can_be_cleared(tmp_path, monkeypatch):
     assert webview2.login_profile_exists() is False
 
 
+def test_webview2_allowed_url():
+    assert webview2.is_allowed_url("https://tieba.baidu.com/p/1") is True
+    assert webview2.is_allowed_url("https://passport.baidu.com/v2/?login") is True
+    assert webview2.is_allowed_url("https://example.com/") is False
+
+
 def test_webview2_accepts_tieba_sid_as_login_cookie():
     assert webview2.has_login_cookie({"TIEBA_SID": "x"}) is True
     assert webview2.has_login_cookie({"BDUSS": "x"}) is True
     assert webview2.has_login_cookie({"BAIDUID": "x"}) is False
+
+
+def test_webview2_cookie_filter_prefers_specific_path():
+    raw = [
+        {"name": "X", "value": "root", "domain": ".baidu.com", "path": "/"},
+        {"name": "X", "value": "tieba", "domain": ".tieba.baidu.com", "path": "/p/1"},
+    ]
+    assert webview2.filter_cookies(raw, anonymous=False)["X"] == "tieba"
 
 
 def test_webview2_guest_cookie_filter_drops_login_tokens():

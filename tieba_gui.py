@@ -4763,7 +4763,26 @@ class App:
                 parent=self.root,
             )
             return
-        self._start_webview_cookie_flow(anonymous=False)
+        entry = self._ask_choice(
+            "打开内置登录",
+            "只开放以下百度入口，不提供任意网址。",
+            [
+                ("百度登录", "login"),
+                ("当前帖子验证页", "thread"),
+                ("贴吧首页", "home"),
+                ("取消", "cancel"),
+            ],
+            default=0,
+        )
+        if not entry or entry == "cancel":
+            return
+        if entry == "login":
+            target_url = "https://passport.baidu.com/v2/?login"
+        elif entry == "home":
+            target_url = "https://tieba.baidu.com/"
+        else:
+            target_url = (getattr(self, "_current_urls", []) or ["https://tieba.baidu.com/"])[0]
+        self._start_webview_cookie_flow(anonymous=False, url=target_url)
 
     def _auto_get_login(self, target: str) -> None:
         if self.mode_var.get() != "login":
@@ -4790,6 +4809,8 @@ class App:
         ):
             return
         url = (getattr(self, "_current_urls", []) or ["https://tieba.baidu.com/"])[0]
+        if not webview2.is_allowed_url(url):
+            url = "https://tieba.baidu.com/"
         self._webview_running = True
         self.status_var.set("正在打开内置登录…")
         center = self._webview_center()
@@ -5988,8 +6009,20 @@ class App:
 
         ttk.Button(
             win,
-            text="模拟验证码（离线，不读取 Cookie）",
-            command=lambda: run(self._simulate_captcha),
+            text="模拟游客验证码",
+            command=lambda: run(lambda: self._simulate_captcha(scenario="guest")),
+            width=38,
+        ).pack(fill="x", padx=16, pady=2)
+        ttk.Button(
+            win,
+            text="模拟登录：完整 Cookie",
+            command=lambda: run(lambda: self._simulate_captcha(scenario="cookie")),
+            width=38,
+        ).pack(fill="x", padx=16, pady=2)
+        ttk.Button(
+            win,
+            text="模拟登录：仅 BDUSS",
+            command=lambda: run(lambda: self._simulate_captcha(scenario="bduss")),
             width=38,
         ).pack(fill="x", padx=16, pady=2)
         ttk.Button(
@@ -6019,10 +6052,23 @@ class App:
         win.lift()
         win.focus_force()
 
-    def _simulate_captcha(self, _event=None) -> None:
+    def _simulate_captcha(self, _event=None, scenario: str = "") -> None:
         """隐藏测试入口：不发网络请求，只走验证码处理流程。"""
         if self._network_task_active() or getattr(self, "_active_choice_window", None):
             return
+        restore = None
+        if scenario in ("guest", "cookie", "bduss"):
+            restore = (
+                self.mode_var.get(),
+                self.login_method_var.get(),
+            )
+            if scenario == "guest":
+                self.mode_var.set("guest")
+            else:
+                self.mode_var.set("login")
+                self.login_method_var.set(scenario)
+                self._on_login_method_changed()
+        self._simulated_restore = restore
         self._append_log("模拟验证码：未发出网络请求，仅测试界面流程。", "muted")
         self._simulated_captcha = True
         self._set_running(True)
@@ -6037,7 +6083,7 @@ class App:
             ),
         )
 
-    def _start_webview_cookie_flow(self, anonymous: bool) -> None:
+    def _start_webview_cookie_flow(self, anonymous: bool, url: str = "") -> None:
         scope = (
             "只读取匿名 Cookie，不读取 BDUSS/STOKEN"
             if anonymous
@@ -6059,7 +6105,14 @@ class App:
         ):
             self._append_log("用户取消读取验证 Cookie。", "muted")
             return
-        url = (getattr(self, "_current_urls", []) or ["https://tieba.baidu.com/"])[0]
+        target_url = url or (getattr(self, "_current_urls", []) or ["https://tieba.baidu.com/"])[0]
+        if not webview2.is_allowed_url(target_url):
+            messagebox.showwarning(
+                "地址不允许",
+                "内置窗口只允许百度贴吧登录/验证页面。",
+                parent=self.root,
+            )
+            return
         self._webview_running = True
         self.status_var.set("正在打开内置验证窗口…")
         center = self._webview_center()
@@ -6067,7 +6120,7 @@ class App:
         def worker():
             try:
                 result = webview2.open_verification(
-                    url,
+                    target_url,
                     center=center,
                     persistent=(not anonymous)
                     and bool(self.settings.get("webview_remember_login", False)),
@@ -6077,9 +6130,20 @@ class App:
                 cookies = webview2.filter_cookies(raw_cookies, anonymous=anonymous)
                 if not cookies:
                     raise RuntimeError("没有读取到可用 Cookie")
-                self._post(("embedded_done", cookies, ""))
+                warning = ""
+                if not anonymous:
+                    probe = Fetcher(cookie=cookies, delay=0, verbose=False)
+                    try:
+                        probe.get("https://tieba.baidu.com/")
+                    except CaptchaError:
+                        warning = "预检仍被验证码拦截，Cookie 可能不可用"
+                    except Exception as error:  # noqa: BLE001
+                        warning = f"预检失败：{error}"
+                    finally:
+                        probe.close()
+                self._post(("embedded_done", cookies, "", warning))
             except Exception as error:  # noqa: BLE001
-                self._post(("embedded_done", {}, str(error)))
+                self._post(("embedded_done", {}, str(error), ""))
 
         threading.Thread(target=worker, daemon=True).start()
 
@@ -10706,6 +10770,13 @@ class App:
                     + "\n\n模拟模式：不打开 WebView2、不读取 Cookie、不修改登录状态。",
                     [("结束模拟", "stop")],
                 )
+                restore = getattr(self, "_simulated_restore", None)
+                self._simulated_restore = None
+                if restore:
+                    self.mode_var.set(restore[0])
+                    self.login_method_var.set(restore[1])
+                    self._on_login_method_changed()
+                    self._apply_mode_ui()
                 self.status_var.set("模拟验证码已结束（未联网）")
                 self._append_log("模拟验证码已结束，未发出请求。", "muted")
                 self._refresh_log_summary()
@@ -10849,7 +10920,7 @@ class App:
                 parent=self.root,
             )
         elif kind == "embedded_done":
-            _, cookies, error = message
+            _, cookies, error, warning = message
             self._webview_running = False
             if error or not cookies:
                 self._append_log(f"内置验证窗口失败：{error or '没有可用 Cookie'}", "err")
@@ -10898,6 +10969,13 @@ class App:
                     "已读取完整 Cookie。请重新开始统计，已完成的帖子不会重抓。",
                     parent=self.root,
                 )
+                if warning:
+                    self._append_log(f"登录预检警告：{warning}", "warn")
+                    messagebox.showwarning(
+                        "预检未通过",
+                        warning + "\n\nCookie 已填入，但开始抓取后仍可能被拦截。",
+                        parent=self.root,
+                    )
             self._refresh_webview_status()
             self._refresh_log_summary()
         elif kind == "auto_login_done":
@@ -10906,10 +10984,25 @@ class App:
             if error or not cookies:
                 self.status_var.set("登录信息获取失败")
                 self._append_log(f"自动获取登录失败：{error or '没有可用 Cookie'}", "err")
+                rolled_back = False
+                if self.settings.get("follow_enhance") and not webview2.has_login_cookie(
+                    parse_cookie_input(self.cookie_var.get())
+                ):
+                    self.settings["follow_enhance"] = False
+                    if hasattr(self, "follow_enhance_var"):
+                        self.follow_enhance_var.set(False)
+                    save_settings(self.settings)
+                    self._set_mode("guest")
+                    rolled_back = True
+                    self._append_log("登录无效，已关闭抓取增强并切回游客。", "warn")
                 messagebox.showwarning(
                     "自动获取失败",
                     (error or "没有读取到可用 Cookie。")
-                    + "\n可以改用手动粘贴。",
+                    + (
+                        "\n已关闭抓取增强并切回游客。"
+                        if rolled_back
+                        else "\n可以改用手动粘贴。"
+                    ),
                     parent=self.root,
                 )
                 self._refresh_webview_status()

@@ -14,6 +14,7 @@ import subprocess
 import sys
 import winreg
 from pathlib import Path
+from urllib.parse import urlsplit
 
 
 def _runtime_installed() -> bool:
@@ -65,7 +66,16 @@ def clear_login_profile() -> bool:
         return False
 
 
+ALLOWED_HOSTS = ("tieba.baidu.com", "passport.baidu.com", "wappass.baidu.com")
 LOGIN_COOKIE_NAMES = ("BDUSS", "TIEBA_SID")
+
+
+def is_allowed_url(url: str) -> bool:
+    try:
+        host = (urlsplit(url).hostname or "").lower()
+    except ValueError:
+        return False
+    return host in ALLOWED_HOSTS
 
 
 def has_login_cookie(cookies) -> bool:
@@ -79,10 +89,11 @@ def has_login_cookie(cookies) -> bool:
 
 def filter_cookies(cookies, anonymous: bool) -> dict[str, str]:
     result: dict[str, str] = {}
+    ranks: dict[str, tuple[int, int]] = {}
     for item in cookies or []:
         if not isinstance(item, dict):
             continue
-        domain = str(item.get("domain") or "")
+        domain = str(item.get("domain") or "").lower()
         if domain and "baidu.com" not in domain:
             continue
         name = str(item.get("name") or "")
@@ -90,7 +101,11 @@ def filter_cookies(cookies, anonymous: bool) -> dict[str, str]:
             continue
         if anonymous and name in ("BDUSS", "STOKEN"):
             continue
-        result[name] = str(item.get("value") or "")
+        path = str(item.get("path") or "/")
+        rank = (1 if domain.endswith("tieba.baidu.com") else 0, len(path))
+        if name not in ranks or rank >= ranks[name]:
+            ranks[name] = rank
+            result[name] = str(item.get("value") or "")
     return result
 
 
