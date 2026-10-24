@@ -587,8 +587,34 @@ class App:
         self.cookie_var = tk.StringVar()
         self.login_method_var = tk.StringVar(value="bduss")
 
+        login_header = tk.Frame(cookie_box, bg="#eef1f5")
+        login_header.grid(row=0, column=0, columnspan=4, sticky="ew", pady=(2, 2))
+        self.login_summary_var = tk.StringVar(value="登录信息未配置")
+        tk.Label(
+            login_header,
+            textvariable=self.login_summary_var,
+            bg="#eef1f5",
+            fg="#334155",
+            font=("Microsoft YaHei UI", 9),
+            anchor="w",
+        ).pack(side="left", fill="x", expand=True)
+        self.login_baidu_btn = ttk.Button(
+            login_header,
+            text="登录百度",
+            command=self._login_baidu,
+            width=10,
+        )
+        self.login_baidu_btn.pack(side="right", padx=(8, 0))
+        self.login_toggle_btn = ttk.Button(
+            login_header,
+            text="收起",
+            command=self._toggle_login_fields,
+            width=6,
+        )
+        self.login_toggle_btn.pack(side="right", padx=(8, 0))
+
         method_row = tk.Frame(cookie_box, bg="#eef1f5")
-        method_row.grid(row=0, column=0, columnspan=4, sticky="w", pady=(2, 4))
+        method_row.grid(row=1, column=0, columnspan=4, sticky="w", pady=(2, 4))
         tk.Label(method_row, text="登录方式：", bg="#eef1f5", fg="#475569").pack(side="left")
         self.login_bduss_radio = ttk.Radiobutton(
             method_row,
@@ -608,7 +634,7 @@ class App:
         self.login_cookie_radio.pack(side="left")
 
         self.bduss_frame = tk.Frame(cookie_box, bg="#eef1f5")
-        self.bduss_frame.grid(row=1, column=0, columnspan=4, sticky="ew")
+        self.bduss_frame.grid(row=2, column=0, columnspan=4, sticky="ew")
         self.bduss_frame.columnconfigure(1, weight=1)
         tk.Label(self.bduss_frame, text="BDUSS：", bg="#eef1f5", fg="#475569").grid(row=0, column=0, sticky="w")
         self.bduss_var = tk.StringVar()
@@ -651,7 +677,7 @@ class App:
         self.bduss_auto_btn.grid(row=3, column=0, columnspan=2, sticky="w", pady=(4, 0))
 
         self.cookie_frame = tk.Frame(cookie_box, bg="#eef1f5")
-        self.cookie_frame.grid(row=1, column=0, columnspan=4, sticky="ew")
+        self.cookie_frame.grid(row=2, column=0, columnspan=4, sticky="ew")
         self.cookie_frame.columnconfigure(1, weight=1)
         tk.Label(self.cookie_frame, text="Cookie：", bg="#eef1f5", fg="#475569").grid(
             row=0, column=0, sticky="w"
@@ -688,6 +714,9 @@ class App:
         )
         self.cookie_auto_btn.grid(row=2, column=0, columnspan=2, sticky="w", pady=(4, 0))
         self.cookie_frame.grid_remove()
+        self.login_method_row = method_row
+        self.login_fields_widgets = [method_row, self.bduss_frame, self.cookie_frame]
+        self._login_fields_expanded = True
         self.cookie_controls = [
             self.login_bduss_radio,
             self.login_cookie_radio,
@@ -699,6 +728,7 @@ class App:
             self.cookie_clear_btn,
             self.bduss_auto_btn,
             self.cookie_auto_btn,
+            self.login_baidu_btn,
         ]
         self.login_method_var.trace_add("write", lambda *_: self._on_login_method_changed())
 
@@ -822,6 +852,8 @@ class App:
 
     def _on_login_method_changed(self) -> None:
         method = self.login_method_var.get()
+        if not getattr(self, "_login_fields_expanded", True):
+            return
         if method == "cookie":
             self.bduss_frame.grid_remove()
             self.cookie_frame.grid()
@@ -3884,6 +3916,28 @@ class App:
         self._apply_risk_ui()
         self._update_risk_summary()
 
+    def _toggle_login_fields(self) -> None:
+        self._set_login_fields_expanded(not getattr(self, "_login_fields_expanded", True))
+
+    def _set_login_fields_expanded(self, expanded: bool) -> None:
+        self._login_fields_expanded = bool(expanded)
+        if not hasattr(self, "login_method_row"):
+            return
+        if self._login_fields_expanded:
+            self.login_method_row.grid()
+            if self.login_method_var.get() == "bduss":
+                self.bduss_frame.grid()
+                self.cookie_frame.grid_remove()
+            else:
+                self.cookie_frame.grid()
+                self.bduss_frame.grid_remove()
+            self.login_toggle_btn.configure(text="收起")
+        else:
+            self.login_method_row.grid_remove()
+            self.bduss_frame.grid_remove()
+            self.cookie_frame.grid_remove()
+            self.login_toggle_btn.configure(text="展开")
+
     def _set_mode(self, mode: str, persist: bool = True) -> None:
         mode = mode if mode in ("guest", "login") else "guest"
         self.mode_var.set(mode)
@@ -4628,25 +4682,12 @@ class App:
 
         button_row = tk.Frame(login_box, bg="#eef1f5")
         button_row.pack(fill="x", padx=8, pady=(0, 4))
-        self.webview_open_btn = ttk.Button(
-            button_row,
-            text="登录百度",
-            command=self._login_baidu,
-            width=14,
-        )
-        self.webview_open_btn.pack(side="left")
         ttk.Button(
             button_row,
-            text="手动填写",
-            command=self._manual_fill_login,
-            width=10,
-        ).pack(side="left", padx=(8, 0))
-        ttk.Button(
-            button_row,
-            text="清除当前登录信息",
-            command=self._clear_cookie,
-            width=16,
-        ).pack(side="left", padx=(8, 0))
+            text="去抓取页管理登录",
+            command=self._go_manage_login,
+            width=18,
+        ).pack(side="left")
 
         self.webview_remember_var = tk.BooleanVar(
             value=bool(self.settings.get("webview_remember_login", False))
@@ -4777,6 +4818,14 @@ class App:
         self.webview_status_var.set(
             f"当前模式：{mode}\n当前登录信息：{login_info}\n内置登录：{login_state}"
         )
+        if hasattr(self, "login_summary_var"):
+            if not is_login:
+                summary = "游客模式 · 匿名 Cookie"
+            elif login_info == "未填写":
+                summary = "登录信息未填写"
+            else:
+                summary = f"{login_info} · 已就绪"
+            self.login_summary_var.set(summary)
         can_open = available and is_login and not self._network_task_active()
         if hasattr(self, "webview_open_btn"):
             self.webview_open_btn.configure(state="normal" if can_open else "disabled")
@@ -4828,6 +4877,16 @@ class App:
         self.settings["webview_remember_login"] = enabled
         save_settings(self.settings)
         self._refresh_webview_status()
+
+    def _go_manage_login(self) -> None:
+        if self.mode_var.get() != "login":
+            self._set_mode("login")
+        self.notebook.select(self.tab_posts)
+        self.post_nb.select(self.tab_fetch)
+        self._set_login_fields_expanded(True)
+        self.root.update_idletasks()
+        target = self.bduss_entry if self.login_method_var.get() == "bduss" else self.cookie_entry
+        target.focus_set()
 
     def _login_baidu(self) -> None:
         if not webview2.available():
@@ -11109,7 +11168,8 @@ class App:
                 self.login_method_var.set("cookie")
                 self.cookie_var.set(self._full_cookie_cache)
                 self._on_login_method_changed()
-                self.cookie_entry.focus_set()
+                self._set_login_fields_expanded(False)
+                self.login_toggle_btn.focus_set()
                 self.status_var.set("登录信息已就绪")
                 self._append_log("已改用缓存的完整 Cookie，请重新开始。", "ok")
                 messagebox.showinfo(
@@ -11225,7 +11285,8 @@ class App:
                 self._full_cookie_cache = cookie_text
                 self.login_method_var.set("cookie")
                 self._on_login_method_changed()
-                self.cookie_entry.focus_set()
+                self._set_login_fields_expanded(False)
+                self.login_toggle_btn.focus_set()
                 self.status_var.set("登录信息已就绪")
                 self._append_log("已从内置验证窗口读取完整 Cookie。", "ok")
                 messagebox.showinfo(
@@ -11280,7 +11341,8 @@ class App:
                 self.bduss_var.set(str(cookies.get("BDUSS") or ""))
                 self.cookie_var.set(f"BDUSS={cookies.get('BDUSS') or ''}")
                 self._on_login_method_changed()
-                self.bduss_entry.focus_set()
+                self._set_login_fields_expanded(False)
+                self.login_toggle_btn.focus_set()
                 self._append_log("已自动获取 BDUSS。", "ok")
                 messagebox.showinfo(
                     "BDUSS 已获取",
@@ -11292,7 +11354,8 @@ class App:
                 self.login_method_var.set("cookie")
                 self.cookie_var.set(cookie_text)
                 self._on_login_method_changed()
-                self.cookie_entry.focus_set()
+                self._set_login_fields_expanded(False)
+                self.login_toggle_btn.focus_set()
                 self._append_log("已自动获取完整 Cookie。", "ok")
                 messagebox.showinfo(
                     "完整 Cookie 已获取",

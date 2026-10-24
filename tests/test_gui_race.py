@@ -62,6 +62,15 @@ def test_login_result_text_for_first_time_and_existing(root_app):
     assert "不会重抓" in app._login_result_text("已读取完整 Cookie")
 
 
+def test_login_fields_can_collapse(root_app):
+    _root, app = root_app
+    app._set_login_fields_expanded(True)
+    assert app.cookie_frame.winfo_manager() or app.bduss_frame.winfo_manager()
+    app._set_login_fields_expanded(False)
+    assert app.cookie_frame.winfo_manager() == ""
+    assert app.bduss_frame.winfo_manager() == ""
+
+
 def test_offline_checks_have_no_failures(root_app):
     _root, app = root_app
     results = app._offline_checks()
