@@ -620,13 +620,6 @@ class App:
             width=22,
         )
         self.login_baidu_btn.pack(side="right", padx=(8, 0))
-        self.login_refresh_btn = ttk.Button(
-            login_header,
-            text="从当前页面刷新",
-            command=self._refresh_login_from_page,
-            width=14,
-        )
-        self.login_refresh_btn.pack(side="right", padx=(8, 0))
         self.login_toggle_btn = ttk.Button(
             login_header,
             text="展开",
@@ -735,7 +728,6 @@ class App:
             self.cookie_apply_btn,
             self.cookie_clear_btn,
             self.login_baidu_btn,
-            self.login_refresh_btn,
         ]
         self.login_method_var.trace_add("write", lambda *_: self._on_login_method_changed())
         self._set_login_fields_expanded(False)
@@ -860,6 +852,8 @@ class App:
 
     def _on_login_method_changed(self) -> None:
         method = self.login_method_var.get()
+        if hasattr(self, "_refresh_webview_status"):
+            self._refresh_webview_status()
         if not getattr(self, "_login_fields_expanded", True):
             return
         if method == "cookie":
@@ -4923,14 +4917,6 @@ class App:
             target,
             url="https://passport.baidu.com/v2/?login",
         )
-
-    def _refresh_login_from_page(self) -> None:
-        if self.mode_var.get() != "login":
-            self._set_mode("login")
-        self._set_login_fields_expanded(True)
-        target = "bduss" if self.login_method_var.get() == "bduss" else "cookie"
-        url = (getattr(self, "_current_urls", []) or ["https://tieba.baidu.com/"])[0]
-        self._auto_get_login(target, url=url)
 
     def _manual_fill_login(self) -> None:
         self._set_mode("login")

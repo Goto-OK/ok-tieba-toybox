@@ -62,6 +62,15 @@ def test_login_result_text_for_first_time_and_existing(root_app):
     assert "不会重抓" in app._login_result_text("已读取完整 Cookie")
 
 
+def test_login_button_text_follows_method(root_app):
+    _root, app = root_app
+    app._set_mode("login")
+    app.login_method_var.set("bduss")
+    assert "BDUSS" in app.login_baidu_btn.cget("text")
+    app.login_method_var.set("cookie")
+    assert "完整 Cookie" in app.login_baidu_btn.cget("text")
+
+
 def test_login_baidu_uses_current_method(root_app, monkeypatch):
     _root, app = root_app
     captured = {}
@@ -78,21 +87,6 @@ def test_login_baidu_uses_current_method(root_app, monkeypatch):
     app.login_method_var.set("cookie")
     app._login_baidu()
     assert captured["target"] == "cookie"
-
-
-def test_refresh_login_uses_current_page_and_method(root_app, monkeypatch):
-    _root, app = root_app
-    captured = {}
-    monkeypatch.setattr(
-        app,
-        "_auto_get_login",
-        lambda target, url="": captured.update(target=target, url=url),
-    )
-    app._set_mode("login")
-    app.login_method_var.set("cookie")
-    app._refresh_login_from_page()
-    assert captured["target"] == "cookie"
-    assert captured["url"]
 
 
 def test_fetch_body_has_mousewheel_scroll(root_app):
