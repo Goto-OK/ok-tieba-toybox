@@ -1919,6 +1919,23 @@ class App:
             finally:
                 self._person_popup.grab_release()
 
+    def _offer_retry_incomplete(self, source: str) -> None:
+        targets = [
+            thread
+            for thread in getattr(self, "last_threads", [])
+            if not getattr(thread, "complete", True)
+        ]
+        if not targets:
+            return
+        if messagebox.askyesno(
+            f"{source}已更新",
+            f"有 {len(targets)} 个帖子未完成。\n"
+            "是否只重试失败部分（不会重抓已完成页/楼层）？",
+            parent=self.root,
+            default=messagebox.YES,
+        ):
+            self._retry_incomplete_threads()
+
     def _retry_incomplete_threads(self) -> None:
         if getattr(self, "_supplement_running", False) or self.running:
             return
@@ -11138,6 +11155,7 @@ class App:
                         warning + "\n\nCookie 已填入，但开始抓取后仍可能被拦截。",
                         parent=self.root,
                     )
+            self._offer_retry_incomplete("登录信息")
             self._refresh_webview_status()
             self._refresh_log_summary()
         elif kind == "auto_login_done":
@@ -11206,6 +11224,7 @@ class App:
                     warning + "\n\nCookie 已填入，但开始抓取后仍可能被拦截。",
                     parent=self.root,
                 )
+            self._offer_retry_incomplete("登录信息")
             self._refresh_webview_status()
             self._refresh_log_summary()
         elif kind == "rate_limit_ask":
