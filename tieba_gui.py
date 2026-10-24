@@ -580,7 +580,7 @@ class App:
         )
 
         # 4. 登录 / 关注增强
-        cookie_box = ttk.LabelFrame(body, text=" 登录 / 关注增强 ", style="Card.TLabelframe")
+        cookie_box = ttk.LabelFrame(body, text=" 登录 ", style="Card.TLabelframe")
         cookie_box.grid(row=3, column=0, sticky="ew", pady=(6, 0))
         self.cookie_box = cookie_box
         cookie_box.columnconfigure(0, weight=1)
@@ -607,7 +607,7 @@ class App:
         self.login_baidu_btn.pack(side="right", padx=(8, 0))
         self.login_toggle_btn = ttk.Button(
             login_header,
-            text="收起",
+            text="展开",
             command=self._toggle_login_fields,
             width=6,
         )
@@ -716,7 +716,7 @@ class App:
         self.cookie_frame.grid_remove()
         self.login_method_row = method_row
         self.login_fields_widgets = [method_row, self.bduss_frame, self.cookie_frame]
-        self._login_fields_expanded = True
+        self._login_fields_expanded = False
         self.cookie_controls = [
             self.login_bduss_radio,
             self.login_cookie_radio,
@@ -731,6 +731,7 @@ class App:
             self.login_baidu_btn,
         ]
         self.login_method_var.trace_add("write", lambda *_: self._on_login_method_changed())
+        self._set_login_fields_expanded(False)
 
         # 5. 按钮
         buttons = tk.Frame(body, bg="#eef1f5")
@@ -4898,6 +4899,7 @@ class App:
             return
         if self.mode_var.get() != "login":
             self._set_mode("login")
+        self._set_login_fields_expanded(True)
         self._start_webview_cookie_flow(
             anonymous=False,
             url="https://passport.baidu.com/v2/?login",
@@ -4906,6 +4908,7 @@ class App:
     def _manual_fill_login(self) -> None:
         self._set_mode("login")
         self.login_method_var.set("cookie")
+        self._set_login_fields_expanded(True)
         self._on_login_method_changed()
         try:
             self.notebook.select(self.tab_posts)
