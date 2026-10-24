@@ -634,6 +634,13 @@ class App:
             fg="#8a94a6",
             font=("Microsoft YaHei UI", 8),
         ).grid(row=2, column=0, columnspan=6, sticky="w")
+        self.bduss_auto_btn = ttk.Button(
+            self.bduss_frame,
+            text="自动获取 BDUSS",
+            command=lambda: self._auto_get_login("bduss"),
+            width=16,
+        )
+        self.bduss_auto_btn.grid(row=3, column=0, columnspan=2, sticky="w", pady=(4, 0))
 
         self.cookie_frame = tk.Frame(cookie_box, bg="#eef1f5")
         self.cookie_frame.grid(row=1, column=0, columnspan=4, sticky="ew")
@@ -665,6 +672,13 @@ class App:
             text="记住完整 Cookie（用 Windows 账户加密，仅本机可用；可能包含其他 Cookie）",
             variable=self.remember_cookie_var,
         ).grid(row=1, column=0, columnspan=6, sticky="w", pady=(3, 0))
+        self.cookie_auto_btn = ttk.Button(
+            self.cookie_frame,
+            text="自动获取完整 Cookie",
+            command=lambda: self._auto_get_login("cookie"),
+            width=18,
+        )
+        self.cookie_auto_btn.grid(row=2, column=0, columnspan=2, sticky="w", pady=(4, 0))
         self.cookie_frame.grid_remove()
         self.cookie_controls = [
             self.login_bduss_radio,
@@ -675,6 +689,8 @@ class App:
             self.cookie_help_btn,
             self.cookie_apply_btn,
             self.cookie_clear_btn,
+            self.bduss_auto_btn,
+            self.cookie_auto_btn,
         ]
         self.login_method_var.trace_add("write", lambda *_: self._on_login_method_changed())
 
@@ -3712,15 +3728,40 @@ class App:
 
     def _on_follow_toggle(self) -> None:
         enabled = bool(self.follow_enhance_var.get())
-        self.settings["follow_enhance"] = enabled
-        if enabled:
-            self._set_mode("login")
-            if not parse_cookie_input(self.cookie_var.get()).get("BDUSS"):
-                if self._ask_go_fill_bduss():
-                    self._go_to_login()
-        else:
+        if not enabled:
+            self.settings["follow_enhance"] = False
             self._set_mode("guest")
+            save_settings(self.settings)
+            return
+        has_login = bool(parse_cookie_input(self.cookie_var.get()).get("BDUSS"))
+        if not has_login:
+            choice = self._ask_choice(
+                "启用抓取增强",
+                "抓取增强需要登录信息。请选择获取方式：\n"
+                "自动获取会打开内置登录窗口；手动方式只到抓取页填写。",
+                [
+                    ("自动获取完整 Cookie（推荐）", "cookie"),
+                    ("自动获取 BDUSS", "bduss"),
+                    ("手动填写", "manual"),
+                    ("取消", "cancel"),
+                ],
+                default=0,
+            )
+            if not choice or choice == "cancel":
+                self.follow_enhance_var.set(False)
+                self.settings["follow_enhance"] = False
+                save_settings(self.settings)
+                return
+        else:
+            choice = "manual"
+        self.settings["follow_enhance"] = True
+        self._set_mode("login")
         save_settings(self.settings)
+        if choice in ("cookie", "bduss"):
+            self.root.after(50, lambda: self._auto_get_login(choice))
+        else:
+            self._go_to_login()
+            self.bduss_entry.focus_set()
 
     def _ask_go_fill_bduss(self) -> bool:
         win = tk.Toplevel(self.root)
@@ -4719,6 +4760,63 @@ class App:
             )
             return
         self._start_webview_cookie_flow(anonymous=False)
+
+    def _auto_get_login(self, target: str) -> None:
+        if self.mode_var.get() != "login":
+            messagebox.showinfo("仅登录模式可用", "请先切换到登录模式。", parent=self.root)
+            return
+        if not webview2.available():
+            messagebox.showwarning(
+                "WebView2 不可用",
+                "未检测到 WebView2 Runtime，请手动粘贴 BDUSS 或完整 Cookie。",
+                parent=self.root,
+            )
+            return
+        if self._network_task_active() or getattr(self, "_webview_running", False):
+            messagebox.showinfo("请稍后", "当前有任务或内置窗口正在运行。", parent=self.root)
+            return
+        if not messagebox.askyesno(
+            "自动获取登录信息",
+            "将打开内置百度登录窗口。\n"
+            "登录完成后读取完整 Cookie"
+            + ("，只提取 BDUSS。" if target == "bduss" else "。")
+            + "\nCookie 默认只在内存；开启“记住内置登录”时 WebView2 会话会保留在本机。\n\n继续？",
+            parent=self.root,
+            default=messagebox.NO,
+        ):
+            return
+        url = (getattr(self, "_current_urls", []) or ["https://tieba.baidu.com/"])[0]
+        self._webview_running = True
+        self.status_var.set("正在打开内置登录…")
+        center = self._webview_center()
+        persistent = bool(self.settings.get("webview_remember_login", False))
+
+        def worker():
+            try:
+                result = webview2.open_verification(
+                    url,
+                    center=center,
+                    persistent=persistent,
+                    require_login=True,
+                )
+                raw = result.get("cookies") if isinstance(result, dict) else result
+                cookies = webview2.filter_cookies(raw, anonymous=False)
+                if not cookies.get("BDUSS"):
+                    raise RuntimeError("没有读取到 BDUSS，可能尚未登录")
+                probe = Fetcher(cookie=cookies, delay=0, verbose=False)
+                try:
+                    probe.get("https://tieba.baidu.com/")
+                except CaptchaError as error:
+                    raise RuntimeError("登录预检仍被验证码拦截") from error
+                except Exception as error:  # noqa: BLE001
+                    raise RuntimeError(f"登录预检失败：{error}") from error
+                finally:
+                    probe.close()
+                self._post(("auto_login_done", target, cookies, ""))
+            except Exception as error:  # noqa: BLE001
+                self._post(("auto_login_done", target, {}, str(error)))
+
+        threading.Thread(target=worker, daemon=True).start()
 
     def _clear_internal_login(self) -> None:
         if self._network_task_active() or getattr(self, "_webview_running", False):
@@ -10776,6 +10874,48 @@ class App:
                 messagebox.showinfo(
                     "验证完成",
                     "已读取完整 Cookie。请重新开始统计，已完成的帖子不会重抓。",
+                    parent=self.root,
+                )
+            self._refresh_webview_status()
+            self._refresh_log_summary()
+        elif kind == "auto_login_done":
+            _, target, cookies, error = message
+            self._webview_running = False
+            if error or not cookies:
+                self._append_log(f"自动获取登录失败：{error or '没有可用 Cookie'}", "err")
+                messagebox.showwarning(
+                    "自动获取失败",
+                    (error or "没有读取到可用 Cookie。")
+                    + "\n可以改用手动粘贴。",
+                    parent=self.root,
+                )
+                self._refresh_webview_status()
+                self._refresh_log_summary()
+                return
+            cookie_text = "; ".join(f"{k}={v}" for k, v in cookies.items())
+            self._full_cookie_cache = cookie_text
+            if target == "bduss":
+                self.login_method_var.set("bduss")
+                self.bduss_var.set(str(cookies.get("BDUSS") or ""))
+                self.cookie_var.set(f"BDUSS={cookies.get('BDUSS') or ''}")
+                self._on_login_method_changed()
+                self.bduss_entry.focus_set()
+                self._append_log("已自动获取 BDUSS。", "ok")
+                messagebox.showinfo(
+                    "BDUSS 已获取",
+                    "已从内置登录提取 BDUSS。请重新开始统计。",
+                    parent=self.root,
+                )
+            else:
+                self._webview_cookie_session = True
+                self.login_method_var.set("cookie")
+                self.cookie_var.set(cookie_text)
+                self._on_login_method_changed()
+                self.cookie_entry.focus_set()
+                self._append_log("已自动获取完整 Cookie。", "ok")
+                messagebox.showinfo(
+                    "完整 Cookie 已获取",
+                    "已从内置登录读取完整 Cookie。请重新开始统计。",
                     parent=self.root,
                 )
             self._refresh_webview_status()
