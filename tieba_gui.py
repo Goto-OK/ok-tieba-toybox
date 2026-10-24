@@ -378,6 +378,14 @@ class App:
             font=("Microsoft YaHei UI", 9),
             anchor="w",
         ).pack(side="left")
+        tk.Label(
+            status,
+            text="F1 使用说明 · Ctrl+Enter 开始 · Esc 关闭",
+            bg="#ffffff",
+            fg="#8a94a6",
+            font=("Microsoft YaHei UI", 8),
+            anchor="e",
+        ).pack(side="right", padx=(8, 0))
         self.progress = ttk.Progressbar(status, mode="indeterminate", length=180)
 
         self.body = tk.Frame(self.root, bg="#eef1f5")
@@ -5840,19 +5848,6 @@ class App:
         ttk.Button(help_row, text="复制诊断信息", command=self._copy_diagnostics, width=14).pack(
             side="left", padx=(8, 0)
         )
-        ttk.Button(
-            help_row,
-            text="测试内置验证窗口",
-            command=self._test_embedded_verification,
-            width=16,
-        ).pack(side="left", padx=(8, 0))
-        tk.Label(
-            help_box,
-            text="测试只打开真实页面，不读取 Cookie、不写入登录状态。",
-            bg="#eef1f5",
-            fg="#8a94a6",
-            font=("Microsoft YaHei UI", 8),
-        ).pack(anchor="w", padx=8, pady=(0, 4))
         tk.Label(
             help_box,
             text="第三方组件：Python / PyInstaller / lxml / openpyxl / Tcl-Tk，各自按其许可证分发。",
@@ -6578,8 +6573,16 @@ class App:
                     content = handle.read()
         except OSError:
             content = ""
+        shortcuts = (
+            "快捷键\n"
+            "  F1           打开使用说明\n"
+            "  Ctrl+Enter   从链接输入框开始抓取\n"
+            "  Ctrl+C       复制选中行\n"
+            "  Esc          关闭当前弹窗\n"
+            "  双击         打开选中项\n\n"
+        )
         text.configure(state="normal")
-        text.insert("1.0", content or "使用说明文件未找到。")
+        text.insert("1.0", shortcuts + (content or "使用说明文件未找到。"))
         text.configure(state="disabled")
         self._theme_widget_tree(win)
         self._center_toplevel(win, 780, 640)
