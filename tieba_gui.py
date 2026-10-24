@@ -6027,6 +6027,12 @@ class App:
         ).pack(fill="x", padx=16, pady=2)
         ttk.Button(
             win,
+            text="运行离线检查（PASS/FAIL）",
+            command=lambda: run(self._show_offline_test_results),
+            width=38,
+        ).pack(fill="x", padx=16, pady=2)
+        ttk.Button(
+            win,
             text="测试内置验证窗口（不读取 Cookie）",
             command=lambda: run(self._test_embedded_verification),
             width=38,
@@ -6051,6 +6057,71 @@ class App:
         win.geometry(f"{width}x{height}+{x}+{y}")
         win.lift()
         win.focus_force()
+
+    def _offline_checks(self) -> list[tuple[str, str, str]]:
+        results: list[tuple[str, str, str]] = []
+
+        def check(name: str, condition: bool, detail: str = "") -> None:
+            results.append((name, "PASS" if condition else "FAIL", detail))
+
+        check(
+            "允许百度登录域名",
+            webview2.is_allowed_url("https://passport.baidu.com/v2/?login"),
+        )
+        check(
+            "拒绝非白名单域名",
+            not webview2.is_allowed_url("https://example.com/"),
+        )
+        check(
+            "接受 TIEBA_SID 登录态",
+            webview2.has_login_cookie({"TIEBA_SID": "test"}),
+        )
+        check(
+            "匿名 Cookie 不算登录",
+            not webview2.has_login_cookie({"BAIDUID": "test"}),
+        )
+        filtered = webview2.filter_cookies(
+            [
+                {"name": "BDUSS", "value": "secret", "domain": ".baidu.com", "path": "/"},
+                {"name": "BAIDUID", "value": "anonymous", "domain": ".baidu.com", "path": "/"},
+            ],
+            anonymous=True,
+        )
+        check("游客过滤 BDUSS", "BDUSS" not in filtered and "BAIDUID" in filtered)
+        merged = webview2.filter_cookies(
+            [
+                {"name": "X", "value": "root", "domain": ".baidu.com", "path": "/"},
+                {"name": "X", "value": "tieba", "domain": ".tieba.baidu.com", "path": "/p/1"},
+            ],
+            anonymous=False,
+        )
+        check("同名 Cookie 取更具体 path", merged.get("X") == "tieba")
+        check("WebView2 组件可用", webview2.available(), "仅信息，不强制安装")
+        return results
+
+    def _show_offline_test_results(self) -> None:
+        results = self._offline_checks()
+        win = tk.Toplevel(self.root)
+        win.title("离线检查结果")
+        win.configure(bg="#eef1f5")
+        win.transient(self.root)
+        win.grab_set()
+        body = tk.Frame(win, bg="#eef1f5", padx=12, pady=10)
+        body.pack(fill="both", expand=True)
+        text = tk.Text(body, width=78, height=max(8, len(results) + 4), wrap="word")
+        text.pack(fill="both", expand=True)
+        text.insert("end", "测试项\t结果\t说明\n")
+        for name, status, detail in results:
+            text.insert("end", f"{name}\t{status}\t{detail}\n")
+        text.configure(state="disabled")
+        ttk.Button(body, text="关闭", command=win.destroy).pack(anchor="e", pady=(8, 0))
+        win.update_idletasks()
+        width = max(620, win.winfo_reqwidth())
+        height = max(300, win.winfo_reqheight())
+        x = self.root.winfo_rootx() + max(0, (self.root.winfo_width() - width) // 2)
+        y = self.root.winfo_rooty() + max(0, (self.root.winfo_height() - height) // 2)
+        win.geometry(f"{width}x{height}+{x}+{y}")
+        win.lift()
 
     def _show_test_captcha_dialog(self, scenario: str) -> None:
         """测试模式：展示真实按钮，用假 Cookie 走后续界面，不联网。"""

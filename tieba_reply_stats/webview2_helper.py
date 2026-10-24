@@ -8,6 +8,7 @@ import sys
 import threading
 import time
 from ctypes import wintypes
+from urllib.parse import urlsplit
 
 TITLE = "贴吧安全验证"
 
@@ -172,7 +173,21 @@ def main() -> int:
                 _close_window()
                 return
 
+    def on_loaded() -> None:
+        try:
+            url = str(window.get_current_url() or "")
+            host = (urlsplit(url).hostname or "").lower()
+        except Exception:  # noqa: BLE001
+            return
+        if host and host not in (
+            "tieba.baidu.com",
+            "passport.baidu.com",
+            "wappass.baidu.com",
+        ):
+            _close_window()
+
     window.events.closed += on_closed
+    window.events.loaded += on_loaded
     threading.Thread(target=monitor, daemon=True).start()
     webview.start(private_mode=not profile_dir, storage_path=profile_dir or None)
     print(
