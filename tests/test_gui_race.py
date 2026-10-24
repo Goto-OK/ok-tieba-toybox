@@ -80,6 +80,21 @@ def test_login_baidu_uses_current_method(root_app, monkeypatch):
     assert captured["target"] == "cookie"
 
 
+def test_refresh_login_uses_current_page_and_method(root_app, monkeypatch):
+    _root, app = root_app
+    captured = {}
+    monkeypatch.setattr(
+        app,
+        "_auto_get_login",
+        lambda target, url="": captured.update(target=target, url=url),
+    )
+    app._set_mode("login")
+    app.login_method_var.set("cookie")
+    app._refresh_login_from_page()
+    assert captured["target"] == "cookie"
+    assert captured["url"]
+
+
 def test_fetch_body_has_mousewheel_scroll(root_app):
     _root, app = root_app
     assert app.fetch_body.bind("<MouseWheel>")

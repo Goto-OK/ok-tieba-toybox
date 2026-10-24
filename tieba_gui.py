@@ -615,11 +615,18 @@ class App:
         ).pack(side="left", fill="x", expand=True)
         self.login_baidu_btn = ttk.Button(
             login_header,
-            text="登录百度",
+            text="登录百度并获取",
             command=self._login_baidu,
-            width=10,
+            width=22,
         )
         self.login_baidu_btn.pack(side="right", padx=(8, 0))
+        self.login_refresh_btn = ttk.Button(
+            login_header,
+            text="从当前页面刷新",
+            command=self._refresh_login_from_page,
+            width=14,
+        )
+        self.login_refresh_btn.pack(side="right", padx=(8, 0))
         self.login_toggle_btn = ttk.Button(
             login_header,
             text="展开",
@@ -683,13 +690,6 @@ class App:
             fg="#8a94a6",
             font=("Microsoft YaHei UI", 8),
         ).grid(row=2, column=0, columnspan=6, sticky="w")
-        self.bduss_auto_btn = ttk.Button(
-            self.bduss_frame,
-            text="自动获取 BDUSS",
-            command=lambda: self._auto_get_login("bduss"),
-            width=16,
-        )
-        self.bduss_auto_btn.grid(row=3, column=0, columnspan=2, sticky="w", pady=(4, 0))
 
         self.cookie_frame = tk.Frame(cookie_box, bg="#eef1f5")
         self.cookie_frame.grid(row=2, column=0, columnspan=4, sticky="ew")
@@ -721,13 +721,6 @@ class App:
             text="记住完整 Cookie（用 Windows 账户加密，仅本机可用；可能包含其他 Cookie）",
             variable=self.remember_cookie_var,
         ).grid(row=1, column=0, columnspan=6, sticky="w", pady=(3, 0))
-        self.cookie_auto_btn = ttk.Button(
-            self.cookie_frame,
-            text="自动获取完整 Cookie",
-            command=lambda: self._auto_get_login("cookie"),
-            width=18,
-        )
-        self.cookie_auto_btn.grid(row=2, column=0, columnspan=2, sticky="w", pady=(4, 0))
         self.cookie_frame.grid_remove()
         self.login_method_row = method_row
         self.login_fields_widgets = [method_row, self.bduss_frame, self.cookie_frame]
@@ -741,9 +734,8 @@ class App:
             self.cookie_help_btn,
             self.cookie_apply_btn,
             self.cookie_clear_btn,
-            self.bduss_auto_btn,
-            self.cookie_auto_btn,
             self.login_baidu_btn,
+            self.login_refresh_btn,
         ]
         self.login_method_var.trace_add("write", lambda *_: self._on_login_method_changed())
         self._set_login_fields_expanded(False)
@@ -4837,6 +4829,14 @@ class App:
         self.webview_status_var.set(
             f"当前模式：{mode}\n当前登录信息：{login_info}\n内置登录：{login_state}"
         )
+        if hasattr(self, "login_baidu_btn"):
+            self.login_baidu_btn.configure(
+                text=(
+                    "登录百度并获取 BDUSS"
+                    if self.login_method_var.get() == "bduss"
+                    else "登录百度并获取完整 Cookie"
+                )
+            )
         if hasattr(self, "login_summary_var"):
             if not is_login:
                 summary = "游客模式 · 匿名 Cookie"
@@ -4923,6 +4923,14 @@ class App:
             target,
             url="https://passport.baidu.com/v2/?login",
         )
+
+    def _refresh_login_from_page(self) -> None:
+        if self.mode_var.get() != "login":
+            self._set_mode("login")
+        self._set_login_fields_expanded(True)
+        target = "bduss" if self.login_method_var.get() == "bduss" else "cookie"
+        url = (getattr(self, "_current_urls", []) or ["https://tieba.baidu.com/"])[0]
+        self._auto_get_login(target, url=url)
 
     def _manual_fill_login(self) -> None:
         self._set_mode("login")
