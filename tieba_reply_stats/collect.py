@@ -100,7 +100,7 @@ def _resume_login_thread(
     thread.warnings = list(thread.warnings)
     meta = thread.meta
     total = int(meta.total_page or 0)
-    failed = sorted({int(pn) for pn in thread.failed_pages if int(pn) >= 2})
+    failed = sorted({int(pn) for pn in thread.failed_pages if int(pn) >= 1})
     if total:
         failed = [pn for pn in failed if pn <= total]
     if failed:
@@ -109,7 +109,28 @@ def _resume_login_thread(
         pages = list(range(max(2, int(thread.pages_fetched) + 1), total + 1)) if total else []
     floors_by_no = {floor.post_no: floor for floor in thread.floors}
     failed_after: List[int] = []
-    fetched = int(thread.pages_fetched or 1)
+    fetched = int(thread.pages_fetched or 0)
+    if 1 in pages:
+        _check_stop(options)
+        try:
+            response = fetcher.get(thread_page_url(tid, 1), name=f"thread_{tid}_p1")
+            page_meta, items = parse_thread_page(response.text, source_url, tid)
+            total = int(page_meta.total_page or 0)
+            meta.total_page = total
+            thread.meta.total_page = total
+            for floor in items:
+                floors_by_no[floor.post_no] = floor
+            fetched = 1
+            pages = list(range(2, total + 1)) if total else []
+            log(f"  续抓第 1 页：{len(items)} 层")
+        except CaptchaError as error:
+            thread.floors = []
+            thread.pages_fetched = 0
+            thread.failed_pages = [1]
+            thread.complete = False
+            thread.warnings.append("第一页仍被验证码拦截")
+            error.partial = thread
+            raise
     for pn in pages:
         _check_stop(options)
         try:
@@ -210,7 +231,19 @@ def collect_thread(
             source_url, tid, fetcher, options, resume_thread, log
         )
     log("  模式：登录（完整楼中楼 / 关注 / 等级）")
-    first = fetcher.get(thread_page_url(tid, 1), name=f"thread_{tid}_p1")
+    try:
+        first = fetcher.get(thread_page_url(tid, 1), name=f"thread_{tid}_p1")
+    except CaptchaError as error:
+        error.partial = ThreadData(
+            meta=ThreadMeta(tid=tid, url=source_url, mode="login"),
+            floors=[],
+            comments=[],
+            pages_fetched=0,
+            failed_pages=[1],
+            warnings=["第一页被验证码拦截，尚未解析"],
+            complete=False,
+        )
+        raise
     meta, floors = parse_thread_page(first.text, source_url, tid)
     if not floors:
         raise CollectError(

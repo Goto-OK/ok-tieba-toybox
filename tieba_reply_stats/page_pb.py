@@ -446,6 +446,18 @@ def resume_thread_anon(url: str, thread: ThreadData, fetcher, options) -> Thread
     ):
         thread.warnings.append("缺少失败页/楼层断点，未自动标记完成")
         return thread
+    if 1 in failed and not thread.fetched_pages:
+        try:
+            first = fetch_page(fetcher, tid, 1, options.include_comments, 30, 10, bduss="")
+            _merge_page(thread, first, seen_floors)
+            thread.fetched_pages.append(1)
+            thread.failed_pages.remove(1)
+            thread.meta.total_page = first["page"].get("total") or thread.meta.total_page
+            failed = sorted(set(thread.failed_pages))
+        except CaptchaError as error:
+            thread.complete = False
+            error.partial = thread
+            raise
     last = options.max_pages or thread.meta.total_page or (failed[0] if failed else 1)
     if thread.fetched_pages:
         done_pages = set(thread.fetched_pages)
@@ -504,7 +516,19 @@ def collect_thread_anon(
     tid = extract_tid(url)
     if resume_thread is not None:
         return resume_thread_anon(url, resume_thread, fetcher, options)
-    first = fetch_page(fetcher, tid, 1, options.include_comments, 30, 10, bduss="")
+    try:
+        first = fetch_page(fetcher, tid, 1, options.include_comments, 30, 10, bduss="")
+    except CaptchaError as error:
+        error.partial = ThreadData(
+            meta=ThreadMeta(tid=tid, url=url, mode="guest"),
+            floors=[],
+            comments=[],
+            fetched_pages=[],
+            failed_pages=[1],
+            warnings=["第一页被验证码拦截，尚未解析"],
+            complete=False,
+        )
+        raise
     thread = first["thread"]
     page = first["page"]
     meta = ThreadMeta(
