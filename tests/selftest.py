@@ -175,21 +175,28 @@ def test_export(render: bool):
     stats_sheet = book["回复统计"]
     check(stats_sheet["A1"].value == "排名", "表头")
     check(stats_sheet["B1"].value == "昵称" and stats_sheet["C1"].value == "用户名", "昵称/用户名列")
-    check(stats_sheet["E1"].value == "等级" and stats_sheet["F1"].value == "头衔", "等级/头衔列")
+    check(
+        stats_sheet["E1"].value == "用户ID"
+        and stats_sheet["F1"].value == "等级"
+        and stats_sheet["G1"].value == "头衔",
+        "用户ID/等级/头衔列",
+    )
     check(stats_sheet["B2"].value == "用户B", f"排名第一：{stats_sheet['B2'].value!r}")
-    check(stats_sheet["E2"].value == "Lv.9", f"回复统计等级：{stats_sheet['E2'].value!r}")
-    check(stats_sheet["I2"].value == 11, "合计值")
+    check(stats_sheet["F2"].value == "Lv.9", f"回复统计等级：{stats_sheet['F2'].value!r}")
+    check(stats_sheet["J2"].value == 11, "合计值")
 
     floor_sheet = book["楼层明细"]
-    check(floor_sheet["E1"].value == "等级", "楼层明细等级列")
-    check(floor_sheet["E2"].value == "Lv.12", f"楼层等级：{floor_sheet['E2'].value!r}")
-    check(floor_sheet["I4"].value == "=1+1" and floor_sheet["I4"].data_type == "s", "公式样文本")
+    check(floor_sheet["E1"].value == "用户ID", "楼层明细用户ID列")
+    check(floor_sheet["F1"].value == "等级", "楼层明细等级列")
+    check(floor_sheet["F2"].value == "Lv.12", f"楼层等级：{floor_sheet['F2'].value!r}")
+    check(floor_sheet["J4"].value == "=1+1" and floor_sheet["J4"].data_type == "s", "公式样文本")
     check(floor_sheet["B6"].value == "小A" and floor_sheet["C6"].value == "用户A", "楼层昵称/用户名")
 
     comment_sheet = book["楼中楼明细"]
-    check(comment_sheet["F1"].value == "等级", "楼中楼等级列")
-    check(comment_sheet["I1"].value == "内容", "楼中楼内容列在最后")
-    check(comment_sheet["I2"].value not in (None, ""), f"楼中楼内容不为空：{comment_sheet['I2'].value!r}")
+    check(comment_sheet["F1"].value == "用户ID", "楼中楼用户ID列")
+    check(comment_sheet["G1"].value == "等级", "楼中楼等级列")
+    check(comment_sheet["J1"].value == "内容", "楼中楼内容列在最后")
+    check(comment_sheet["J2"].value not in (None, ""), f"楼中楼内容不为空：{comment_sheet['J2'].value!r}")
 
     # 多帖导出
     second = collect_thread(URL, fetcher, CollectOptions(mode="login", verbose=False))

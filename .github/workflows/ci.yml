@@ -9,6 +9,8 @@ jobs:
   test:
     runs-on: windows-latest
     env:
+      # GitHub Windows runner 默认 cp1252，selftest 输出中文需要 UTF-8。
+      PYTHONIOENCODING: "utf-8"
       # CI 不安装可选 WebView2 依赖；该离线检查在界面中只作信息展示。
       TIEBA_SKIP_WEBVIEW2_CHECK: "1"
     steps:
