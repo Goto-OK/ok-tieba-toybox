@@ -13,7 +13,8 @@
 - 未知后台消息类型写入警告日志，不再静默丢弃；
 - ruff 增加 bugbear 规则，mypy 开启未注解函数体检查；
 - GUI 版面构建方法拆出为独立 `tieba_gui_layout.py`，App 主类减少约 1,300 行；
-- 后台消息的 35 个 kind 分支全部拆出为独立 `tieba_gui_messages.py` 的 `MessageMixin`，`_handle_message` 从 783 行降到约 74 行。
+- 后台消息的 35 个 kind 分支全部拆出为独立 `tieba_gui_messages.py` 的 `MessageMixin`，`_handle_message` 从 783 行降到约 74 行；
+- 设置页构建方法拆出为独立 `tieba_gui_settings.py`。
 
 ## [1.7.3] - 2026-10-26（已打包）
 
