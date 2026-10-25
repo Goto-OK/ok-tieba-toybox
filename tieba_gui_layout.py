@@ -1081,6 +1081,14 @@ class GuiLayoutMixin:
 
     def _build_lookup_tab(self) -> None:
         page = self.tab_lookup
+        self._build_lookup_query(page)
+        self._build_lookup_summary(page)
+        self._build_lookup_bottom(page)
+        self._build_lookup_trees(page)
+        self._toggle_lookup_dates()
+
+
+    def _build_lookup_query(self, page) -> None:
         query = tk.Frame(page, bg="#ffffff", padx=12, pady=8)
         query.pack(fill="x")
         self.lookup_query_bar = query
@@ -1187,6 +1195,9 @@ class GuiLayoutMixin:
         self.lookup_start_var.set(self._group_date(self.lookup_start_parts))
         self.lookup_end_var.set(self._group_date(self.lookup_end_parts))
 
+
+
+    def _build_lookup_summary(self, page) -> None:
         summary = tk.Frame(page, bg="#eef1f5", padx=12, pady=4)
         summary.pack(fill="x")
         self.lookup_summary = summary
@@ -1249,6 +1260,9 @@ class GuiLayoutMixin:
         )
         self.lookup_cache_label.pack(side="left")
 
+
+
+    def _build_lookup_bottom(self, page) -> None:
         bottom = tk.Frame(page, bg="#eef1f5", padx=10, pady=6)
         bottom.pack(side="bottom", fill="x")
         self.lookup_bottom = bottom
@@ -1277,6 +1291,9 @@ class GuiLayoutMixin:
         )
         self.lookup_forum_note.pack(side="left", fill="x", expand=True)
 
+
+
+    def _build_lookup_trees(self, page) -> None:
         paned = ttk.PanedWindow(page, orient="horizontal")
         paned.pack(fill="both", expand=True, padx=10, pady=(0, 6))
         self.lookup_paned = paned
@@ -1377,11 +1394,10 @@ class GuiLayoutMixin:
         self._lookup_cache: Dict[str, tuple[float, Dict[str, Any]]] = {}
         self._lookup_topic_limit = 50
         self.lookup_topic_btn = ttk.Button(
-            bottom, text="继续抓主题", command=self._continue_lookup_topics, width=12
+            self.lookup_bottom, text="继续抓主题", command=self._continue_lookup_topics, width=12
         )
         self._lookup_generation = 0
         self.lookup_date_mode_var.trace_add("write", lambda *_: self._on_lookup_date_changed())
         for _var in (self.lookup_count_var, self.lookup_prefer_var):
             _var.trace_add("write", lambda *_: self._on_lookup_date_changed())
-        self._toggle_lookup_dates()
 
