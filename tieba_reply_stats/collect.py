@@ -99,7 +99,8 @@ def _resume_login_thread(
     thread.complete = False
     thread.warnings = list(thread.warnings)
     meta = thread.meta
-    total = int(meta.total_page or 0)
+    raw_total = int(meta.total_page or 0)
+    total = min(raw_total, HARD_PAGE_LIMIT) if raw_total else 0
     failed = sorted({int(pn) for pn in thread.failed_pages if int(pn) >= 1})
     if total:
         failed = [pn for pn in failed if pn <= total]
@@ -115,9 +116,10 @@ def _resume_login_thread(
         try:
             response = fetcher.get(thread_page_url(tid, 1), name=f"thread_{tid}_p1")
             page_meta, items = parse_thread_page(response.text, source_url, tid)
-            total = int(page_meta.total_page or 0)
-            meta.total_page = total
-            thread.meta.total_page = total
+            raw_total = int(page_meta.total_page or 0)
+            total = min(raw_total, HARD_PAGE_LIMIT) if raw_total else 0
+            meta.total_page = raw_total
+            thread.meta.total_page = raw_total
             for floor in items:
                 floors_by_no[floor.post_no] = floor
             fetched = 1
@@ -162,6 +164,9 @@ def _resume_login_thread(
     thread.pages_fetched = fetched
     thread.failed_pages = failed_after
     thread.complete = not failed_after
+    if raw_total > HARD_PAGE_LIMIT:
+        thread.complete = False
+        thread.warnings.append(f"页数超过上限 {HARD_PAGE_LIMIT}，仅续抓前 {HARD_PAGE_LIMIT} 页")
     if options.include_comments:
         try:
             comments = _collect_comments(
