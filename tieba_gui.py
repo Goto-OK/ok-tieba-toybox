@@ -626,6 +626,436 @@ class MessageMixin:
         self._refresh_webview_status()
         self._refresh_log_summary()
 
+    def _handle_message_log(self, message: tuple) -> None:
+        _, text, tag = message
+        self._append_log(text, tag)
+
+
+    def _handle_message_stage(self, message: tuple) -> None:
+        self.status_var.set(message[1])
+
+
+    def _handle_message_done(self, message: tuple) -> None:
+        _, output, count, threads, timings = message
+        self._last_stage_times = dict(timings) if self.identity_timing_var.get() else {}
+        if self.identity_timing_var.get():
+            for key in ("抓取", "合并", "用户ID", "贴吧ID", "保存", "导出", "总耗时"):
+                if key in timings:
+                    self._append_log(f"  {key}耗时：{timings[key]:.1f} 秒", "muted")
+        self.last_output = output
+        self.last_threads = self._merge_threads(threads or [])
+        self._persist_result(self.last_threads)
+        self._auto_filled = False
+        self._profile_cache.clear()
+        try:
+            self._reset_people_filters()
+            self._refresh_people()
+            self._refresh_grid()
+            if str(getattr(self, "_last_identity_strategy", "full")) == "detail":
+                self.post_nb.select(self.tab_people)
+        except Exception:  # noqa: BLE001
+            pass
+        self._set_running(False)
+        identity_missing = int(getattr(self, "_identity_missing", 0) or 0)
+        tieba_missing = int(getattr(self, "_tieba_uid_missing", 0) or 0)
+        incomplete_threads = [
+            thread for thread in self.last_threads if not getattr(thread, "complete", True)
+        ]
+        timing_enabled = bool(self.identity_timing_var.get())
+        total_seconds = float(timings.get("总耗时") or 0) if timing_enabled else 0.0
+        missing_label = (
+            "待补充" if str(getattr(self, "_last_identity_strategy", "full")) in ("skip", "detail", "user_id") else "失败"
+        )
+        status = f"完成 · {len(self.last_threads)} 个帖子 / {len(self._aggregate_users())} 位用户"
+        last_strategy = str(getattr(self, "_last_identity_strategy", "full"))
+        if identity_missing:
+            status += f" · 身份待补充 {identity_missing} 条"
+        if tieba_missing:
+            if last_strategy in ("skip", "detail", "user_id"):
+                status += f" · 贴吧ID待补充 {tieba_missing} 人"
+            else:
+                status += f" · 贴吧ID失败 {tieba_missing} 人"
+        if incomplete_threads:
+            status += f" · 不完整 {len(incomplete_threads)} 帖"
+        self.status_var.set(status)
+        self._refresh_cache_stats_if_visible()
+        self._refresh_log_summary()
+        if output:
+            self.open_btn.configure(state="normal")
+            self._append_log(f"\n完成！共 {count} 个帖子，文件已保存：\n{output}", "ok")
+            messagebox.showinfo(
+                "全部完成",
+                f"统计完成，共 {count} 个帖子。\n\n文件已保存到：\n{output}\n\n"
+                + (f"总耗时：{total_seconds:.1f} 秒。\n\n" if timing_enabled else "")
+                + (
+                    f"有 {len(incomplete_threads)} 个帖子只抓到部分内容，"
+                    "可在参与者页点「重试失败部分」。\n\n"
+                    if incomplete_threads
+                    else ""
+                )
+                + (f"贴吧ID{missing_label} {tieba_missing} 人。\n\n" if tieba_missing else "")
+                + "切到「参与者」选项卡可以点开每个人，查看他的发言和关注的贴吧。",
+                parent=self.root,
+            )
+            self._open_result()
+        else:
+            self.open_btn.configure(state="disabled")
+            self._append_log(f"\n完成！共 {count} 个帖子（按设置未导出 Excel）。", "ok")
+            messagebox.showinfo(
+                "全部完成",
+                f"统计完成，共 {count} 个帖子。\n\n按设置没有导出 Excel，可以切到「参与者」看结果，"
+                "或点「导出 Excel」现在生成。\n\n"
+                + (f"总耗时：{total_seconds:.1f} 秒。" if timing_enabled else "")
+                + (
+                    f"\n\n有 {len(incomplete_threads)} 个帖子只抓到部分内容，"
+                    "可在参与者页点「重试失败部分」。"
+                    if incomplete_threads
+                    else ""
+                )
+                + (f"\n\n贴吧ID{missing_label} {tieba_missing} 人。" if tieba_missing else ""),
+                parent=self.root,
+            )
+
+
+    def _handle_message_cancelled_partial(self, message: tuple) -> None:
+        _, output, count, threads = message
+        self.last_output = output
+        self.last_threads = threads or []
+        self._auto_filled = False
+        self._set_running(False)
+        self.status_var.set("已停止（已导出完成部分）" if output else "已停止")
+        if output:
+            self.open_btn.configure(state="normal")
+            self._append_log(f"\n已停止，先导出了 {count} 个已完成帖子的结果：\n{output}", "err")
+        else:
+            self.open_btn.configure(state="disabled")
+            self._append_log(f"\n已停止，完成了 {count} 个帖子的抓取（未导出 Excel）。", "err")
+        self._refresh_log_summary()
+
+
+    def _handle_message_probe_done(self, message: tuple) -> None:
+        _, profile, results, button = message
+        self._probe_running = False
+        button.configure(state="normal", text="探测候选关注")
+        profile["probed_forums"] = results
+        if results:
+            summary = f"候选探测完成：确认 {len(results)} 个关注。"
+            self._append_log(summary, "ok")
+        else:
+            summary = "候选探测完成：没有确认新的关注。"
+            self._append_log(summary, "muted")
+        if profile is getattr(self, "_last_lookup_profile", None):
+            self._render_lookup(profile)
+            self.lookup_status.configure(text=summary)
+        elif profile is getattr(self, "_profile_data", None):
+            self._render_profile(self._profile_user, profile)
+            self.profile_status.configure(text=summary)
+
+
+    def _handle_message_batch_profile(self, message: tuple) -> None:
+        _, index, user, profile = message
+        self._batch_done = max(getattr(self, "_batch_done", 0), index + 1)
+        key = user.get("uid") or f"name:{user['name']}"
+        if profile and profile.get("ok"):
+            profile["_ui_cached_at"] = time.time()
+            self._profile_cache[key] = profile
+            self._batch_success = getattr(self, "_batch_success", 0) + 1
+        elif profile and profile.get("skipped"):
+            self._batch_skip = getattr(self, "_batch_skip", 0) + 1
+            user["mark_error"] = str(profile.get("error") or "跳过")
+        else:
+            self._batch_fail = getattr(self, "_batch_fail", 0) + 1
+        self._apply_batch_mark(user, profile)
+        if getattr(self, "_batch_total", 0):
+            live = f"批量查询 {self._batch_done}/{self._batch_total}…"
+            if getattr(self, "_batch_skip", 0):
+                live += f" · 跳过 {self._batch_skip}"
+            if getattr(self, "_batch_fail", 0):
+                live += f" · 失败 {self._batch_fail}"
+            self.people_hint.configure(text=live)
+
+
+    def _handle_message_batch_done(self, message: tuple) -> None:
+        cancelled = getattr(self, "_batch_cancel", False)
+        self._batch_running = False
+        self._batch_cancel = False
+        self.status_var.set("准备就绪")
+        self.batch_btn.configure(text="一键红绿灯")
+        self._set_people_controls_enabled(True)
+        self.remark_btn.state(["!disabled"])
+        self.refresh_people_btn.state(["!disabled"])
+        self.include_follows_check.configure(
+            state="normal" if self.settings.get("follow_enhance") and self._risk_enabled() else "disabled"
+        )
+        done = getattr(self, "_batch_done", 0)
+        total = getattr(self, "_batch_total", 0)
+        if cancelled and done < total:
+            self._batch_pending = list(self._batch_plan[done:])
+            resume_text = f"继续未完成（{done}/{total}）"
+            self.resume_batch_btn.configure(
+                state="normal", text=resume_text, width=max(12, len(resume_text) + 8)
+            )
+            self.resume_batch_btn.pack(side="left", padx=(6, 0), after=self.batch_btn)
+        else:
+            self._batch_pending = []
+            self.resume_batch_btn.configure(state="disabled", text="继续未完成")
+            self.resume_batch_btn.pack_forget()
+        summary = f"已刷新 {done}/{total} 人的红绿灯"
+        if getattr(self, "_batch_skip", 0):
+            summary += f" · 跳过 {self._batch_skip}（缺少身份/昵称不唯一）"
+        if getattr(self, "_batch_fail", 0):
+            summary += f" · 失败 {self._batch_fail}"
+        self.people_hint.configure(text=summary)
+        self._append_log(
+            ("已停止" if cancelled else "完成") + f"一键红绿灯：刷新 {done} 人。",
+            "muted" if cancelled else "ok",
+        )
+        self._refresh_cache_stats_if_visible()
+
+
+    def _handle_message_profile_ready(self, message: tuple) -> None:
+        _, key, user, profile = message
+        profile["_ui_cached_at"] = time.time()
+        self._profile_cache[key] = profile
+        selection = self.people_tree.selection()
+        if selection:
+            try:
+                current = self.people_users[int(selection[0])]
+            except (IndexError, ValueError):
+                current = None
+            if current and (current["uid"] or f"name:{current['name']}") == key:
+                self._render_profile(user, profile)
+        self._refresh_cache_stats_if_visible()
+
+
+    def _handle_message_enrich_done(self, message: tuple) -> None:
+        self._enriching = False
+        self._refresh_people()
+        self.people_hint.configure(text="等级已补全，Excel 已更新")
+        self._append_log("等级补全完成，Excel 已重新导出。", "ok")
+
+
+    def _handle_message_enrich_error(self, message: tuple) -> None:
+        self._enriching = False
+        self.people_hint.configure(text="补全失败")
+        self._append_log(f"补全等级失败：{message[1]}", "err")
+
+
+    def _handle_message_identity_ask(self, message: tuple) -> None:
+        _, missing_uid, missing_tieba = message
+        strategy, remember = self._ask_identity_strategy(missing_uid, missing_tieba)
+        if remember:
+            label = {
+                "full": "补全用户ID + 贴吧ID",
+                "skip": "跳过补全",
+                "user_id": "只补用户ID",
+                "detail": "详情再补",
+            }.get(strategy, "每次询问")
+            self.identity_strategy_var.set(label)
+            self._save_identity_strategy()
+        self._identity_choice_queue.put((strategy, remember))
+
+
+    def _handle_message_identity_supplement_progress(self, message: tuple) -> None:
+        _, done, total = message
+        self.people_hint.configure(text=f"正在补全身份 {done}/{total}…")
+        if done % 10 == 0:
+            self._refresh_supplement_rows()
+
+
+    def _handle_message_identity_supplement_done(self, message: tuple) -> None:
+        _, done_strategy, manual_timings = message
+        self._set_supplement_running(False)
+        self._refresh_people()
+        self._refresh_grid()
+        timing_enabled = bool(self.identity_timing_var.get())
+        seconds = float(manual_timings.get("总耗时") or 0) if timing_enabled else 0.0
+        self.people_hint.configure(
+            text=(
+                f"身份补全完成 · 本次 {seconds:.1f} 秒 · 需要重新导出"
+                if timing_enabled
+                else "身份补全完成 · 需要重新导出"
+            )
+        )
+        messagebox.showinfo(
+            "身份已更新",
+            (
+                f"身份补全完成，本次耗时 {seconds:.1f} 秒。\n"
+                if timing_enabled
+                else "身份补全完成。\n"
+            )
+            + "请重新导出 Excel 以包含新的贴吧ID。",
+            parent=self.root,
+        )
+
+
+    def _handle_message_incomplete_retry_done(self, message: tuple) -> None:
+        self._set_supplement_running(False)
+        self._refresh_people()
+        self._refresh_grid()
+        self.people_hint.configure(text="失败部分重试完成，需要重新导出")
+        messagebox.showinfo(
+            "重试完成",
+            "失败页/失败楼中楼已重试。请重新导出 Excel。",
+            parent=self.root,
+        )
+
+
+    def _handle_message_incomplete_retry_stopped(self, message: tuple) -> None:
+        self._set_supplement_running(False)
+        self._refresh_people()
+        self.people_hint.configure(text="重试已停止，已完成部分已保留")
+
+
+    def _handle_message_incomplete_retry_error(self, message: tuple) -> None:
+        self._set_supplement_running(False)
+        self._refresh_people()
+        self.people_hint.configure(
+            text=f"重试失败：{friendly_error(RuntimeError(message[1]))}"
+        )
+
+
+    def _handle_message_identity_supplement_stopped(self, message: tuple) -> None:
+        self._set_supplement_running(False)
+        self._refresh_people()
+        self.people_hint.configure(text="补全已停止，已完成部分已保留")
+
+
+    def _handle_message_identity_supplement_error(self, message: tuple) -> None:
+        self._set_supplement_running(False)
+        self._refresh_people()
+        self.people_hint.configure(text=f"补全失败：{friendly_error(RuntimeError(message[1]))}")
+
+
+    def _handle_message_identity_remember(self, message: tuple) -> None:
+        label = {
+            "full": "补全用户ID + 贴吧ID",
+            "skip": "跳过补全",
+            "user_id": "只补用户ID",
+            "detail": "详情再补",
+        }.get(message[1], "每次询问")
+        self.identity_strategy_var.set(label)
+        self._save_identity_strategy()
+
+
+    def _handle_message_levels_filled(self, message: tuple) -> None:
+        self._auto_filling = False
+        self._refresh_people()
+        with_level = sum(1 for user in self.people_users if user.get("level"))
+        self.people_hint.configure(text=f"共 {len(self.people_users)} 人 · 有等级 {with_level}")
+
+
+    def _handle_message_levels_error(self, message: tuple) -> None:
+        self._auto_filling = False
+        self.people_hint.configure(text="等级补全失败，可点「刷新」重试")
+
+
+    def _handle_message_lookup_ready(self, message: tuple) -> None:
+        _, profile, error = message
+        if error:
+            self._set_lookup_text("查询失败：" + friendly_error(error))
+            self.lookup_status.configure(text="查询失败")
+        else:
+            self._render_lookup(profile)
+
+
+    def _handle_message_levels_ready(self, message: tuple) -> None:
+        _, level_kind, profile, forums, results = message
+        self._apply_level_results(level_kind, profile, forums, results)
+
+
+    def _handle_message_links_ready(self, message: tuple) -> None:
+        _, result, error = message
+        self._render_links(result, error)
+
+
+    def _handle_message_love_ready(self, message: tuple) -> None:
+        _, result, error = message
+        self._render_love(result, error)
+
+
+    def _handle_message_cancelled(self, message: tuple) -> None:
+        self._set_running(False)
+        self.status_var.set("已停止")
+        self._append_log("\n已停止，没有生成文件。", "err")
+        self._refresh_log_summary()
+
+
+    def _handle_message_manual_cookie_probe(self, message: tuple) -> None:
+        _, token, warning, logged, missing = message
+        if token != self._login_probe_token:
+            return
+        if warning:
+            self.status_var.set("登录信息预检未通过")
+            self._append_log(f"登录预检：{warning}", "warn")
+        else:
+            self.status_var.set(
+                "登录信息预检通过（可能不完整）" if missing else "登录信息预检通过"
+            )
+            self._append_log("登录信息预检通过。", "ok")
+            if missing:
+                self._append_log("Cookie 可能不完整：缺少 " + "；".join(missing), "warn")
+        self._refresh_log_summary()
+
+
+    def _handle_message_rate_limit_ask(self, message: tuple) -> None:
+        _, detail, retry_after, _url = message
+        wait = int(retry_after or 30)
+        self.status_var.set("被限流，等待选择")
+        self._append_log(f"被限流：{detail}", "warn")
+        choice = self._ask_choice(
+            "被限流",
+            f"服务端返回限流，建议至少等待 {wait} 秒。\n"
+            "等待后只继续当前未完成帖子，已完成帖子不会重抓。",
+            [
+                (f"等待 {wait} 秒后继续", str(wait)),
+                ("暂停 2 分钟", "120"),
+                ("暂停 5 分钟", "300"),
+                ("停止本次", "stop"),
+            ],
+            default=0,
+        )
+        self._rate_choice_queue.put(choice or "stop")
+
+
+    def _handle_message_rate_limit(self, message: tuple) -> None:
+        _, detail, retry_after = message
+        self._set_running(False)
+        self.status_var.set("被限流")
+        self._append_log("抓取失败：" + detail, "warn")
+        wait = int(retry_after or 30)
+        choice = self._ask_choice(
+            "被限流",
+            f"服务端返回限流，建议至少等待 {wait} 秒。\n"
+            "等待后可重新开始；已完成的数据不会丢失。",
+            [
+                (f"等待 {wait} 秒后重试", "wait"),
+                ("暂停 2 分钟", "120"),
+                ("暂停 5 分钟", "300"),
+                ("停止本次", "stop"),
+            ],
+            default=0,
+        )
+        if choice in ("wait", "120", "300"):
+            seconds = wait if choice == "wait" else int(choice)
+            pause_requests(seconds)
+            self._append_log(f"已设置请求暂停 {seconds} 秒。", "muted")
+            self.root.after(
+                int(seconds * 1000),
+                lambda: self.status_var.set("暂停结束，可以重新开始"),
+            )
+        self._refresh_log_summary()
+
+
+    def _handle_message_error(self, message: tuple) -> None:
+        _, detail = message
+        self._set_running(False)
+        self.status_var.set("出错了")
+        self._append_log(f"\n✗ {detail}", "err")
+        self._refresh_log_summary()
+        messagebox.showerror("出错了", detail.split("\n\n")[0], parent=self.root)
+
+
 
 class App(GuiLayoutMixin, MessageMixin):
     def __init__(self, root: tk.Tk) -> None:
@@ -10426,308 +10856,57 @@ class App(GuiLayoutMixin, MessageMixin):
     def _handle_message(self, message: tuple) -> None:
         kind = message[0]
         if kind == "log":
-            _, text, tag = message
-            self._append_log(text, tag)
+            self._handle_message_log(message)
         elif kind == "stage":
-            self.status_var.set(message[1])
+            self._handle_message_stage(message)
         elif kind == "done":
-            _, output, count, threads, timings = message
-            self._last_stage_times = dict(timings) if self.identity_timing_var.get() else {}
-            if self.identity_timing_var.get():
-                for key in ("抓取", "合并", "用户ID", "贴吧ID", "保存", "导出", "总耗时"):
-                    if key in timings:
-                        self._append_log(f"  {key}耗时：{timings[key]:.1f} 秒", "muted")
-            self.last_output = output
-            self.last_threads = self._merge_threads(threads or [])
-            self._persist_result(self.last_threads)
-            self._auto_filled = False
-            self._profile_cache.clear()
-            try:
-                self._reset_people_filters()
-                self._refresh_people()
-                self._refresh_grid()
-                if str(getattr(self, "_last_identity_strategy", "full")) == "detail":
-                    self.post_nb.select(self.tab_people)
-            except Exception:  # noqa: BLE001
-                pass
-            self._set_running(False)
-            identity_missing = int(getattr(self, "_identity_missing", 0) or 0)
-            tieba_missing = int(getattr(self, "_tieba_uid_missing", 0) or 0)
-            incomplete_threads = [
-                thread for thread in self.last_threads if not getattr(thread, "complete", True)
-            ]
-            timing_enabled = bool(self.identity_timing_var.get())
-            total_seconds = float(timings.get("总耗时") or 0) if timing_enabled else 0.0
-            missing_label = (
-                "待补充" if str(getattr(self, "_last_identity_strategy", "full")) in ("skip", "detail", "user_id") else "失败"
-            )
-            status = f"完成 · {len(self.last_threads)} 个帖子 / {len(self._aggregate_users())} 位用户"
-            last_strategy = str(getattr(self, "_last_identity_strategy", "full"))
-            if identity_missing:
-                status += f" · 身份待补充 {identity_missing} 条"
-            if tieba_missing:
-                if last_strategy in ("skip", "detail", "user_id"):
-                    status += f" · 贴吧ID待补充 {tieba_missing} 人"
-                else:
-                    status += f" · 贴吧ID失败 {tieba_missing} 人"
-            if incomplete_threads:
-                status += f" · 不完整 {len(incomplete_threads)} 帖"
-            self.status_var.set(status)
-            self._refresh_cache_stats_if_visible()
-            self._refresh_log_summary()
-            if output:
-                self.open_btn.configure(state="normal")
-                self._append_log(f"\n完成！共 {count} 个帖子，文件已保存：\n{output}", "ok")
-                messagebox.showinfo(
-                    "全部完成",
-                    f"统计完成，共 {count} 个帖子。\n\n文件已保存到：\n{output}\n\n"
-                    + (f"总耗时：{total_seconds:.1f} 秒。\n\n" if timing_enabled else "")
-                    + (
-                        f"有 {len(incomplete_threads)} 个帖子只抓到部分内容，"
-                        "可在参与者页点「重试失败部分」。\n\n"
-                        if incomplete_threads
-                        else ""
-                    )
-                    + (f"贴吧ID{missing_label} {tieba_missing} 人。\n\n" if tieba_missing else "")
-                    + "切到「参与者」选项卡可以点开每个人，查看他的发言和关注的贴吧。",
-                    parent=self.root,
-                )
-                self._open_result()
-            else:
-                self.open_btn.configure(state="disabled")
-                self._append_log(f"\n完成！共 {count} 个帖子（按设置未导出 Excel）。", "ok")
-                messagebox.showinfo(
-                    "全部完成",
-                    f"统计完成，共 {count} 个帖子。\n\n按设置没有导出 Excel，可以切到「参与者」看结果，"
-                    "或点「导出 Excel」现在生成。\n\n"
-                    + (f"总耗时：{total_seconds:.1f} 秒。" if timing_enabled else "")
-                    + (
-                        f"\n\n有 {len(incomplete_threads)} 个帖子只抓到部分内容，"
-                        "可在参与者页点「重试失败部分」。"
-                        if incomplete_threads
-                        else ""
-                    )
-                    + (f"\n\n贴吧ID{missing_label} {tieba_missing} 人。" if tieba_missing else ""),
-                    parent=self.root,
-                )
+            self._handle_message_done(message)
         elif kind == "cancelled_partial":
-            _, output, count, threads = message
-            self.last_output = output
-            self.last_threads = threads or []
-            self._auto_filled = False
-            self._set_running(False)
-            self.status_var.set("已停止（已导出完成部分）" if output else "已停止")
-            if output:
-                self.open_btn.configure(state="normal")
-                self._append_log(f"\n已停止，先导出了 {count} 个已完成帖子的结果：\n{output}", "err")
-            else:
-                self.open_btn.configure(state="disabled")
-                self._append_log(f"\n已停止，完成了 {count} 个帖子的抓取（未导出 Excel）。", "err")
-            self._refresh_log_summary()
+            self._handle_message_cancelled_partial(message)
         elif kind == "probe_done":
-            _, profile, results, button = message
-            self._probe_running = False
-            button.configure(state="normal", text="探测候选关注")
-            profile["probed_forums"] = results
-            if results:
-                summary = f"候选探测完成：确认 {len(results)} 个关注。"
-                self._append_log(summary, "ok")
-            else:
-                summary = "候选探测完成：没有确认新的关注。"
-                self._append_log(summary, "muted")
-            if profile is getattr(self, "_last_lookup_profile", None):
-                self._render_lookup(profile)
-                self.lookup_status.configure(text=summary)
-            elif profile is getattr(self, "_profile_data", None):
-                self._render_profile(self._profile_user, profile)
-                self.profile_status.configure(text=summary)
+            self._handle_message_probe_done(message)
         elif kind == "batch_profile":
-            _, index, user, profile = message
-            self._batch_done = max(getattr(self, "_batch_done", 0), index + 1)
-            key = user.get("uid") or f"name:{user['name']}"
-            if profile and profile.get("ok"):
-                profile["_ui_cached_at"] = time.time()
-                self._profile_cache[key] = profile
-                self._batch_success = getattr(self, "_batch_success", 0) + 1
-            elif profile and profile.get("skipped"):
-                self._batch_skip = getattr(self, "_batch_skip", 0) + 1
-                user["mark_error"] = str(profile.get("error") or "跳过")
-            else:
-                self._batch_fail = getattr(self, "_batch_fail", 0) + 1
-            self._apply_batch_mark(user, profile)
-            if getattr(self, "_batch_total", 0):
-                live = f"批量查询 {self._batch_done}/{self._batch_total}…"
-                if getattr(self, "_batch_skip", 0):
-                    live += f" · 跳过 {self._batch_skip}"
-                if getattr(self, "_batch_fail", 0):
-                    live += f" · 失败 {self._batch_fail}"
-                self.people_hint.configure(text=live)
+            self._handle_message_batch_profile(message)
         elif kind == "batch_done":
-            cancelled = getattr(self, "_batch_cancel", False)
-            self._batch_running = False
-            self._batch_cancel = False
-            self.status_var.set("准备就绪")
-            self.batch_btn.configure(text="一键红绿灯")
-            self._set_people_controls_enabled(True)
-            self.remark_btn.state(["!disabled"])
-            self.refresh_people_btn.state(["!disabled"])
-            self.include_follows_check.configure(
-                state="normal" if self.settings.get("follow_enhance") and self._risk_enabled() else "disabled"
-            )
-            done = getattr(self, "_batch_done", 0)
-            total = getattr(self, "_batch_total", 0)
-            if cancelled and done < total:
-                self._batch_pending = list(self._batch_plan[done:])
-                resume_text = f"继续未完成（{done}/{total}）"
-                self.resume_batch_btn.configure(
-                    state="normal", text=resume_text, width=max(12, len(resume_text) + 8)
-                )
-                self.resume_batch_btn.pack(side="left", padx=(6, 0), after=self.batch_btn)
-            else:
-                self._batch_pending = []
-                self.resume_batch_btn.configure(state="disabled", text="继续未完成")
-                self.resume_batch_btn.pack_forget()
-            summary = f"已刷新 {done}/{total} 人的红绿灯"
-            if getattr(self, "_batch_skip", 0):
-                summary += f" · 跳过 {self._batch_skip}（缺少身份/昵称不唯一）"
-            if getattr(self, "_batch_fail", 0):
-                summary += f" · 失败 {self._batch_fail}"
-            self.people_hint.configure(text=summary)
-            self._append_log(
-                ("已停止" if cancelled else "完成") + f"一键红绿灯：刷新 {done} 人。",
-                "muted" if cancelled else "ok",
-            )
-            self._refresh_cache_stats_if_visible()
+            self._handle_message_batch_done(message)
         elif kind == "profile_ready":
-            _, key, user, profile = message
-            profile["_ui_cached_at"] = time.time()
-            self._profile_cache[key] = profile
-            selection = self.people_tree.selection()
-            if selection:
-                try:
-                    current = self.people_users[int(selection[0])]
-                except (IndexError, ValueError):
-                    current = None
-                if current and (current["uid"] or f"name:{current['name']}") == key:
-                    self._render_profile(user, profile)
-            self._refresh_cache_stats_if_visible()
+            self._handle_message_profile_ready(message)
         elif kind == "enrich_done":
-            self._enriching = False
-            self._refresh_people()
-            self.people_hint.configure(text="等级已补全，Excel 已更新")
-            self._append_log("等级补全完成，Excel 已重新导出。", "ok")
+            self._handle_message_enrich_done(message)
         elif kind == "enrich_error":
-            self._enriching = False
-            self.people_hint.configure(text="补全失败")
-            self._append_log(f"补全等级失败：{message[1]}", "err")
+            self._handle_message_enrich_error(message)
         elif kind == "identity_ask":
-            _, missing_uid, missing_tieba = message
-            strategy, remember = self._ask_identity_strategy(missing_uid, missing_tieba)
-            if remember:
-                label = {
-                    "full": "补全用户ID + 贴吧ID",
-                    "skip": "跳过补全",
-                    "user_id": "只补用户ID",
-                    "detail": "详情再补",
-                }.get(strategy, "每次询问")
-                self.identity_strategy_var.set(label)
-                self._save_identity_strategy()
-            self._identity_choice_queue.put((strategy, remember))
+            self._handle_message_identity_ask(message)
         elif kind == "identity_supplement_progress":
-            _, done, total = message
-            self.people_hint.configure(text=f"正在补全身份 {done}/{total}…")
-            if done % 10 == 0:
-                self._refresh_supplement_rows()
+            self._handle_message_identity_supplement_progress(message)
         elif kind == "identity_supplement_done":
-            _, done_strategy, manual_timings = message
-            self._set_supplement_running(False)
-            self._refresh_people()
-            self._refresh_grid()
-            timing_enabled = bool(self.identity_timing_var.get())
-            seconds = float(manual_timings.get("总耗时") or 0) if timing_enabled else 0.0
-            self.people_hint.configure(
-                text=(
-                    f"身份补全完成 · 本次 {seconds:.1f} 秒 · 需要重新导出"
-                    if timing_enabled
-                    else "身份补全完成 · 需要重新导出"
-                )
-            )
-            messagebox.showinfo(
-                "身份已更新",
-                (
-                    f"身份补全完成，本次耗时 {seconds:.1f} 秒。\n"
-                    if timing_enabled
-                    else "身份补全完成。\n"
-                )
-                + "请重新导出 Excel 以包含新的贴吧ID。",
-                parent=self.root,
-            )
+            self._handle_message_identity_supplement_done(message)
         elif kind == "incomplete_retry_done":
-            self._set_supplement_running(False)
-            self._refresh_people()
-            self._refresh_grid()
-            self.people_hint.configure(text="失败部分重试完成，需要重新导出")
-            messagebox.showinfo(
-                "重试完成",
-                "失败页/失败楼中楼已重试。请重新导出 Excel。",
-                parent=self.root,
-            )
+            self._handle_message_incomplete_retry_done(message)
         elif kind == "incomplete_retry_stopped":
-            self._set_supplement_running(False)
-            self._refresh_people()
-            self.people_hint.configure(text="重试已停止，已完成部分已保留")
+            self._handle_message_incomplete_retry_stopped(message)
         elif kind == "incomplete_retry_error":
-            self._set_supplement_running(False)
-            self._refresh_people()
-            self.people_hint.configure(
-                text=f"重试失败：{friendly_error(RuntimeError(message[1]))}"
-            )
+            self._handle_message_incomplete_retry_error(message)
         elif kind == "identity_supplement_stopped":
-            self._set_supplement_running(False)
-            self._refresh_people()
-            self.people_hint.configure(text="补全已停止，已完成部分已保留")
+            self._handle_message_identity_supplement_stopped(message)
         elif kind == "identity_supplement_error":
-            self._set_supplement_running(False)
-            self._refresh_people()
-            self.people_hint.configure(text=f"补全失败：{friendly_error(RuntimeError(message[1]))}")
+            self._handle_message_identity_supplement_error(message)
         elif kind == "identity_remember":
-            label = {
-                "full": "补全用户ID + 贴吧ID",
-                "skip": "跳过补全",
-                "user_id": "只补用户ID",
-                "detail": "详情再补",
-            }.get(message[1], "每次询问")
-            self.identity_strategy_var.set(label)
-            self._save_identity_strategy()
+            self._handle_message_identity_remember(message)
         elif kind == "levels_filled":
-            self._auto_filling = False
-            self._refresh_people()
-            with_level = sum(1 for user in self.people_users if user.get("level"))
-            self.people_hint.configure(text=f"共 {len(self.people_users)} 人 · 有等级 {with_level}")
+            self._handle_message_levels_filled(message)
         elif kind == "levels_error":
-            self._auto_filling = False
-            self.people_hint.configure(text="等级补全失败，可点「刷新」重试")
+            self._handle_message_levels_error(message)
         elif kind == "lookup_ready":
-            _, profile, error = message
-            if error:
-                self._set_lookup_text("查询失败：" + friendly_error(error))
-                self.lookup_status.configure(text="查询失败")
-            else:
-                self._render_lookup(profile)
+            self._handle_message_lookup_ready(message)
         elif kind == "levels_ready":
-            _, level_kind, profile, forums, results = message
-            self._apply_level_results(level_kind, profile, forums, results)
+            self._handle_message_levels_ready(message)
         elif kind == "links_ready":
-            _, result, error = message
-            self._render_links(result, error)
+            self._handle_message_links_ready(message)
         elif kind == "love_ready":
-            _, result, error = message
-            self._render_love(result, error)
+            self._handle_message_love_ready(message)
         elif kind == "cancelled":
-            self._set_running(False)
-            self.status_var.set("已停止")
-            self._append_log("\n已停止，没有生成文件。", "err")
-            self._refresh_log_summary()
+            self._handle_message_cancelled(message)
         elif kind == "captcha":
             self._handle_captcha_message(message)
         elif kind == "webview_test_done":
@@ -10739,72 +10918,13 @@ class App(GuiLayoutMixin, MessageMixin):
         elif kind == "switch_login_done":
             self._handle_switch_login_done(message)
         elif kind == "manual_cookie_probe":
-            _, token, warning, logged, missing = message
-            if token != self._login_probe_token:
-                return
-            if warning:
-                self.status_var.set("登录信息预检未通过")
-                self._append_log(f"登录预检：{warning}", "warn")
-            else:
-                self.status_var.set(
-                    "登录信息预检通过（可能不完整）" if missing else "登录信息预检通过"
-                )
-                self._append_log("登录信息预检通过。", "ok")
-                if missing:
-                    self._append_log("Cookie 可能不完整：缺少 " + "；".join(missing), "warn")
-            self._refresh_log_summary()
+            self._handle_message_manual_cookie_probe(message)
         elif kind == "rate_limit_ask":
-            _, detail, retry_after, _url = message
-            wait = int(retry_after or 30)
-            self.status_var.set("被限流，等待选择")
-            self._append_log(f"被限流：{detail}", "warn")
-            choice = self._ask_choice(
-                "被限流",
-                f"服务端返回限流，建议至少等待 {wait} 秒。\n"
-                "等待后只继续当前未完成帖子，已完成帖子不会重抓。",
-                [
-                    (f"等待 {wait} 秒后继续", str(wait)),
-                    ("暂停 2 分钟", "120"),
-                    ("暂停 5 分钟", "300"),
-                    ("停止本次", "stop"),
-                ],
-                default=0,
-            )
-            self._rate_choice_queue.put(choice or "stop")
+            self._handle_message_rate_limit_ask(message)
         elif kind == "rate_limit":
-            _, detail, retry_after = message
-            self._set_running(False)
-            self.status_var.set("被限流")
-            self._append_log("抓取失败：" + detail, "warn")
-            wait = int(retry_after or 30)
-            choice = self._ask_choice(
-                "被限流",
-                f"服务端返回限流，建议至少等待 {wait} 秒。\n"
-                "等待后可重新开始；已完成的数据不会丢失。",
-                [
-                    (f"等待 {wait} 秒后重试", "wait"),
-                    ("暂停 2 分钟", "120"),
-                    ("暂停 5 分钟", "300"),
-                    ("停止本次", "stop"),
-                ],
-                default=0,
-            )
-            if choice in ("wait", "120", "300"):
-                seconds = wait if choice == "wait" else int(choice)
-                pause_requests(seconds)
-                self._append_log(f"已设置请求暂停 {seconds} 秒。", "muted")
-                self.root.after(
-                    int(seconds * 1000),
-                    lambda: self.status_var.set("暂停结束，可以重新开始"),
-                )
-            self._refresh_log_summary()
+            self._handle_message_rate_limit(message)
         elif kind == "error":
-            _, detail = message
-            self._set_running(False)
-            self.status_var.set("出错了")
-            self._append_log(f"\n✗ {detail}", "err")
-            self._refresh_log_summary()
-            messagebox.showerror("出错了", detail.split("\n\n")[0], parent=self.root)
+            self._handle_message_error(message)
         else:
             self._append_log(f"未知消息类型：{kind}", "warn")
 
