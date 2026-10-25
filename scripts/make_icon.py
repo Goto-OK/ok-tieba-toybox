@@ -100,7 +100,7 @@ def _write_ico(frames: list[Image.Image]) -> None:
     count = len(images)
     offset = 6 + count * 16
     entries = []
-    for frame, payload in zip(frames, images):
+    for frame, payload in zip(frames, images, strict=False):
         width = 0 if frame.width >= 256 else frame.width
         height = 0 if frame.height >= 256 else frame.height
         entries.append(

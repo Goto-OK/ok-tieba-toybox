@@ -51,7 +51,7 @@ def read_backup(path: str) -> Dict[str, Any]:
             raw = target.read_text(encoding="utf-8")
         data = json.loads(raw)
     except (OSError, KeyError, zipfile.BadZipFile, json.JSONDecodeError) as error:
-        raise ValueError(f"无法读取备份：{error}")
+        raise ValueError(f"无法读取备份：{error}") from error
     if not isinstance(data, dict) or data.get("kind") != KIND:
         raise ValueError("不是本项目生成的备份")
     if int(data.get("schema_version") or 0) != SCHEMA_VERSION:

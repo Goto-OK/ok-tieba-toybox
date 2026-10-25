@@ -481,12 +481,12 @@ class Fetcher:
         text = response.text.strip()
         try:
             return json.loads(text)
-        except json.JSONDecodeError:
+        except json.JSONDecodeError as error:
             # 有些接口返回 JSONP：callback({...})
             match = re.search(r"^\s*[\w$.]+\s*\(\s*(\{.*\})\s*\)\s*;?\s*$", text, re.S)
             if match:
                 return json.loads(match.group(1))
-            raise FetchError(f"接口返回的不是 JSON：{text[:120]}")
+            raise FetchError(f"接口返回的不是 JSON：{text[:120]}") from error
 
     def post_form(self, url: str, data: Dict, name: Optional[str] = None) -> Response:
         """提交表单（贴吧客户端接口用），带重试与验证码识别。"""

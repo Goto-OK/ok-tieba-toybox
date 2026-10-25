@@ -19,7 +19,7 @@
 ```text
 ruff     通过
 mypy     32 个源文件通过
-pytest   145 项：本机 143 通过 + 2 跳过；CI 通过
+pytest   145 项：本机 144 通过 + 1 跳过；CI 通过
 selftest 通过
 GitHub Actions CI 通过
 Android 核心同步通过
@@ -293,7 +293,7 @@ Android 核心同步通过
 - 2026-10-26 真实验证码路径：抓取被拦截后打开内置验证，成功读取完整 Cookie；修复登录更新后的排队重试和 ttk 按钮 disabled 状态后，登录模式重试已跑完，2 个帖子均为 complete、failed_pages 为空，界面提示“失败部分重试完成，需要重新导出”；
 - 打包版中文路径临时目录问题已修（系统 tmp 不可用时退回应用数据目录）；新包已从中文路径启动并读取 BDUSS；
 - 审查修复（仅 main，尚未重新打包）：凭据接口改 HTTPS；补全等级线程改用线程安全日志；身份弹窗可被停止关闭；protobuf 截断改为报错、页数硬上限固定 500、楼中楼跨页按 pid 去重、未知消息有警告；HTTPS 端点已实测返回 200；
-- 仍未修：GUI 巨型类与工具链规则（ruff 未开 B/C90/S，mypy 未开 check_untyped_defs）；
+- 仍未修：GUI 巨型类拆分；ruff C90/S 规则未启用，mypy 只开 check_untyped_defs，尚未全面严格化；
 - Android 不跟进 UI；
 - CLI 不跟 GUI 新功能。
 

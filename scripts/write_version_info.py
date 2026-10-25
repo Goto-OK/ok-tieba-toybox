@@ -59,7 +59,7 @@ def main() -> int:
     try:
         major, minor, patch = (int(item) for item in parts)
     except ValueError:
-        raise SystemExit(f"版本号不是 x.y.z：{version}")
+        raise SystemExit(f"版本号不是 x.y.z：{version}") from None
     content = TEMPLATE.format(major=major, minor=minor, patch=patch, version=version)
     with open(TARGET, "w", encoding="utf-8", newline="\n") as handle:
         handle.write(content)

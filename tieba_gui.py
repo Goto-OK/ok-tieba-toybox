@@ -1193,7 +1193,7 @@ class App:
 
     # ------------------------------------------------------- 参与者与查用户
     def _aggregate_users(self, threads=None):
-        buckets = {}
+        buckets: Dict[str, Dict[str, Any]] = {}
         for thread in (self.last_threads if threads is None else threads):
             for item in thread.user_stats():
                 key = (
@@ -7509,7 +7509,7 @@ class App:
         self._refresh_webview_status()
         self._set_lookup_text("软件数据已清空。")
         self.open_btn.configure(state="disabled")
-        for key, editor in getattr(self, "blacklist_editors", {}).items():
+        for _key, editor in getattr(self, "blacklist_editors", {}).items():
             editor.delete("1.0", "end")
         self._update_grid_selector()
         self._refresh_people()
@@ -8326,7 +8326,7 @@ class App:
         return [self.last_threads[0]]
 
     def _aggregate_threads(self, threads):
-        buckets = {}
+        buckets: Dict[str, Dict[str, Any]] = {}
         for thread in threads:
             for item in thread.user_stats():
                 key = (
@@ -8841,7 +8841,7 @@ class App:
         state = getattr(tree, "_loaded_filter_state", None)
         if state is None:
             state = {"all": list(tree.get_children()), "filters": {}}
-            setattr(tree, "_loaded_filter_state", state)
+            setattr(tree, "_loaded_filter_state", state)  # noqa: B010
         return state
 
     def _clear_loaded_tree(self, tree) -> None:
@@ -9180,7 +9180,13 @@ class App:
                 except (TypeError, ValueError):
                     return (1, str(value))
 
-            paired = list(zip(all_rows, all_urls + [""] * max(0, len(all_rows) - len(all_urls))))
+            paired = list(
+                zip(
+                    all_rows,
+                    all_urls + [""] * max(0, len(all_rows) - len(all_urls)),
+                    strict=False,
+                )
+            )
             paired.sort(key=lambda item: key(item[0]), reverse=reverse)
             all_rows[:] = [item[0] for item in paired]
             all_urls[:] = [item[1] for item in paired]
@@ -9212,7 +9218,7 @@ class App:
                 return lambda: open_filter(index)
             return lambda: sort_by(column)
 
-        for index, header in enumerate(headers):
+        for index, _header in enumerate(headers):
             tree.heading(columns[index], command=make_command(index))
         if default_sort in headers:
             apply_sort(columns[headers.index(default_sort)], default_reverse)
@@ -9759,7 +9765,7 @@ class App:
 
                 with ThreadPoolExecutor(max_workers=concurrency) as pool:
                     futures = [pool.submit(resolve, user) for user in users]
-                    for index, (user, future) in enumerate(zip(users, futures)):
+                    for index, (user, future) in enumerate(zip(users, futures, strict=False)):
                         if self._batch_cancel:
                             break
                         try:
@@ -9923,6 +9929,7 @@ class App:
             cached_posts = cached_user_posts(user["uid"], count, start_date, end_date, prefer)
 
         def worker():
+            profile: Dict[str, Any]
             try:
                 fetcher = Fetcher(cookie=self._request_cookie(), delay=0, verbose=False)
                 uid = str(user.get("uid") or "")
