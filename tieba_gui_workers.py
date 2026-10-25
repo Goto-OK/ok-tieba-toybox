@@ -13,7 +13,6 @@ from tkinter import messagebox
 from typing import Any, Dict
 
 from tieba_gui_utils import default_output_path
-
 from tieba_reply_stats import webview2
 from tieba_reply_stats.collect import (
     CollectCancelled,
