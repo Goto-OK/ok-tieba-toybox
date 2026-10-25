@@ -201,13 +201,13 @@ def replace_login_profile(temp_dir: str) -> None:
             _replace_with_retry(target, backup)
         _replace_with_retry(source, target)
     except OSError:
-        try:
-            if os.path.isdir(target):
-                shutil.rmtree(target)
-            if os.path.isdir(backup) and not os.path.isdir(target):
+        # 只有“旧目录已移到 backup、新目录替换失败”时才需要恢复。
+        # 如果第一步就失败，target 仍是旧目录，不能删除它。
+        if os.path.isdir(backup) and not os.path.isdir(target):
+            try:
                 _replace_with_retry(backup, target)
-        except OSError:
-            pass
+            except OSError:
+                pass
         raise RuntimeError("内置登录目录被占用，旧登录已保留")
     try:
         shutil.rmtree(backup)

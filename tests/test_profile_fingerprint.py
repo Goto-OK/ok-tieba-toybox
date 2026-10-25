@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import os
 
+import pytest
+
 from tieba_reply_stats import webview2
 
 
@@ -41,6 +43,28 @@ def test_replace_login_profile_swaps_directories(monkeypatch, tmp_path):
     open(os.path.join(temp, "new.txt"), "w", encoding="utf-8").write("new")
     webview2.replace_login_profile(temp)
     assert os.path.isfile(os.path.join(profile, "new.txt"))
+    assert not os.path.exists(profile + ".bak")
+
+
+def test_replace_login_profile_keeps_old_when_backup_move_fails(monkeypatch, tmp_path):
+    profile = _use_temp_profile(monkeypatch, tmp_path)
+    os.makedirs(profile)
+    open(os.path.join(profile, "old.txt"), "w", encoding="utf-8").write("old")
+    temp = webview2.prepare_switch_profile()
+    open(os.path.join(temp, "new.txt"), "w", encoding="utf-8").write("new")
+
+    original = webview2._replace_with_retry
+
+    def fail_backup(source, target, *args, **kwargs):
+        if str(target).endswith(".bak"):
+            raise OSError("locked")
+        return original(source, target, *args, **kwargs)
+
+    monkeypatch.setattr(webview2, "_replace_with_retry", fail_backup)
+    with pytest.raises(RuntimeError):
+        webview2.replace_login_profile(temp)
+
+    assert os.path.isfile(os.path.join(profile, "old.txt"))
     assert not os.path.exists(profile + ".bak")
 
 

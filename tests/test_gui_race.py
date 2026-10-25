@@ -125,9 +125,11 @@ def test_login_source_conflict_is_visible(root_app, monkeypatch):
     assert "可能不是同一会话" in app.login_source_label.cget("text")
 
 
-def test_login_button_text_follows_method(root_app):
+def test_login_button_text_follows_method(root_app, monkeypatch):
     _root, app = root_app
+    monkeypatch.setattr(tieba_gui.webview2, "login_profile_exists", lambda: False)
     app._set_mode("login")
+    app._refresh_webview_status()
     app.login_method_var.set("bduss")
     assert "BDUSS" in app.login_baidu_btn.cget("text")
     app.login_method_var.set("cookie")
