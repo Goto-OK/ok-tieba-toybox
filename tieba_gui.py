@@ -197,7 +197,437 @@ def _optional_int(text: str) -> Optional[int]:
 
 
 
-class App(GuiLayoutMixin):
+class MessageMixin:
+    """后台消息处理器，从 App._handle_message 拆出。"""
+
+    root: Any
+    status_var: Any
+    login_method_var: Any
+    _simulated_restore: Any
+
+    def __getattr__(self, name: str) -> Any:
+        raise AttributeError(name)
+
+    def _handle_captcha_message(self, message: tuple) -> None:
+        _, detail, partial = message
+        if partial:
+            self.last_threads = self._merge_threads(partial)
+            self._persist_result(self.last_threads)
+            self._refresh_people()
+            self._refresh_grid()
+            self._append_log(
+                f"验证码中断：已保留 {len(self.last_threads)} 个已完成帖子。",
+                "warn",
+            )
+        self._set_running(False)
+        self.status_var.set("被安全验证拦截")
+        self._append_log("抓取失败：" + detail, "err")
+        if getattr(self, "_simulated_captcha", False):
+            self._simulated_captcha = False
+            mode = self.mode_var.get()
+            if mode == "guest":
+                dialog_text = (
+                    "当前是游客模式。\n"
+                    "真实流程会读取匿名 Cookie，不读取 BDUSS/STOKEN。"
+                )
+            elif self.login_method_var.get() == "bduss":
+                cached = bool(getattr(self, "_full_cookie_cache", ""))
+                dialog_text = (
+                    "本次实际只发送了 BDUSS。\n"
+                    + (
+                        "真实流程会提示改用已保存的完整 Cookie。"
+                        if cached
+                        else "当前没有完整 Cookie 缓存。"
+                    )
+                )
+            else:
+                dialog_text = (
+                    "当前使用完整 Cookie。\n"
+                    "真实流程会读取完整 Cookie，并检查 BDUSS。"
+                )
+            self._ask_choice(
+                "模拟验证码",
+                dialog_text
+                + "\n\n模拟模式：不打开 WebView2、不读取 Cookie、不修改登录状态。",
+                [("结束模拟", "stop")],
+            )
+            restore = getattr(self, "_simulated_restore", None)
+            self._simulated_restore = None
+            if restore:
+                self.mode_var.set(restore[0])
+                self.login_method_var.set(restore[1])
+                self._on_login_method_changed()
+                self._apply_mode_ui()
+            self.status_var.set("模拟验证码已结束（未联网）")
+            self._append_log("模拟验证码已结束，未发出请求。", "muted")
+            self._refresh_log_summary()
+            return
+        mode = self.mode_var.get()
+        current_cookie_mode = mode == "login" and self.login_method_var.get() == "cookie"
+        use_bduss = mode == "login" and self.login_method_var.get() == "bduss"
+        cached_cookie = bool(getattr(self, "_full_cookie_cache", ""))
+        if use_bduss and cached_cookie:
+            dialog_text = (
+                "本次实际只发送了 BDUSS。\n"
+                "软件检测到你之前保存过完整 Cookie，可能是仅 BDUSS 不够用。\n\n"
+                "是否改用完整 Cookie 重试？"
+            )
+        elif use_bduss:
+            dialog_text = (
+                "本次实际只发送了 BDUSS，且没有可用的完整 Cookie。\n"
+                "验证码通常需要完整 Cookie。"
+            )
+        elif mode == "guest":
+            if webview2.available():
+                dialog_text = (
+                    "当前是游客模式。\n"
+                    "完成验证后软件会自动读取匿名 Cookie，不会读取 BDUSS/STOKEN。"
+                )
+            else:
+                dialog_text = (
+                    "当前是游客模式，且未检测到 WebView2 Runtime。\n"
+                    "可以改用登录模式（完整 Cookie）继续。"
+                )
+        else:
+            dialog_text = (
+                "当前请求需要完整 Cookie。\n"
+                "完成验证后软件会读取完整 Cookie，仅用于本次抓取。"
+            )
+        choices = []
+        if use_bduss and cached_cookie:
+            choices.append(("改用已保存的完整 Cookie", "cached_cookie"))
+        if webview2.available():
+            choices.append(
+                (
+                    "打开内置验证（自动读匿名 Cookie）"
+                    if mode == "guest"
+                    else (
+                        "重新打开内置验证并更新完整 Cookie"
+                        if current_cookie_mode
+                        else "打开内置验证并读取完整 Cookie"
+                    ),
+                    "embedded",
+                )
+            )
+        choices.extend(
+            [
+                (
+                    "重新手动粘贴完整 Cookie"
+                    if current_cookie_mode
+                    else "转到登录模式（完整 Cookie）",
+                    "login",
+                ),
+                ("停止本次", "stop"),
+            ]
+        )
+        choice = self._ask_choice(
+            "被安全验证拦截",
+            dialog_text,
+            choices,
+            default=0,
+        )
+        if choice == "cached_cookie":
+            self.login_method_var.set("cookie")
+            self.cookie_var.set(self._full_cookie_cache)
+            self._on_login_method_changed()
+            self._set_login_fields_expanded(False)
+            self.login_toggle_btn.focus_set()
+            self.status_var.set("登录信息已就绪")
+            self._append_log("已改用缓存的完整 Cookie，请重新开始。", "ok")
+            messagebox.showinfo(
+                "已切换完整 Cookie",
+                self._login_result_text("已改用之前保存的完整 Cookie"),
+                parent=self.root,
+            )
+            self._refresh_log_summary()
+            return
+        if choice == "login":
+            source = "manual"
+            if mode == "guest" and webview2.available():
+                source = self._ask_choice(
+                    "改用登录模式（完整 Cookie）",
+                    "选择获取完整 Cookie 的方式。\n"
+                    "内置验证会读取完整 Cookie；手动方式只打开浏览器，不自动读取。",
+                    [
+                        ("打开内置验证并读取完整 Cookie", "embedded"),
+                        ("手动粘贴完整 Cookie", "manual"),
+                    ],
+                    default=0,
+                )
+                if source is None:
+                    return
+            self.mode_var.set("login")
+            self.login_method_var.set("cookie")
+            self._on_login_method_changed()
+            if mode == "guest":
+                self.settings["follow_enhance"] = True
+                if hasattr(self, "follow_enhance_var"):
+                    self.follow_enhance_var.set(True)
+                save_settings(self.settings)
+                self._apply_risk_ui()
+                self._append_log("已自动开启关注检测。", "muted")
+            if source == "embedded":
+                self._start_webview_cookie_flow(anonymous=False)
+            else:
+                url = (getattr(self, "_current_urls", []) or ["https://tieba.baidu.com/"])[0]
+                try:
+                    webbrowser.open(url)
+                except Exception:  # noqa: BLE001
+                    pass
+                self.cookie_entry.focus_set()
+                self._append_log(
+                    "已切换到登录模式（完整 Cookie）。手动粘贴完整 Cookie 后重新开始。",
+                    "err",
+                )
+        elif choice == "embedded":
+            self._start_webview_cookie_flow(
+                anonymous=self.mode_var.get() == "guest"
+            )
+        self._refresh_log_summary()
+
+
+    def _handle_webview_test_done(self, message: tuple) -> None:
+        _, error = message
+        self._webview_running = False
+        if error:
+            self.status_var.set("内置验证窗口测试失败")
+            messagebox.showwarning(
+                "测试失败",
+                f"内置验证窗口启动失败：\n{error}",
+                parent=self.root,
+            )
+            return
+        self.status_var.set("内置验证窗口测试完成")
+        messagebox.showinfo(
+            "测试完成",
+            "内置验证窗口已成功打开并关闭。\n"
+            "本测试会打开真实帖子页面，但不读取 Cookie、不修改登录状态。",
+            parent=self.root,
+        )
+
+
+    def _handle_embedded_done(self, message: tuple) -> None:
+        _, cookies, error, warning = message
+        self._webview_running = False
+        if error or not cookies:
+            self.status_var.set("内置验证失败")
+            self._append_log(f"内置验证窗口失败：{error or '没有可用 Cookie'}", "err")
+            messagebox.showwarning(
+                "内置验证未完成",
+                (error or "没有读取到可用 Cookie。")
+                + "\n可以改用「转到登录模式（完整 Cookie）」。",
+                parent=self.root,
+            )
+            self._refresh_log_summary()
+            return
+        if self.mode_var.get() == "guest":
+            self._guest_cookie = dict(cookies)
+            self.status_var.set("游客验证会话已就绪")
+            self._append_log("已获取匿名验证会话，保持游客模式。", "ok")
+            messagebox.showinfo(
+                "游客验证会话已获取",
+                "已读取匿名 Cookie，未读取 BDUSS/STOKEN。\n"
+                + self._login_result_text("模式仍为游客"),
+                parent=self.root,
+            )
+        else:
+            if not webview2.has_login_cookie(cookies):
+                self._append_log(
+                    "内置窗口未登录百度账号：没有读取到 BDUSS/TIEBA_SID。", "err"
+                )
+                messagebox.showwarning(
+                    "尚未登录",
+                    "没有读取到登录 Cookie（BDUSS/TIEBA_SID），"
+                    "不能当作完整 Cookie 登录成功。\n"
+                    "请重新打开内置登录并登录百度账号。",
+                    parent=self.root,
+                )
+                self._refresh_webview_status()
+                self._refresh_log_summary()
+                return
+            self._webview_cookie_session = True
+            self._login_source = "内置浏览器"
+            self._last_webview_match = (
+                webview2.match_profile_fingerprint(cookies)
+                if webview2.login_profile_exists()
+                else None
+            )
+            self._save_login_fingerprint(cookies)
+            cookie_text = "; ".join(f"{k}={v}" for k, v in cookies.items())
+            self.cookie_var.set(cookie_text)
+            self._full_cookie_cache = cookie_text
+            self.login_method_var.set("cookie")
+            self._on_login_method_changed()
+            self._set_login_fields_expanded(False)
+            self.login_toggle_btn.focus_set()
+            self.status_var.set("登录信息已就绪")
+            self._append_log("已从内置验证窗口读取完整 Cookie。", "ok")
+            messagebox.showinfo(
+                "验证完成",
+                self._login_result_text("已读取完整 Cookie"),
+                parent=self.root,
+            )
+            if warning:
+                self._append_log(f"登录预检警告：{warning}", "warn")
+                messagebox.showwarning(
+                    "预检未通过",
+                    warning + "\n\nCookie 已填入，但开始抓取后仍可能被拦截。",
+                    parent=self.root,
+                )
+        self._offer_retry_incomplete("登录信息")
+        self._refresh_webview_status()
+        self._refresh_log_summary()
+
+
+    def _handle_auto_login_done(self, message: tuple) -> None:
+        _, target, cookies, error, warning = message
+        self._webview_running = False
+        if error or not cookies:
+            self.status_var.set("登录信息获取失败")
+            self._append_log(f"自动获取登录失败：{error or '没有可用 Cookie'}", "err")
+            rolled_back = False
+            if self.settings.get("follow_enhance") and not webview2.has_login_cookie(
+                parse_cookie_input(self.cookie_var.get())
+            ):
+                self.settings["follow_enhance"] = False
+                if hasattr(self, "follow_enhance_var"):
+                    self.follow_enhance_var.set(False)
+                save_settings(self.settings)
+                self._set_mode("guest")
+                rolled_back = True
+                self._append_log("登录无效，已关闭关注检测并切回游客。", "warn")
+            messagebox.showwarning(
+                "自动获取失败",
+                (error or "没有读取到可用 Cookie。")
+                + (
+                    "\n已关闭关注检测并切回游客。"
+                    if rolled_back
+                    else "\n可以改用手动粘贴。"
+                ),
+                parent=self.root,
+            )
+            self._refresh_webview_status()
+            self._refresh_log_summary()
+            return
+        self._login_source = "内置浏览器"
+        self._last_webview_match = (
+            webview2.match_profile_fingerprint(cookies)
+            if webview2.login_profile_exists()
+            else None
+        )
+        self._save_login_fingerprint(cookies)
+        cookie_text = "; ".join(f"{k}={v}" for k, v in cookies.items())
+        self._full_cookie_cache = cookie_text
+        if target == "bduss":
+            self.login_method_var.set("bduss")
+            self.bduss_var.set(str(cookies.get("BDUSS") or ""))
+            self.cookie_var.set(f"BDUSS={cookies.get('BDUSS') or ''}")
+            self._on_login_method_changed()
+            self._set_login_fields_expanded(False)
+            self.login_toggle_btn.focus_set()
+            self._append_log("已自动获取 BDUSS。", "ok")
+            messagebox.showinfo(
+                "BDUSS 已获取",
+                self._login_result_text("已从内置登录提取 BDUSS"),
+                parent=self.root,
+            )
+        else:
+            self._webview_cookie_session = True
+            self.login_method_var.set("cookie")
+            self.cookie_var.set(cookie_text)
+            self._on_login_method_changed()
+            self._set_login_fields_expanded(False)
+            self.login_toggle_btn.focus_set()
+            self._append_log("已自动获取完整 Cookie。", "ok")
+            messagebox.showinfo(
+                "完整 Cookie 已获取",
+                self._login_result_text("已从内置登录读取完整 Cookie"),
+                parent=self.root,
+            )
+        self.status_var.set(
+            "登录信息已获取" if not warning else "登录信息已获取（预检未通过）"
+        )
+        if warning:
+            self._append_log(f"登录预检警告：{warning}", "warn")
+            messagebox.showwarning(
+                "预检未通过",
+                warning + "\n\nCookie 已填入，但开始抓取后仍可能被拦截。",
+                parent=self.root,
+            )
+        self._offer_retry_incomplete("登录信息")
+        self._refresh_webview_status()
+        self._refresh_log_summary()
+
+
+    def _handle_switch_login_done(self, message: tuple) -> None:
+        _, cookies, error, warning = message
+        self._webview_running = False
+        if error or not cookies:
+            webview2.clear_switch_profile()
+            self.status_var.set("切换账号失败")
+            self._append_log(f"切换账号失败：{error or '没有可用 Cookie'}", "err")
+            messagebox.showwarning(
+                "切换账号失败",
+                (error or "没有读取到可用 Cookie。")
+                + "\n旧登录和旧内置会话已保留。",
+                parent=self.root,
+            )
+            self._refresh_webview_status()
+            return
+        remember = bool(self.settings.get("webview_remember_login", False))
+        try:
+            if remember:
+                webview2.replace_login_profile(webview2.switch_profile_dir())
+                self._save_login_fingerprint(cookies, force=True)
+                self._last_webview_match = None
+            else:
+                webview2.clear_switch_profile()
+                self._last_webview_match = (
+                    webview2.match_profile_fingerprint(cookies)
+                    if webview2.login_profile_exists()
+                    else None
+                )
+        except Exception as switch_error:  # noqa: BLE001
+            webview2.clear_switch_profile()
+            self.status_var.set("切换账号失败")
+            self._append_log(f"切换账号失败：{switch_error}", "err")
+            messagebox.showwarning(
+                "切换账号失败",
+                f"{switch_error}\n旧登录和旧内置会话已保留。",
+                parent=self.root,
+            )
+            self._refresh_webview_status()
+            return
+        target = "bduss" if self.login_method_var.get() == "bduss" else "cookie"
+        self._adopt_webview_login(cookies, target)
+        if self._remember_current_login():
+            save_cookie(self._current_cookie_text())
+        if not remember and webview2.login_profile_exists():
+            if messagebox.askyesno(
+                "清除旧内置登录",
+                "新账号已登录，但“记住内置登录”未开启。\n"
+                "旧的内置登录仍是旧账号。是否清除旧内置登录？",
+                parent=self.root,
+                default=messagebox.YES,
+            ):
+                if webview2.clear_login_profile():
+                    self._last_webview_match = None
+                else:
+                    messagebox.showwarning(
+                        "旧内置登录未清除",
+                        "旧内置登录目录仍被占用；当前账号已切换，旧目录保留。",
+                        parent=self.root,
+                    )
+        self.status_var.set("已切换百度账号")
+        self._append_log("已切换百度账号并更新当前登录。", "ok")
+        if warning:
+            self._append_log(f"登录预检警告：{warning}", "warn")
+        self._offer_retry_incomplete("登录信息")
+        self._refresh_webview_status()
+        self._refresh_log_summary()
+
+
+class App(GuiLayoutMixin, MessageMixin):
     def __init__(self, root: tk.Tk) -> None:
         self.root = root
         self.log_queue: "queue.Queue[tuple]" = queue.Queue()
@@ -10299,414 +10729,15 @@ class App(GuiLayoutMixin):
             self._append_log("\n已停止，没有生成文件。", "err")
             self._refresh_log_summary()
         elif kind == "captcha":
-            _, detail, partial = message
-            if partial:
-                self.last_threads = self._merge_threads(partial)
-                self._persist_result(self.last_threads)
-                self._refresh_people()
-                self._refresh_grid()
-                self._append_log(
-                    f"验证码中断：已保留 {len(self.last_threads)} 个已完成帖子。",
-                    "warn",
-                )
-            self._set_running(False)
-            self.status_var.set("被安全验证拦截")
-            self._append_log("抓取失败：" + detail, "err")
-            if getattr(self, "_simulated_captcha", False):
-                self._simulated_captcha = False
-                mode = self.mode_var.get()
-                if mode == "guest":
-                    dialog_text = (
-                        "当前是游客模式。\n"
-                        "真实流程会读取匿名 Cookie，不读取 BDUSS/STOKEN。"
-                    )
-                elif self.login_method_var.get() == "bduss":
-                    cached = bool(getattr(self, "_full_cookie_cache", ""))
-                    dialog_text = (
-                        "本次实际只发送了 BDUSS。\n"
-                        + (
-                            "真实流程会提示改用已保存的完整 Cookie。"
-                            if cached
-                            else "当前没有完整 Cookie 缓存。"
-                        )
-                    )
-                else:
-                    dialog_text = (
-                        "当前使用完整 Cookie。\n"
-                        "真实流程会读取完整 Cookie，并检查 BDUSS。"
-                    )
-                self._ask_choice(
-                    "模拟验证码",
-                    dialog_text
-                    + "\n\n模拟模式：不打开 WebView2、不读取 Cookie、不修改登录状态。",
-                    [("结束模拟", "stop")],
-                )
-                restore = getattr(self, "_simulated_restore", None)
-                self._simulated_restore = None
-                if restore:
-                    self.mode_var.set(restore[0])
-                    self.login_method_var.set(restore[1])
-                    self._on_login_method_changed()
-                    self._apply_mode_ui()
-                self.status_var.set("模拟验证码已结束（未联网）")
-                self._append_log("模拟验证码已结束，未发出请求。", "muted")
-                self._refresh_log_summary()
-                return
-            mode = self.mode_var.get()
-            current_cookie_mode = mode == "login" and self.login_method_var.get() == "cookie"
-            use_bduss = mode == "login" and self.login_method_var.get() == "bduss"
-            cached_cookie = bool(getattr(self, "_full_cookie_cache", ""))
-            if use_bduss and cached_cookie:
-                dialog_text = (
-                    "本次实际只发送了 BDUSS。\n"
-                    "软件检测到你之前保存过完整 Cookie，可能是仅 BDUSS 不够用。\n\n"
-                    "是否改用完整 Cookie 重试？"
-                )
-            elif use_bduss:
-                dialog_text = (
-                    "本次实际只发送了 BDUSS，且没有可用的完整 Cookie。\n"
-                    "验证码通常需要完整 Cookie。"
-                )
-            elif mode == "guest":
-                if webview2.available():
-                    dialog_text = (
-                        "当前是游客模式。\n"
-                        "完成验证后软件会自动读取匿名 Cookie，不会读取 BDUSS/STOKEN。"
-                    )
-                else:
-                    dialog_text = (
-                        "当前是游客模式，且未检测到 WebView2 Runtime。\n"
-                        "可以改用登录模式（完整 Cookie）继续。"
-                    )
-            else:
-                dialog_text = (
-                    "当前请求需要完整 Cookie。\n"
-                    "完成验证后软件会读取完整 Cookie，仅用于本次抓取。"
-                )
-            choices = []
-            if use_bduss and cached_cookie:
-                choices.append(("改用已保存的完整 Cookie", "cached_cookie"))
-            if webview2.available():
-                choices.append(
-                    (
-                        "打开内置验证（自动读匿名 Cookie）"
-                        if mode == "guest"
-                        else (
-                            "重新打开内置验证并更新完整 Cookie"
-                            if current_cookie_mode
-                            else "打开内置验证并读取完整 Cookie"
-                        ),
-                        "embedded",
-                    )
-                )
-            choices.extend(
-                [
-                    (
-                        "重新手动粘贴完整 Cookie"
-                        if current_cookie_mode
-                        else "转到登录模式（完整 Cookie）",
-                        "login",
-                    ),
-                    ("停止本次", "stop"),
-                ]
-            )
-            choice = self._ask_choice(
-                "被安全验证拦截",
-                dialog_text,
-                choices,
-                default=0,
-            )
-            if choice == "cached_cookie":
-                self.login_method_var.set("cookie")
-                self.cookie_var.set(self._full_cookie_cache)
-                self._on_login_method_changed()
-                self._set_login_fields_expanded(False)
-                self.login_toggle_btn.focus_set()
-                self.status_var.set("登录信息已就绪")
-                self._append_log("已改用缓存的完整 Cookie，请重新开始。", "ok")
-                messagebox.showinfo(
-                    "已切换完整 Cookie",
-                    self._login_result_text("已改用之前保存的完整 Cookie"),
-                    parent=self.root,
-                )
-                self._refresh_log_summary()
-                return
-            if choice == "login":
-                source = "manual"
-                if mode == "guest" and webview2.available():
-                    source = self._ask_choice(
-                        "改用登录模式（完整 Cookie）",
-                        "选择获取完整 Cookie 的方式。\n"
-                        "内置验证会读取完整 Cookie；手动方式只打开浏览器，不自动读取。",
-                        [
-                            ("打开内置验证并读取完整 Cookie", "embedded"),
-                            ("手动粘贴完整 Cookie", "manual"),
-                        ],
-                        default=0,
-                    )
-                    if source is None:
-                        return
-                self.mode_var.set("login")
-                self.login_method_var.set("cookie")
-                self._on_login_method_changed()
-                if mode == "guest":
-                    self.settings["follow_enhance"] = True
-                    if hasattr(self, "follow_enhance_var"):
-                        self.follow_enhance_var.set(True)
-                    save_settings(self.settings)
-                    self._apply_risk_ui()
-                    self._append_log("已自动开启关注检测。", "muted")
-                if source == "embedded":
-                    self._start_webview_cookie_flow(anonymous=False)
-                else:
-                    url = (getattr(self, "_current_urls", []) or ["https://tieba.baidu.com/"])[0]
-                    try:
-                        webbrowser.open(url)
-                    except Exception:  # noqa: BLE001
-                        pass
-                    self.cookie_entry.focus_set()
-                    self._append_log(
-                        "已切换到登录模式（完整 Cookie）。手动粘贴完整 Cookie 后重新开始。",
-                        "err",
-                    )
-            elif choice == "embedded":
-                self._start_webview_cookie_flow(
-                    anonymous=self.mode_var.get() == "guest"
-                )
-            self._refresh_log_summary()
+            self._handle_captcha_message(message)
         elif kind == "webview_test_done":
-            _, error = message
-            self._webview_running = False
-            if error:
-                self.status_var.set("内置验证窗口测试失败")
-                messagebox.showwarning(
-                    "测试失败",
-                    f"内置验证窗口启动失败：\n{error}",
-                    parent=self.root,
-                )
-                return
-            self.status_var.set("内置验证窗口测试完成")
-            messagebox.showinfo(
-                "测试完成",
-                "内置验证窗口已成功打开并关闭。\n"
-                "本测试会打开真实帖子页面，但不读取 Cookie、不修改登录状态。",
-                parent=self.root,
-            )
+            self._handle_webview_test_done(message)
         elif kind == "embedded_done":
-            _, cookies, error, warning = message
-            self._webview_running = False
-            if error or not cookies:
-                self.status_var.set("内置验证失败")
-                self._append_log(f"内置验证窗口失败：{error or '没有可用 Cookie'}", "err")
-                messagebox.showwarning(
-                    "内置验证未完成",
-                    (error or "没有读取到可用 Cookie。")
-                    + "\n可以改用「转到登录模式（完整 Cookie）」。",
-                    parent=self.root,
-                )
-                self._refresh_log_summary()
-                return
-            if self.mode_var.get() == "guest":
-                self._guest_cookie = dict(cookies)
-                self.status_var.set("游客验证会话已就绪")
-                self._append_log("已获取匿名验证会话，保持游客模式。", "ok")
-                messagebox.showinfo(
-                    "游客验证会话已获取",
-                    "已读取匿名 Cookie，未读取 BDUSS/STOKEN。\n"
-                    + self._login_result_text("模式仍为游客"),
-                    parent=self.root,
-                )
-            else:
-                if not webview2.has_login_cookie(cookies):
-                    self._append_log(
-                        "内置窗口未登录百度账号：没有读取到 BDUSS/TIEBA_SID。", "err"
-                    )
-                    messagebox.showwarning(
-                        "尚未登录",
-                        "没有读取到登录 Cookie（BDUSS/TIEBA_SID），"
-                        "不能当作完整 Cookie 登录成功。\n"
-                        "请重新打开内置登录并登录百度账号。",
-                        parent=self.root,
-                    )
-                    self._refresh_webview_status()
-                    self._refresh_log_summary()
-                    return
-                self._webview_cookie_session = True
-                self._login_source = "内置浏览器"
-                self._last_webview_match = (
-                    webview2.match_profile_fingerprint(cookies)
-                    if webview2.login_profile_exists()
-                    else None
-                )
-                self._save_login_fingerprint(cookies)
-                cookie_text = "; ".join(f"{k}={v}" for k, v in cookies.items())
-                self.cookie_var.set(cookie_text)
-                self._full_cookie_cache = cookie_text
-                self.login_method_var.set("cookie")
-                self._on_login_method_changed()
-                self._set_login_fields_expanded(False)
-                self.login_toggle_btn.focus_set()
-                self.status_var.set("登录信息已就绪")
-                self._append_log("已从内置验证窗口读取完整 Cookie。", "ok")
-                messagebox.showinfo(
-                    "验证完成",
-                    self._login_result_text("已读取完整 Cookie"),
-                    parent=self.root,
-                )
-                if warning:
-                    self._append_log(f"登录预检警告：{warning}", "warn")
-                    messagebox.showwarning(
-                        "预检未通过",
-                        warning + "\n\nCookie 已填入，但开始抓取后仍可能被拦截。",
-                        parent=self.root,
-                    )
-            self._offer_retry_incomplete("登录信息")
-            self._refresh_webview_status()
-            self._refresh_log_summary()
+            self._handle_embedded_done(message)
         elif kind == "auto_login_done":
-            _, target, cookies, error, warning = message
-            self._webview_running = False
-            if error or not cookies:
-                self.status_var.set("登录信息获取失败")
-                self._append_log(f"自动获取登录失败：{error or '没有可用 Cookie'}", "err")
-                rolled_back = False
-                if self.settings.get("follow_enhance") and not webview2.has_login_cookie(
-                    parse_cookie_input(self.cookie_var.get())
-                ):
-                    self.settings["follow_enhance"] = False
-                    if hasattr(self, "follow_enhance_var"):
-                        self.follow_enhance_var.set(False)
-                    save_settings(self.settings)
-                    self._set_mode("guest")
-                    rolled_back = True
-                    self._append_log("登录无效，已关闭关注检测并切回游客。", "warn")
-                messagebox.showwarning(
-                    "自动获取失败",
-                    (error or "没有读取到可用 Cookie。")
-                    + (
-                        "\n已关闭关注检测并切回游客。"
-                        if rolled_back
-                        else "\n可以改用手动粘贴。"
-                    ),
-                    parent=self.root,
-                )
-                self._refresh_webview_status()
-                self._refresh_log_summary()
-                return
-            self._login_source = "内置浏览器"
-            self._last_webview_match = (
-                webview2.match_profile_fingerprint(cookies)
-                if webview2.login_profile_exists()
-                else None
-            )
-            self._save_login_fingerprint(cookies)
-            cookie_text = "; ".join(f"{k}={v}" for k, v in cookies.items())
-            self._full_cookie_cache = cookie_text
-            if target == "bduss":
-                self.login_method_var.set("bduss")
-                self.bduss_var.set(str(cookies.get("BDUSS") or ""))
-                self.cookie_var.set(f"BDUSS={cookies.get('BDUSS') or ''}")
-                self._on_login_method_changed()
-                self._set_login_fields_expanded(False)
-                self.login_toggle_btn.focus_set()
-                self._append_log("已自动获取 BDUSS。", "ok")
-                messagebox.showinfo(
-                    "BDUSS 已获取",
-                    self._login_result_text("已从内置登录提取 BDUSS"),
-                    parent=self.root,
-                )
-            else:
-                self._webview_cookie_session = True
-                self.login_method_var.set("cookie")
-                self.cookie_var.set(cookie_text)
-                self._on_login_method_changed()
-                self._set_login_fields_expanded(False)
-                self.login_toggle_btn.focus_set()
-                self._append_log("已自动获取完整 Cookie。", "ok")
-                messagebox.showinfo(
-                    "完整 Cookie 已获取",
-                    self._login_result_text("已从内置登录读取完整 Cookie"),
-                    parent=self.root,
-                )
-            self.status_var.set(
-                "登录信息已获取" if not warning else "登录信息已获取（预检未通过）"
-            )
-            if warning:
-                self._append_log(f"登录预检警告：{warning}", "warn")
-                messagebox.showwarning(
-                    "预检未通过",
-                    warning + "\n\nCookie 已填入，但开始抓取后仍可能被拦截。",
-                    parent=self.root,
-                )
-            self._offer_retry_incomplete("登录信息")
-            self._refresh_webview_status()
-            self._refresh_log_summary()
+            self._handle_auto_login_done(message)
         elif kind == "switch_login_done":
-            _, cookies, error, warning = message
-            self._webview_running = False
-            if error or not cookies:
-                webview2.clear_switch_profile()
-                self.status_var.set("切换账号失败")
-                self._append_log(f"切换账号失败：{error or '没有可用 Cookie'}", "err")
-                messagebox.showwarning(
-                    "切换账号失败",
-                    (error or "没有读取到可用 Cookie。")
-                    + "\n旧登录和旧内置会话已保留。",
-                    parent=self.root,
-                )
-                self._refresh_webview_status()
-                return
-            remember = bool(self.settings.get("webview_remember_login", False))
-            try:
-                if remember:
-                    webview2.replace_login_profile(webview2.switch_profile_dir())
-                    self._save_login_fingerprint(cookies, force=True)
-                    self._last_webview_match = None
-                else:
-                    webview2.clear_switch_profile()
-                    self._last_webview_match = (
-                        webview2.match_profile_fingerprint(cookies)
-                        if webview2.login_profile_exists()
-                        else None
-                    )
-            except Exception as switch_error:  # noqa: BLE001
-                webview2.clear_switch_profile()
-                self.status_var.set("切换账号失败")
-                self._append_log(f"切换账号失败：{switch_error}", "err")
-                messagebox.showwarning(
-                    "切换账号失败",
-                    f"{switch_error}\n旧登录和旧内置会话已保留。",
-                    parent=self.root,
-                )
-                self._refresh_webview_status()
-                return
-            target = "bduss" if self.login_method_var.get() == "bduss" else "cookie"
-            self._adopt_webview_login(cookies, target)
-            if self._remember_current_login():
-                save_cookie(self._current_cookie_text())
-            if not remember and webview2.login_profile_exists():
-                if messagebox.askyesno(
-                    "清除旧内置登录",
-                    "新账号已登录，但“记住内置登录”未开启。\n"
-                    "旧的内置登录仍是旧账号。是否清除旧内置登录？",
-                    parent=self.root,
-                    default=messagebox.YES,
-                ):
-                    if webview2.clear_login_profile():
-                        self._last_webview_match = None
-                    else:
-                        messagebox.showwarning(
-                            "旧内置登录未清除",
-                            "旧内置登录目录仍被占用；当前账号已切换，旧目录保留。",
-                            parent=self.root,
-                        )
-            self.status_var.set("已切换百度账号")
-            self._append_log("已切换百度账号并更新当前登录。", "ok")
-            if warning:
-                self._append_log(f"登录预检警告：{warning}", "warn")
-            self._offer_retry_incomplete("登录信息")
-            self._refresh_webview_status()
-            self._refresh_log_summary()
+            self._handle_switch_login_done(message)
         elif kind == "manual_cookie_probe":
             _, token, warning, logged, missing = message
             if token != self._login_probe_token:
