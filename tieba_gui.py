@@ -20,15 +20,14 @@ import traceback
 import webbrowser
 from dataclasses import replace
 from datetime import datetime, timedelta
-from functools import partial
 from tkinter import filedialog, messagebox, simpledialog, ttk
 from typing import Any, Callable, Dict, List, Optional
 from urllib.parse import quote
 
+from tieba_gui_grid import GridMixin
 from tieba_gui_layout import APP_TITLE, GuiLayoutMixin
 from tieba_gui_messages import MessageMixin
 from tieba_gui_settings import SettingsMixin
-from tieba_gui_grid import GridMixin
 from tieba_reply_stats import profile_pb, third_party, webview2
 from tieba_reply_stats.blacklist import (
     LEVEL_LABEL,
