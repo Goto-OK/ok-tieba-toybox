@@ -81,15 +81,27 @@ def _fields(data: bytes):
             return
         number, wire = key >> 3, key & 7
         if wire == 0:
-            value, index = _read_varint(data, index)
+            try:
+                value, index = _read_varint(data, index)
+            except IndexError:
+                return
         elif wire == 2:
-            length, index = _read_varint(data, index)
+            try:
+                length, index = _read_varint(data, index)
+            except IndexError:
+                return
+            if length < 0 or index + length > len(data):
+                return
             value = data[index : index + length]
             index += length
         elif wire == 5:
+            if index + 4 > len(data):
+                return
             value = data[index : index + 4]
             index += 4
         elif wire == 1:
+            if index + 8 > len(data):
+                return
             value = data[index : index + 8]
             index += 8
         else:

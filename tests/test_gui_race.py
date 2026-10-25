@@ -40,6 +40,20 @@ def test_stop_closes_choice_dialog(root_app):
     app._set_running(False)
 
 
+def test_stop_destroys_active_choice_window(root_app):
+    _root, app = root_app
+    destroyed = []
+
+    class Window:
+        def destroy(self):
+            destroyed.append(True)
+
+    app._active_choice_window = Window()
+    app._on_stop()
+    assert destroyed == [True]
+    assert app._active_choice_window is None
+
+
 def test_follow_detection_requires_login(root_app):
     _root, app = root_app
     app._set_mode("guest")

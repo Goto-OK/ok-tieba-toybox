@@ -1,6 +1,6 @@
 """Client-protobuf user posts (new PC "查发言" source).
 
-Endpoint: POST http://tiebac.baidu.com/c/u/feed/userpost?cmd=303002
+Endpoint: POST https://tiebac.baidu.com/c/u/feed/userpost?cmd=303002
 Request:  UserPostReqIdl { data { user_id=1, rn=2, is_thread=4,
                                   need_content=5, pn=26, common=27 } }
 Response: UserPostResIdl { error=1, data=2 { post_list=1 repeated } }
@@ -16,7 +16,7 @@ import urllib.request
 import uuid
 from typing import Dict, List
 
-USERPOST_URL = "http://tiebac.baidu.com/c/u/feed/userpost?cmd=303002"
+USERPOST_URL = "https://tiebac.baidu.com/c/u/feed/userpost?cmd=303002"
 CLIENT_VERSION = b"12.64.1.1"
 USER_AGENT = "bdtb for Android 12.64.1.1"
 

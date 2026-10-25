@@ -57,3 +57,16 @@ def test_parse_profile_response():
 def test_parse_invalid_response():
     assert profile_pb.parse_response(b"") == {}
     assert profile_pb.parse_response(b'{"error": 1}') == {}
+
+
+def test_credential_endpoints_use_https():
+    from tieba_reply_stats import follow_probe, userpost_pb
+
+    for url in (
+        profile_pb.PROFILE_URL,
+        profile_pb.TIEBA_UID_URL,
+        userpost_pb.USERPOST_URL,
+        follow_probe.FID_URL,
+        follow_probe.LEVEL_URL,
+    ):
+        assert url.startswith("https://"), url

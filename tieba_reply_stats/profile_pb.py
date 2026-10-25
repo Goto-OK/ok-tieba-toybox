@@ -1,6 +1,6 @@
 """Minimal client-protobuf helpers for Tieba user profile.
 
-Endpoint: POST http://tiebac.baidu.com/c/u/user/profile?cmd=303012
+Endpoint: POST https://tiebac.baidu.com/c/u/user/profile?cmd=303012
 Body: multipart/form-data, field ``data`` = ProfileReqIdl bytes,
 header ``x_bd_data_type: protobuf``; no sign required.
 
@@ -14,8 +14,8 @@ import urllib.request
 import uuid
 from typing import Dict, List, Optional
 
-PROFILE_URL = "http://tiebac.baidu.com/c/u/user/profile?cmd=303012"
-TIEBA_UID_URL = "http://tiebac.baidu.com/c/u/user/getUserByTiebaUid?cmd=309702"
+PROFILE_URL = "https://tiebac.baidu.com/c/u/user/profile?cmd=303012"
+TIEBA_UID_URL = "https://tiebac.baidu.com/c/u/user/getUserByTiebaUid?cmd=309702"
 CLIENT_VERSION = b"12.64.1.1"
 USER_AGENT = "bdtb for Android 12.64.1.1"
 

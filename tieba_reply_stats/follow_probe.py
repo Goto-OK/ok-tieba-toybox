@@ -12,8 +12,8 @@ from __future__ import annotations
 import hashlib
 from typing import Callable, Dict, Iterable, List, Optional
 
-FID_URL = "http://tieba.baidu.com/f/commit/share/fnameShareApi"
-LEVEL_URL = "http://tiebac.baidu.com/c/f/forum/getUserForumLevelInfo"
+FID_URL = "https://tieba.baidu.com/f/commit/share/fnameShareApi"
+LEVEL_URL = "https://tiebac.baidu.com/c/f/forum/getUserForumLevelInfo"
 CLIENT_VERSION = "22.12.1.0"
 
 _fid_cache: Dict[str, int] = {}

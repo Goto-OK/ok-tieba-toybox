@@ -1,5 +1,5 @@
 from tieba_reply_stats import page_pb
-from tieba_reply_stats.page_pb import _fb, _fv, _msg, _num, _text
+from tieba_reply_stats.page_pb import _fb, _fields, _fv, _msg, _num, _text
 
 
 def _user(uid: int, name: str, nick: str, level: int = 0) -> bytes:
@@ -109,3 +109,9 @@ def test_parse_response_floors_and_comments():
 def test_parse_response_without_comments():
     result = page_pb.parse_response(build_response(), with_comments=False)
     assert result["comments"] == []
+
+
+def test_fields_stop_at_truncated_payload():
+    assert list(_fields(b"\x08")) == []
+    assert list(_fields(b"\x0a\x05abc")) == []
+    assert list(_fields(b"\x15\x01")) == []

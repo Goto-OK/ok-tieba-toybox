@@ -19,7 +19,7 @@
 ```text
 ruff     通过
 mypy     32 个源文件通过
-pytest   139 项：本地全过；CI 138 通过 + 1 跳过
+pytest   145 项本地全过；CI 通过
 selftest 通过
 GitHub Actions CI 通过
 Android 核心同步通过

@@ -6832,6 +6832,7 @@ class App:
         win.resizable(False, False)
         win.transient(self.root)
         win.grab_set()
+        self._active_choice_window = win
         frame = tk.Frame(win, bg="#ffffff", padx=20, pady=16)
         frame.pack(fill="both", expand=True)
         tk.Label(
@@ -6913,6 +6914,8 @@ class App:
         y = self.root.winfo_rooty() + max(0, (self.root.winfo_height() - height) // 2)
         win.geometry(f"{width}x{height}+{x}+{y}")
         self.root.wait_window(win)
+        if getattr(self, "_active_choice_window", None) is win:
+            self._active_choice_window = None
         self._clear_identity_strategy_selection()
         try:
             self.root.focus_set()
@@ -9552,7 +9555,7 @@ class App:
                 for thread in self.last_threads:
                     filled = fill_thread_levels(thread, fetcher, self._log_from_thread)
                     if filled:
-                        self._append_log(f"  新版网页接口补全等级：{filled} 处", "muted")
+                        self._log_from_thread(f"  新版网页接口补全等级：{filled} 处")
                     enrich_user_levels(thread, fetcher, options, self._log_from_thread)
                 if self.last_output:
                     export_workbook(
@@ -12088,6 +12091,8 @@ class App:
             self._append_log(f"\n✗ {detail}", "err")
             self._refresh_log_summary()
             messagebox.showerror("出错了", detail.split("\n\n")[0], parent=self.root)
+        else:
+            self._append_log(f"未知消息类型：{kind}", "warn")
 
     def _network_task_active(self) -> bool:
         return bool(
