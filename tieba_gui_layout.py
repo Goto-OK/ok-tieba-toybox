@@ -375,146 +375,11 @@ class GuiLayoutMixin:
         self.cookie_var = tk.StringVar()
         self.login_method_var = tk.StringVar(value="bduss")
 
-        login_header = tk.Frame(cookie_box, bg="#eef1f5")
-        login_header.grid(row=0, column=0, columnspan=4, sticky="ew", pady=(2, 2))
-        self.login_summary_var = tk.StringVar(value="登录信息未配置")
-        summary_frame = tk.Frame(login_header, bg="#eef1f5")
-        summary_frame.pack(side="left", fill="x", expand=True)
-        tk.Label(
-            summary_frame,
-            textvariable=self.login_summary_var,
-            bg="#eef1f5",
-            fg="#334155",
-            font=("Microsoft YaHei UI", 9),
-            anchor="w",
-        ).pack(anchor="w")
-        self.login_source_label = tk.Label(
-            summary_frame,
-            text="",
-            bg="#eef1f5",
-            fg="#b45309",
-            font=("Microsoft YaHei UI", 8),
-            anchor="w",
-        )
-        self.login_source_label.pack(anchor="w")
-        self.login_baidu_btn = ttk.Button(
-            login_header,
-            text="登录百度并获取",
-            command=self._login_baidu,
-            width=22,
-        )
-        self.login_baidu_btn.pack(side="right", padx=(8, 0))
-        self.login_toggle_btn = ttk.Button(
-            login_header,
-            text="展开",
-            command=self._toggle_login_fields,
-            width=6,
-        )
-        self.login_toggle_btn.pack(side="right", padx=(8, 0))
-
-        method_row = tk.Frame(cookie_box, bg="#eef1f5")
-        method_row.grid(row=1, column=0, columnspan=4, sticky="w", pady=(2, 4))
-        tk.Label(method_row, text="登录方式：", bg="#eef1f5", fg="#475569").pack(side="left")
-        self.login_bduss_radio = ttk.Radiobutton(
-            method_row,
-            text="仅 BDUSS（推荐）",
-            value="bduss",
-            variable=self.login_method_var,
-            command=self._on_login_method_changed,
-        )
-        self.login_bduss_radio.pack(side="left", padx=(4, 8))
-        self.login_cookie_radio = ttk.Radiobutton(
-            method_row,
-            text="完整 Cookie（验证码时）",
-            value="cookie",
-            variable=self.login_method_var,
-            command=self._on_login_method_changed,
-        )
-        self.login_cookie_radio.pack(side="left")
-
-        self.bduss_frame = tk.Frame(cookie_box, bg="#eef1f5")
-        self.bduss_frame.grid(row=2, column=0, columnspan=4, sticky="ew")
-        self.bduss_frame.columnconfigure(1, weight=1)
-        tk.Label(self.bduss_frame, text="BDUSS：", bg="#eef1f5", fg="#475569").grid(row=0, column=0, sticky="w")
-        self.bduss_var = tk.StringVar()
-        self.bduss_entry = ttk.Entry(
-            self.bduss_frame, textvariable=self.bduss_var, show="•", font=text_font
-        )
-        self.bduss_entry.grid(row=0, column=1, sticky="ew")
-        ttk.Button(
-            self.bduss_frame, text="从剪贴板粘贴", command=self._paste_bduss, width=14
-        ).grid(row=0, column=2, padx=(8, 0))
-        ttk.Button(
-            self.bduss_frame, text="如何获取？", command=self._show_bduss_help, width=10
-        ).grid(row=0, column=3, padx=(6, 0))
-        ttk.Button(self.bduss_frame, text="应用", command=self._apply_bduss, width=7).grid(
-            row=0, column=4, padx=(6, 0)
-        )
-        ttk.Button(self.bduss_frame, text="清除", command=self._clear_bduss, width=7).grid(
-            row=0, column=5, padx=(6, 0)
-        )
-        self.cookie_var.trace_add("write", self._sync_bduss_from_cookie)
-        self.remember_bduss_var = tk.BooleanVar(value=True)
-        ttk.Checkbutton(
-            self.bduss_frame,
-            text="记住 BDUSS（用 Windows 账户加密，仅本机可用）",
-            variable=self.remember_bduss_var,
-        ).grid(row=1, column=0, columnspan=4, sticky="w", pady=(3, 0))
-        tk.Label(
-            self.bduss_frame,
-            text="只发送 BDUSS，不发送浏览器里的其他 Cookie；验证码时切换完整 Cookie。",
-            bg="#eef1f5",
-            fg="#8a94a6",
-            font=("Microsoft YaHei UI", 8),
-        ).grid(row=2, column=0, columnspan=6, sticky="w")
-
-        self.cookie_frame = tk.Frame(cookie_box, bg="#eef1f5")
-        self.cookie_frame.grid(row=2, column=0, columnspan=4, sticky="ew")
-        self.cookie_frame.columnconfigure(1, weight=1)
-        tk.Label(self.cookie_frame, text="Cookie：", bg="#eef1f5", fg="#475569").grid(
-            row=0, column=0, sticky="w"
-        )
-        self.cookie_entry = ttk.Entry(self.cookie_frame, textvariable=self.cookie_var, show="•", font=text_font)
-        self.cookie_entry.grid(row=0, column=1, sticky="ew")
-        self.cookie_paste_btn = ttk.Button(
-            self.cookie_frame, text="从剪贴板粘贴", command=self._paste_cookie, width=14
-        )
-        self.cookie_paste_btn.grid(row=0, column=2, padx=(8, 0))
-        self.cookie_help_btn = ttk.Button(
-            self.cookie_frame, text="如何获取？", command=self._show_cookie_help, width=10
-        )
-        self.cookie_help_btn.grid(row=0, column=3, padx=(6, 0))
-        self.cookie_apply_btn = ttk.Button(
-            self.cookie_frame, text="应用", command=self._apply_cookie, width=7
-        )
-        self.cookie_apply_btn.grid(row=0, column=4, padx=(6, 0))
-        self.cookie_clear_btn = ttk.Button(
-            self.cookie_frame, text="清除", command=self._clear_cookie, width=7
-        )
-        self.cookie_clear_btn.grid(row=0, column=5, padx=(6, 0))
-        self.remember_cookie_var = tk.BooleanVar(value=True)
-        ttk.Checkbutton(
-            self.cookie_frame,
-            text="记住完整 Cookie（用 Windows 账户加密，仅本机可用；可能包含其他 Cookie）",
-            variable=self.remember_cookie_var,
-        ).grid(row=1, column=0, columnspan=6, sticky="w", pady=(3, 0))
-        self.cookie_frame.grid_remove()
-        self.login_switch_row = tk.Frame(cookie_box, bg="#eef1f5")
-        self.login_switch_row.grid(row=3, column=0, columnspan=4, sticky="ew", pady=(4, 0))
-        ttk.Button(
-            self.login_switch_row,
-            text="切换百度账号",
-            command=self._switch_baidu_account,
-            width=14,
-        ).pack(side="left")
-        tk.Label(
-            self.login_switch_row,
-            text="会替换当前登录；旧登录在新账号成功前保留。",
-            bg="#eef1f5",
-            fg="#8a94a6",
-            font=("Microsoft YaHei UI", 8),
-        ).pack(side="left", padx=(8, 0))
-        self.login_switch_row.grid_remove()
+        self._build_login_header(cookie_box)
+        method_row = self._build_login_method(cookie_box)
+        self._build_login_bduss(cookie_box, text_font)
+        self._build_login_cookie(cookie_box, text_font)
+        self._build_login_switch(cookie_box)
         self.login_method_row = method_row
         self.login_fields_widgets = [
             method_row,
@@ -1400,4 +1265,160 @@ class GuiLayoutMixin:
         self.lookup_date_mode_var.trace_add("write", lambda *_: self._on_lookup_date_changed())
         for _var in (self.lookup_count_var, self.lookup_prefer_var):
             _var.trace_add("write", lambda *_: self._on_lookup_date_changed())
+
+
+    def _build_login_header(self, cookie_box) -> None:
+        login_header = tk.Frame(cookie_box, bg="#eef1f5")
+        login_header.grid(row=0, column=0, columnspan=4, sticky="ew", pady=(2, 2))
+        self.login_summary_var = tk.StringVar(value="登录信息未配置")
+        summary_frame = tk.Frame(login_header, bg="#eef1f5")
+        summary_frame.pack(side="left", fill="x", expand=True)
+        tk.Label(
+            summary_frame,
+            textvariable=self.login_summary_var,
+            bg="#eef1f5",
+            fg="#334155",
+            font=("Microsoft YaHei UI", 9),
+            anchor="w",
+        ).pack(anchor="w")
+        self.login_source_label = tk.Label(
+            summary_frame,
+            text="",
+            bg="#eef1f5",
+            fg="#b45309",
+            font=("Microsoft YaHei UI", 8),
+            anchor="w",
+        )
+        self.login_source_label.pack(anchor="w")
+        self.login_baidu_btn = ttk.Button(
+            login_header,
+            text="登录百度并获取",
+            command=self._login_baidu,
+            width=22,
+        )
+        self.login_baidu_btn.pack(side="right", padx=(8, 0))
+        self.login_toggle_btn = ttk.Button(
+            login_header,
+            text="展开",
+            command=self._toggle_login_fields,
+            width=6,
+        )
+        self.login_toggle_btn.pack(side="right", padx=(8, 0))
+
+
+
+    def _build_login_method(self, cookie_box):
+        method_row = tk.Frame(cookie_box, bg="#eef1f5")
+        method_row.grid(row=1, column=0, columnspan=4, sticky="w", pady=(2, 4))
+        tk.Label(method_row, text="登录方式：", bg="#eef1f5", fg="#475569").pack(side="left")
+        self.login_bduss_radio = ttk.Radiobutton(
+            method_row,
+            text="仅 BDUSS（推荐）",
+            value="bduss",
+            variable=self.login_method_var,
+            command=self._on_login_method_changed,
+        )
+        self.login_bduss_radio.pack(side="left", padx=(4, 8))
+        self.login_cookie_radio = ttk.Radiobutton(
+            method_row,
+            text="完整 Cookie（验证码时）",
+            value="cookie",
+            variable=self.login_method_var,
+            command=self._on_login_method_changed,
+        )
+        self.login_cookie_radio.pack(side="left")
+
+        return method_row
+
+
+    def _build_login_bduss(self, cookie_box, text_font) -> None:
+        self.bduss_frame = tk.Frame(cookie_box, bg="#eef1f5")
+        self.bduss_frame.grid(row=2, column=0, columnspan=4, sticky="ew")
+        self.bduss_frame.columnconfigure(1, weight=1)
+        tk.Label(self.bduss_frame, text="BDUSS：", bg="#eef1f5", fg="#475569").grid(row=0, column=0, sticky="w")
+        self.bduss_var = tk.StringVar()
+        self.bduss_entry = ttk.Entry(
+            self.bduss_frame, textvariable=self.bduss_var, show="•", font=text_font
+        )
+        self.bduss_entry.grid(row=0, column=1, sticky="ew")
+        ttk.Button(
+            self.bduss_frame, text="从剪贴板粘贴", command=self._paste_bduss, width=14
+        ).grid(row=0, column=2, padx=(8, 0))
+        ttk.Button(
+            self.bduss_frame, text="如何获取？", command=self._show_bduss_help, width=10
+        ).grid(row=0, column=3, padx=(6, 0))
+        ttk.Button(self.bduss_frame, text="应用", command=self._apply_bduss, width=7).grid(
+            row=0, column=4, padx=(6, 0)
+        )
+        ttk.Button(self.bduss_frame, text="清除", command=self._clear_bduss, width=7).grid(
+            row=0, column=5, padx=(6, 0)
+        )
+        self.cookie_var.trace_add("write", self._sync_bduss_from_cookie)
+        self.remember_bduss_var = tk.BooleanVar(value=True)
+        ttk.Checkbutton(
+            self.bduss_frame,
+            text="记住 BDUSS（用 Windows 账户加密，仅本机可用）",
+            variable=self.remember_bduss_var,
+        ).grid(row=1, column=0, columnspan=4, sticky="w", pady=(3, 0))
+        tk.Label(
+            self.bduss_frame,
+            text="只发送 BDUSS，不发送浏览器里的其他 Cookie；验证码时切换完整 Cookie。",
+            bg="#eef1f5",
+            fg="#8a94a6",
+            font=("Microsoft YaHei UI", 8),
+        ).grid(row=2, column=0, columnspan=6, sticky="w")
+
+
+
+    def _build_login_cookie(self, cookie_box, text_font) -> None:
+        self.cookie_frame = tk.Frame(cookie_box, bg="#eef1f5")
+        self.cookie_frame.grid(row=2, column=0, columnspan=4, sticky="ew")
+        self.cookie_frame.columnconfigure(1, weight=1)
+        tk.Label(self.cookie_frame, text="Cookie：", bg="#eef1f5", fg="#475569").grid(
+            row=0, column=0, sticky="w"
+        )
+        self.cookie_entry = ttk.Entry(self.cookie_frame, textvariable=self.cookie_var, show="•", font=text_font)
+        self.cookie_entry.grid(row=0, column=1, sticky="ew")
+        self.cookie_paste_btn = ttk.Button(
+            self.cookie_frame, text="从剪贴板粘贴", command=self._paste_cookie, width=14
+        )
+        self.cookie_paste_btn.grid(row=0, column=2, padx=(8, 0))
+        self.cookie_help_btn = ttk.Button(
+            self.cookie_frame, text="如何获取？", command=self._show_cookie_help, width=10
+        )
+        self.cookie_help_btn.grid(row=0, column=3, padx=(6, 0))
+        self.cookie_apply_btn = ttk.Button(
+            self.cookie_frame, text="应用", command=self._apply_cookie, width=7
+        )
+        self.cookie_apply_btn.grid(row=0, column=4, padx=(6, 0))
+        self.cookie_clear_btn = ttk.Button(
+            self.cookie_frame, text="清除", command=self._clear_cookie, width=7
+        )
+        self.cookie_clear_btn.grid(row=0, column=5, padx=(6, 0))
+        self.remember_cookie_var = tk.BooleanVar(value=True)
+        ttk.Checkbutton(
+            self.cookie_frame,
+            text="记住完整 Cookie（用 Windows 账户加密，仅本机可用；可能包含其他 Cookie）",
+            variable=self.remember_cookie_var,
+        ).grid(row=1, column=0, columnspan=6, sticky="w", pady=(3, 0))
+        self.cookie_frame.grid_remove()
+
+
+    def _build_login_switch(self, cookie_box) -> None:
+        self.login_switch_row = tk.Frame(cookie_box, bg="#eef1f5")
+        self.login_switch_row.grid(row=3, column=0, columnspan=4, sticky="ew", pady=(4, 0))
+        ttk.Button(
+            self.login_switch_row,
+            text="切换百度账号",
+            command=self._switch_baidu_account,
+            width=14,
+        ).pack(side="left")
+        tk.Label(
+            self.login_switch_row,
+            text="会替换当前登录；旧登录在新账号成功前保留。",
+            bg="#eef1f5",
+            fg="#8a94a6",
+            font=("Microsoft YaHei UI", 8),
+        ).pack(side="left", padx=(8, 0))
+        self.login_switch_row.grid_remove()
 
