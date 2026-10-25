@@ -289,9 +289,9 @@ def export_workbook(
     generated_at = generated_at or datetime.now()
     workbook = Workbook()
     workbook.remove(workbook.active)
-    workbook.properties.creator = "贴吧回复统计"
-    workbook.properties.title = "百度贴吧楼层回复统计"
-    workbook.properties.description = "由 tieba_reply_stats 自动生成"
+    workbook.properties.creator = "OK"
+    workbook.properties.title = "OK的贴吧玩具箱"
+    workbook.properties.description = "由 OK的贴吧玩具箱 自动生成"
 
     if len(threads) > 1:
         _write_overview(workbook, threads, include_op)

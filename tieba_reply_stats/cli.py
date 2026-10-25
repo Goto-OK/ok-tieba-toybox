@@ -25,8 +25,8 @@ from .version import __version__ as VERSION
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="tieba_stats",
-        description="抓取百度贴吧帖子的楼层与楼中楼回复，按用户统计并导出 Excel。",
+        prog="ok-tieba-toybox",
+        description="OK的贴吧玩具箱：抓取贴吧楼层与楼中楼，按用户统计并导出 Excel。",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=(
             "示例：\n"
@@ -36,7 +36,7 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument("urls", nargs="+", help="帖子链接或帖子 ID，可一次传入多个")
-    parser.add_argument("-o", "--output", help="输出 xlsx 路径（默认：贴吧回复统计_时间.xlsx）")
+    parser.add_argument("-o", "--output", help="输出 xlsx 路径（默认：OK的贴吧玩具箱_时间.xlsx）")
     parser.add_argument("--delay", type=float, default=0.8, help="每次请求前的间隔秒数（默认 0.8）")
     parser.add_argument("--timeout", type=float, default=20, help="单次请求超时秒数（默认 20）")
     parser.add_argument("--retries", type=int, default=3, help="单次请求最多重试次数（默认 3）")
@@ -62,12 +62,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--refresh", action="store_true", help="忽略缓存，强制重新请求")
     parser.add_argument("--user-agent", help="自定义 User-Agent")
     parser.add_argument("-q", "--quiet", action="store_true", help="安静模式，只输出结果")
-    parser.add_argument("-V", "--version", action="version", version=f"tieba_stats {VERSION}")
+    parser.add_argument("-V", "--version", action="version", version=f"ok-tieba-toybox {VERSION}")
     return parser
 
 
 def _default_output() -> str:
-    return f"贴吧回复统计_{datetime.now():%Y%m%d_%H%M}.xlsx"
+    return f"OK的贴吧玩具箱_{datetime.now():%Y%m%d_%H%M}.xlsx"
 
 
 def _load_cookies(args) -> dict:

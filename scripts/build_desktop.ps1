@@ -20,6 +20,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 $Root = Split-Path -Parent $PSScriptRoot
+$AppName = "OK的贴吧玩具箱"
 $Gui = Join-Path $Root "tieba_gui.py"
 $Assets = Join-Path $Root "assets"
 $VersionFile = Join-Path $Root "tieba_reply_stats\version.py"
@@ -45,7 +46,7 @@ $Venv = Join-Path $BuildRoot "venv"
 $VenvPython = Join-Path $Venv "Scripts\python.exe"
 $Dist = Join-Path $BuildRoot "dist_onedir"
 $Work = Join-Path $BuildRoot "work_onedir"
-$Output = Join-Path $Root "dist\贴吧回复统计_v$Version"
+$Output = Join-Path $Root "dist\${AppName}_v$Version"
 
 Write-Host "[1/5] 准备构建环境：$Venv"
 if (-not (Test-Path -LiteralPath $VenvPython)) {
@@ -63,7 +64,7 @@ if ($LASTEXITCODE -ne 0) { throw "生成图标失败" }
 
 Write-Host "[2/5] 构建 exe（版本 $Version）"
 & $VenvPython -m PyInstaller --noconfirm --clean --onedir --windowed `
-    --name "贴吧回复统计" `
+    --name $AppName `
     --icon (Join-Path $Assets "app.ico") `
     --version-file (Join-Path $Assets "version_info.txt") `
     --paths $Root `
@@ -76,7 +77,7 @@ if ($LASTEXITCODE -ne 0) { throw "PyInstaller 构建失败" }
 Write-Host "[3/5] 复制发布目录：$Output"
 if (Test-Path -LiteralPath $Output) { Remove-Item -LiteralPath $Output -Recurse -Force }
 New-Item -ItemType Directory -Path $Output | Out-Null
-Copy-Item -Path (Join-Path $Dist "贴吧回复统计\*") -Destination $Output -Recurse -Force
+Copy-Item -Path (Join-Path $Dist "$AppName\*") -Destination $Output -Recurse -Force
 foreach ($name in @("使用说明.txt", "THIRD_PARTY_NOTICES.md", "启动.bat", "以管理员身份运行.bat")) {
     $file = Join-Path $Root $name
     if (Test-Path -LiteralPath $file) { Copy-Item -LiteralPath $file -Destination $Output -Force }
@@ -87,16 +88,16 @@ Copy-Item -LiteralPath (Join-Path $Assets "app.ico") -Destination (Join-Path $As
 
 Write-Host "[4/5] 运行 --selftest"
 $env:TIEBA_SELFTEST_OUT = Join-Path $BuildRoot "selftest.xlsx"
-& (Join-Path $Output "贴吧回复统计.exe") --selftest
+& (Join-Path $Output "$AppName.exe") --selftest
 if ($LASTEXITCODE -ne 0) { throw "selftest 失败（退出码 $LASTEXITCODE）" }
 
 if ($UpdateShortcut) {
     Write-Host "[5/5] 更新桌面快捷方式"
     $shell = New-Object -ComObject WScript.Shell
-    $lnk = $shell.CreateShortcut((Join-Path ([Environment]::GetFolderPath("Desktop")) "贴吧楼层回复统计.lnk"))
-    $lnk.TargetPath = Join-Path $Output "贴吧回复统计.exe"
+    $lnk = $shell.CreateShortcut((Join-Path ([Environment]::GetFolderPath("Desktop")) "$AppName.lnk"))
+    $lnk.TargetPath = Join-Path $Output "$AppName.exe"
     $lnk.WorkingDirectory = $Output
-    $lnk.IconLocation = (Join-Path $Output "贴吧回复统计.exe") + ",0"
+    $lnk.IconLocation = (Join-Path $Output "$AppName.exe") + ",0"
     $lnk.Save()
 } else {
     Write-Host "[5/5] 跳过快捷方式（加 -UpdateShortcut 可更新）"

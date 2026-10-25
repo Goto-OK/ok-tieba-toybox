@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""贴吧楼层回复统计 —— 图形界面（给不想用命令行的用户）。
+"""OK的贴吧玩具箱 —— 图形界面（给不想用命令行的用户）。
 
 直接运行：python tieba_gui.py
 打包后双击 exe 即可。
@@ -106,7 +106,7 @@ from tieba_reply_stats.storage import (
 from tieba_reply_stats.theme import map_color, resolve_palette
 from tieba_reply_stats.version import __version__ as VERSION
 
-APP_TITLE = "贴吧楼层回复统计"
+APP_TITLE = "OK的贴吧玩具箱"
 
 
 
@@ -183,7 +183,7 @@ def default_output_path() -> str:
         desktop = os.path.join(os.path.expanduser("~"), "Desktop")
     if not os.path.isdir(desktop):
         desktop = os.path.expanduser("~")
-    return os.path.join(desktop, f"贴吧回复统计_{datetime.now():%Y%m%d_%H%M}.xlsx")
+    return os.path.join(desktop, f"OK的贴吧玩具箱_{datetime.now():%Y%m%d_%H%M}.xlsx")
 
 
 def resource_dir() -> str:
@@ -901,7 +901,7 @@ class App:
             title="选择保存位置",
             defaultextension=".xlsx",
             filetypes=[("Excel 工作簿", "*.xlsx")],
-            initialfile=os.path.basename(self.output_var.get() or "贴吧回复统计.xlsx"),
+            initialfile=os.path.basename(self.output_var.get() or "OK的贴吧玩具箱.xlsx"),
             initialdir=os.path.dirname(self.output_var.get() or ""),
         )
         if path:
@@ -6277,6 +6277,13 @@ class App:
             fg="#1F4E79",
             font=("Microsoft YaHei UI", 12, "bold"),
         ).pack(anchor="w")
+        tk.Label(
+            box,
+            text="作者：OK · GitHub：Goto-OK",
+            bg="#eef1f5",
+            fg="#64748b",
+            font=("Microsoft YaHei UI", 8),
+        ).pack(anchor="w", pady=(2, 2))
         tk.Label(
             box,
             text="默认匿名 · 结果只存本机 · 不保存 STOKEN · 支持浅色/深色",

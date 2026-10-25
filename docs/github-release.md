@@ -72,7 +72,7 @@ snapshots/*.jsonl
 推荐只上传：
 
 ```text
-贴吧回复统计_v1.7.3_绿色版.zip
+OK的贴吧玩具箱_v1.7.3_绿色版.zip
 SHA256SUMS-1.7.3.txt
 ```
 
@@ -89,7 +89,7 @@ docs/release-notes-v1.7.3.md
 ```text
 版本号：v1.7.3
 Tag：v1.7.3
-标题：贴吧楼层回复统计 v1.7.3
+标题：OK的贴吧玩具箱 v1.7.3
 ```
 
 版本号唯一来源：
@@ -133,8 +133,8 @@ WebView2 登录窗口可打开（如环境支持）
 Windows PowerShell：
 
 ```powershell
-Get-FileHash -Algorithm SHA256 "dist\贴吧回复统计_v1.7.3_绿色版.zip"
-Get-FileHash -Algorithm SHA256 "dist\贴吧回复统计_v1.7.3\贴吧回复统计.exe"
+Get-FileHash -Algorithm SHA256 "dist\OK的贴吧玩具箱_v1.7.3_绿色版.zip"
+Get-FileHash -Algorithm SHA256 "dist\OK的贴吧玩具箱_v1.7.3\OK的贴吧玩具箱.exe"
 ```
 
 写入：

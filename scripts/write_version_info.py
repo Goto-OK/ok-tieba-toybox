@@ -28,12 +28,12 @@ TEMPLATE = """VSVersionInfo(
         StringTable(
           '080404B0',
           [
-            StringStruct('CompanyName', ''),
-            StringStruct('FileDescription', '贴吧楼层回复统计'),
+            StringStruct('CompanyName', 'OK'),
+            StringStruct('FileDescription', 'OK的贴吧玩具箱'),
             StringStruct('FileVersion', '{version}'),
-            StringStruct('InternalName', 'tieba_stats'),
-            StringStruct('OriginalFilename', '贴吧回复统计.exe'),
-            StringStruct('ProductName', '贴吧楼层回复统计'),
+            StringStruct('InternalName', 'ok_tieba_toybox'),
+            StringStruct('OriginalFilename', 'OK的贴吧玩具箱.exe'),
+            StringStruct('ProductName', 'OK的贴吧玩具箱'),
             StringStruct('ProductVersion', '{version}')
           ]
         )

@@ -39,8 +39,8 @@ python tests/selftest.py
 ## 2.2 1.7.3 当前候选
 
 - 当前版本：`1.7.3`，已打包绿色版；
-- 发布目录：`dist/贴吧回复统计_v1.7.3`；
-- 绿色包：`dist/贴吧回复统计_v1.7.3_绿色版.zip`；
+- 发布目录：`dist/OK的贴吧玩具箱_v1.7.3`；
+- 绿色包：`dist/OK的贴吧玩具箱_v1.7.3_绿色版.zip`；
 - 校验：`dist/SHA256SUMS-1.7.3.txt`；
 - 用户版更新说明：`docs/release-notes-v1.7.3.md`；
 - 技术版更新：`CHANGELOG.md` 的 `[1.7.3]`；
@@ -50,9 +50,9 @@ python tests/selftest.py
 ## 3. 桌面版
 
 ```powershell
-./scripts/build_desktop.ps1 -Version 1.7.1
+./scripts/build_desktop.ps1 -Version 1.7.3
 # 若提示“禁止运行脚本”：
-powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build_desktop.ps1 -Version 1.7.1
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build_desktop.ps1 -Version 1.7.3
 ```
 
 脚本会：
@@ -60,15 +60,15 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build_desktop.ps1 -V
 1. 读取/校验版本号；
 2. 准备 `.build\venv` 并安装 PyInstaller；
 3. 构建 `--onedir --windowed`；
-4. 复制到 `dist\贴吧回复统计_v<版本>`；
+4. 复制到 `dist\OK的贴吧玩具箱_v<版本>`；
 5. 复制 `使用说明.txt`、启动 bat；
 6. 运行 `--selftest`。
 
 手工安装到发布目录（当前习惯）：
 
 ```text
-贴吧回复统计_v121/
-├─ 贴吧回复统计.exe
+OK的贴吧玩具箱_v1.7.3/
+├─ OK的贴吧玩具箱.exe
 ├─ _internal/
 ├─ 使用说明.txt
 ├─ 启动.bat
@@ -79,7 +79,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build_desktop.ps1 -V
 
 - 运行 exe `--selftest`，确认退出码 0；
 - 更新桌面快捷方式指向新 exe，并设置 `IconLocation = exe,0`；
-- 重新生成 `贴吧回复统计_绿色版.zip`；
+- 重新生成 `OK的贴吧玩具箱_v1.7.3_绿色版.zip`；
 - 旧版本目录保留一个，其余清理。
 
 ## 4. Android 版（暂停）

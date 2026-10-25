@@ -1,9 +1,13 @@
-# 贴吧楼层回复统计（tieba-reply-stats）
+# OK的贴吧玩具箱（ok-tieba-toybox）
 
 输入贴吧帖子链接，抓取**主题楼层 + 楼中楼**，按用户汇总，导出 Excel。  
 默认匿名使用，不需要 Cookie；可选登录，用于验证码、关注检测和更完整的资料。
 
 当前版本：**v1.7.3**
+
+作者：**OK**（GitHub: [Goto-OK](https://github.com/Goto-OK)）
+
+仓库：[Goto-OK/ok-tieba-toybox](https://github.com/Goto-OK/ok-tieba-toybox)
 
 支持浅色 / 深色 / 跟随系统，以及蓝色、绿色、紫色、橘黄、粉色、青色、红色强调色。  
 详细改动见 [CHANGELOG.md](CHANGELOG.md)。
@@ -19,14 +23,14 @@
 从 GitHub **Releases** 下载：
 
 ```text
-贴吧回复统计_v1.7.3_绿色版.zip
+OK的贴吧玩具箱_v1.7.3_绿色版.zip
 ```
 
 使用：
 
 1. 解压完整压缩包；
 2. 保留 `_internal` 目录，不要只复制 exe；
-3. 运行 `贴吧回复统计.exe`。
+3. 运行 `OK的贴吧玩具箱.exe`。
 
 当前包未使用受信任代码签名证书，Windows SmartScreen 可能提示“未知发布者”。
 
@@ -184,7 +188,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build_desktop.ps1 -V
 构建完成后：
 
 ```text
-dist/贴吧回复统计_v1.7.3/
+dist/OK的贴吧玩具箱_v1.7.3/
 ```
 
 发布时同时生成绿色包和 `SHA256SUMS`。
@@ -194,7 +198,7 @@ dist/贴吧回复统计_v1.7.3/
 ## 项目结构
 
 ```text
-tieba-reply-stats/
+ok-tieba-toybox/
 ├─ tieba_reply_stats/       核心包（抓取、解析、protobuf、导出）
 ├─ tieba_gui.py             Windows 桌面 GUI
 ├─ tieba_stats.py           命令行入口
@@ -241,6 +245,6 @@ tieba-reply-stats/
 
 [MIT](LICENSE)
 
-Copyright (c) 2026 tieba-reply-stats contributors
+Copyright (c) 2026 OK
 
 如需以个人名义署名，可在 `LICENSE`、本 README、`pyproject.toml` 和关于页中替换为你的名字或常用 ID。

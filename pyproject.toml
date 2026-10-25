@@ -3,13 +3,13 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "tieba-reply-stats"
+name = "ok-tieba-toybox"
 dynamic = ["version"]
-description = "抓取百度贴吧楼层与楼中楼，按用户统计并导出 Excel"
+description = "OK的贴吧玩具箱：贴吧楼层、楼中楼与用户分析，导出 Excel"
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
-authors = [{ name = "tieba-reply-stats contributors" }]
+authors = [{ name = "OK" }]
 keywords = ["tieba", "baidu", "scraper", "excel"]
 classifiers = [
     "Programming Language :: Python :: 3",
