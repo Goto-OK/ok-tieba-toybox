@@ -7,8 +7,10 @@ import tkinter as tk
 from tkinter import ttk
 from typing import Any
 
+from tieba_gui_layout import APP_TITLE
 from tieba_reply_stats.post_cache import DEFAULT_LIMIT_MB, MAX_LIMIT_MB, MIN_LIMIT_MB
 from tieba_reply_stats.settings import APP_DIR
+from tieba_reply_stats.version import __version__ as VERSION
 
 
 class SettingsMixin:
@@ -760,4 +762,50 @@ class SettingsMixin:
             block.pack_forget()
         for block in (risk_box, color_box, fetch_box, ui_box, default_box, backup_box):
             block.pack(fill="x", pady=(0, 6), before=self.general_hint)
+
+    def _build_about_tab(self) -> None:
+        box = tk.Frame(self.tab_about, bg="#eef1f5", padx=14, pady=10)
+        box.pack(fill="both", expand=True)
+        tk.Label(
+            box,
+            text=f"{APP_TITLE} v{VERSION}",
+            bg="#eef1f5",
+            fg="#1F4E79",
+            font=("Microsoft YaHei UI", 12, "bold"),
+        ).pack(anchor="w")
+        tk.Label(
+            box,
+            text="作者：OK · GitHub：Goto-OK",
+            bg="#eef1f5",
+            fg="#64748b",
+            font=("Microsoft YaHei UI", 8),
+        ).pack(anchor="w", pady=(2, 2))
+        tk.Label(
+            box,
+            text="默认匿名 · 结果只存本机 · 不保存 STOKEN · 支持浅色/深色",
+            bg="#eef1f5",
+            fg="#8a94a6",
+            font=("Microsoft YaHei UI", 8),
+        ).pack(anchor="w", pady=(2, 8))
+
+        help_box = ttk.LabelFrame(box, text=" 帮助与诊断 ")
+        help_box.pack(fill="x", pady=(0, 6))
+        help_row = tk.Frame(help_box, bg="#eef1f5")
+        help_row.pack(anchor="w", padx=8, pady=(6, 2))
+        ttk.Button(help_row, text="打开使用说明", command=self._open_usage_window, width=14).pack(side="left")
+        ttk.Button(help_row, text="第三方许可", command=self._open_notice, width=12).pack(
+            side="left", padx=(8, 0)
+        )
+        ttk.Button(help_row, text="复制诊断信息", command=self._copy_diagnostics, width=14).pack(
+            side="left", padx=(8, 0)
+        )
+        tk.Label(
+            help_box,
+            text="第三方组件：Python / PyInstaller / lxml / openpyxl / Tcl-Tk，各自按其许可证分发。",
+            bg="#eef1f5",
+            fg="#8a94a6",
+            font=("Microsoft YaHei UI", 8),
+            wraplength=760,
+            justify="left",
+        ).pack(anchor="w", padx=8, pady=(2, 4))
 

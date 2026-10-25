@@ -15,6 +15,10 @@
 - 修复 pip 安装包缺少 GUI 拆分模块的问题，wheel 已实际安装并 `import tieba_gui` 验证；
 - 后台消息轮询改为先续约再派发，模态窗口不再阻塞下一轮轮询；
 - Tk 测试夹具增加初始化重试，Windows 上 Tk 失败不再静默跳过；
+- GUI 通用辅助函数集中到 `tieba_gui_utils.py`，去掉多份复制；
+- 日志内核拆出为独立 `tieba_gui_logging.py`；
+- `_build_ui` 拆分为工具栏、选项、保存、登录、按钮、日志等构建方法；
+- `_build_people_tab` 拆分为工具栏、表格、详情三部分；
 - GUI 版面构建方法拆出为独立 `tieba_gui_layout.py`，App 主类减少约 1,300 行；
 - 后台消息的 35 个 kind 分支全部拆出为独立 `tieba_gui_messages.py` 的 `MessageMixin`，`_handle_message` 从 783 行降到约 74 行；
 - 设置页构建方法拆出为独立 `tieba_gui_settings.py`；

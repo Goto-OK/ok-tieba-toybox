@@ -6,16 +6,12 @@ from datetime import datetime
 from tkinter import filedialog, messagebox
 from typing import Any
 
-from tieba_gui_utils import default_output_path
+from tieba_gui_utils import default_output_path, display_text
 from tieba_reply_stats.errors import friendly_error
 from tieba_reply_stats.export import export_workbook
 from tieba_reply_stats.post_cache import cache as post_cache
 from tieba_reply_stats.report import export_user_posts, posts_base
 from tieba_reply_stats.version import __version__ as VERSION
-
-
-def display_text(value) -> str:
-    return str(value or "")
 
 
 class ExportMixin:

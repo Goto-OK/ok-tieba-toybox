@@ -9,11 +9,8 @@ from tkinter import ttk
 from typing import Any, Callable, Dict, List, Optional
 from urllib.parse import quote
 
+from tieba_gui_utils import display_text
 from tieba_reply_stats.settings import save_settings
-
-
-def display_text(value: object) -> str:
-    return str(value or "")
 
 
 class GridMixin:

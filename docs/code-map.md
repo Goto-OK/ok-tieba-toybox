@@ -17,6 +17,7 @@
 | `tieba_gui_lookup.py` | 查用户页 |
 | `tieba_gui_workers.py` | 抓取生命周期与 worker |
 | `tieba_gui_links.py` | 链接解析页 |
+| `tieba_gui_logging.py` | 日志写入与后台线程安全日志 |
 | `tieba_gui_export.py` | Excel/报告导出 |
 | `tieba_gui_theme.py` | 主题应用 |
 | `tieba_gui_people.py` | 参与者、筛选、分页、区间对话 |

@@ -179,6 +179,25 @@ class GuiLayoutMixin:
 
         text_font = ("Microsoft YaHei UI", 10)
 
+        self._build_fetch_links(body, text_font)
+        self._build_fetch_options(body, text_font)
+        self._build_fetch_output(body, text_font)
+        self._build_fetch_login(body, text_font)
+        self._build_fetch_buttons(body, text_font)
+        self._build_fetch_log(body, text_font)
+        self._build_lookup_tab()
+        self._build_links_tab()
+        self._build_love_tab()
+        self._build_settings_tab()
+        self._apply_ui_mode(persist=False)
+
+        self.url_text.focus_set()
+        self.root.update_idletasks()
+        self.start_btn.configure(state="normal")
+        self._append_log("把帖子链接粘贴到上面，然后点「开始统计」。", "muted")
+
+
+    def _build_fetch_links(self, body, text_font) -> None:
         # 1. 链接
         box = ttk.LabelFrame(body, text=" 帖子链接 ", style="Card.TLabelframe")
         box.grid(row=0, column=0, sticky="ew")
@@ -207,6 +226,9 @@ class GuiLayoutMixin:
             font=("Microsoft YaHei UI", 8),
         ).grid(row=1, column=0, sticky="w", pady=(4, 0))
 
+
+
+    def _build_fetch_options(self, body, text_font) -> None:
         # 2. 选项
         options = ttk.LabelFrame(body, text=" 选项 ", style="Card.TLabelframe")
         options.grid(row=1, column=0, sticky="new", pady=(6, 0))
@@ -329,6 +351,9 @@ class GuiLayoutMixin:
             "write", lambda *_: self._update_risk_summary()
         )
 
+
+
+    def _build_fetch_output(self, body, text_font) -> None:
         # 3. 保存位置
         out_box = ttk.LabelFrame(body, text=" 保存到 ", style="Card.TLabelframe")
         out_box.grid(row=2, column=0, sticky="ew", pady=(6, 0))
@@ -339,6 +364,9 @@ class GuiLayoutMixin:
             row=0, column=1, padx=(8, 0)
         )
 
+
+
+    def _build_fetch_login(self, body, text_font) -> None:
         # 4. 登录 / 关注增强
         cookie_box = ttk.LabelFrame(body, text=" 登录 ", style="Card.TLabelframe")
         cookie_box.grid(row=3, column=0, sticky="ew", pady=(6, 0))
@@ -509,6 +537,9 @@ class GuiLayoutMixin:
         self.login_method_var.trace_add("write", lambda *_: self._on_login_method_changed())
         self._set_login_fields_expanded(False)
 
+
+
+    def _build_fetch_buttons(self, body, text_font) -> None:
         # 5. 按钮
         buttons = tk.Frame(body, bg="#eef1f5")
         buttons.grid(row=4, column=0, sticky="ew", pady=(6, 4))
@@ -573,6 +604,9 @@ class GuiLayoutMixin:
         )
         self.help_btn.pack(side="right")
 
+
+
+    def _build_fetch_log(self, body, text_font) -> None:
         # 6. 日志
         log_box = ttk.LabelFrame(body, text=" 运行日志 ", style="Card.TLabelframe")
         log_box.grid(row=5, column=0, sticky="nsew", pady=(0, 8))
@@ -602,16 +636,6 @@ class GuiLayoutMixin:
 
         self._build_grid_tab()
         self._build_people_tab()
-        self._build_lookup_tab()
-        self._build_links_tab()
-        self._build_love_tab()
-        self._build_settings_tab()
-        self._apply_ui_mode(persist=False)
-
-        self.url_text.focus_set()
-        self.root.update_idletasks()
-        self.start_btn.configure(state="normal")
-        self._append_log("把帖子链接粘贴到上面，然后点「开始统计」。", "muted")
 
 
     def _build_people_tab(self) -> None:
@@ -794,6 +818,11 @@ class GuiLayoutMixin:
         paned.add(left, weight=3)
         paned.add(right, weight=2)
 
+        self._build_people_table(left)
+        self._build_people_detail(right)
+
+
+    def _build_people_table(self, left) -> None:
         columns = ("mark", "name", "username", "tieba_uid", "uid", "level", "floor", "comment", "total")
         self.people_columns = columns
         self._people_col_filters: Dict[str, set] = {}
@@ -876,6 +905,9 @@ class GuiLayoutMixin:
         self._person_popup.add_separator()
         self._person_popup.add_command(label="浏览器打开主页", command=self._open_current_profile)
 
+
+
+    def _build_people_detail(self, right) -> None:
         traffic = tk.Frame(right, bg="#fbfcfe")
         traffic.pack(fill="x", padx=6, pady=(2, 0))
         tk.Label(traffic, text="红绿灯：", bg="#fbfcfe", fg="#6b7280", font=("Microsoft YaHei UI", 9)).pack(
@@ -1046,7 +1078,6 @@ class GuiLayoutMixin:
         self._profile_post_urls: Dict[str, str] = {}
 
         self.post_nb.bind("<<NotebookTabChanged>>", self._on_tab_changed)
-
 
     def _build_lookup_tab(self) -> None:
         page = self.tab_lookup

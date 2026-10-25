@@ -8,22 +8,12 @@ from datetime import datetime, timedelta
 from tkinter import messagebox, ttk
 from typing import Any, Dict, List, Optional
 
+from tieba_gui_utils import display_text, optional_int
 from tieba_reply_stats.filters import filter_users
 from tieba_reply_stats.profile import cached_user_posts
 from tieba_reply_stats.storage import clear as clear_stored_result
 from tieba_reply_stats.storage import save_threads
 from tieba_reply_stats.version import __version__ as VERSION
-
-
-def display_text(value) -> str:
-    return str(value or "")
-
-
-def _optional_int(text: str) -> Optional[int]:
-    try:
-        return int(str(text).strip())
-    except ValueError:
-        return None
 
 
 class PeopleReportMixin:
@@ -124,8 +114,8 @@ class PeopleReportMixin:
             field=self.people_field_var.get(),
             level=self.people_level_var.get(),
             mark=self.people_mark_var.get() if self._risk_enabled() else "全部",
-            min_level=_optional_int(self.people_min_var.get()),
-            max_level=_optional_int(self.people_max_var.get()),
+            min_level=optional_int(self.people_min_var.get()),
+            max_level=optional_int(self.people_max_var.get()),
         )
         for column, selected in self._people_col_filters.items():
             if selected:
@@ -674,4 +664,12 @@ class PeopleReportMixin:
                 messagebox.showerror("日期格式", "日期请用 YYYY-MM-DD。", parent=self.root)
                 return None
         return chosen_start, chosen_end
+
+    def _on_people_paned_configure(self, event=None) -> None:
+        if getattr(self, "_people_sash_set", False):
+            return
+        if event is not None and event.width < 500:
+            return
+        self._people_sash_set = True
+        self.root.after_idle(self._set_people_sash)
 

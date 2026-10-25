@@ -25,6 +25,7 @@ from tieba_gui_grid import GridMixin
 from tieba_gui_identity import BatchIdentityMixin
 from tieba_gui_layout import APP_TITLE, GuiLayoutMixin
 from tieba_gui_links import LinksMixin
+from tieba_gui_logging import LoggingMixin
 from tieba_gui_login import LoginMixin
 from tieba_gui_lookup import LookupMixin
 from tieba_gui_messages import MessageMixin
@@ -34,6 +35,13 @@ from tieba_gui_settings import SettingsMixin
 from tieba_gui_settings_runtime import SettingsRuntimeMixin
 from tieba_gui_theme import ThemeMixin
 from tieba_gui_tools import ToolsMixin
+from tieba_gui_utils import (
+    decode_display,  # noqa: F401  (兼容旧导入)
+    default_output_path,
+    display_text,
+    optional_int,
+    resource_dir,
+)
 from tieba_gui_workers import WorkerMixin
 from tieba_reply_stats import webview2
 from tieba_reply_stats.blacklist import (
@@ -94,8 +102,6 @@ from tieba_reply_stats.storage import (
 from tieba_reply_stats.theme import resolve_palette
 from tieba_reply_stats.version import __version__ as VERSION
 
-_EMOJI_CODE_RE = re.compile(r"\[U\+([0-9A-Fa-f]{4,6})\]", re.I)
-
 EMOJI_PICKER = (
     "😀", "😁", "😂", "🤣", "😊", "😍", "🤔", "😅",
     "😭", "😡", "👍", "👎", "❤", "🔥", "🎉", "💩",
@@ -104,14 +110,8 @@ EMOJI_PICKER = (
 )
 
 
-def display_text(value) -> str:
-    """界面直接显示 emoji；Tk 8.6 以单色字形渲染。"""
-    return str(value or "")
 
 
-def decode_display(value) -> str:
-    """把 [U+XXXX] 还原成 emoji，用于回查。"""
-    return _EMOJI_CODE_RE.sub(lambda match: chr(int(match.group(1), 16)), str(value or ""))
 
 
 BDUSS_HELP = """只填 BDUSS 时，这样复制：
@@ -151,35 +151,6 @@ COOKIE_HELP = """需要 Cookie 时，这样复制：
 """
 
 
-def default_output_path() -> str:
-    desktop = ""
-    try:
-        import winreg
-
-        with winreg.OpenKey(
-            winreg.HKEY_CURRENT_USER,
-            r"Software\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders",
-        ) as key:
-            value, _kind = winreg.QueryValueEx(key, "Desktop")
-        desktop = os.path.expandvars(value)
-    except OSError:
-        desktop = os.path.join(os.path.expanduser("~"), "Desktop")
-    if not os.path.isdir(desktop):
-        desktop = os.path.expanduser("~")
-    return os.path.join(desktop, f"OK的贴吧玩具箱_{datetime.now():%Y%m%d_%H%M}.xlsx")
-
-
-def resource_dir() -> str:
-    if getattr(sys, "frozen", False):
-        return os.path.dirname(sys.executable)
-    return os.path.dirname(os.path.abspath(__file__))
-
-
-def _optional_int(text: str) -> Optional[int]:
-    try:
-        return int(str(text).strip())
-    except ValueError:
-        return None
 
 
 
@@ -205,7 +176,11 @@ def _optional_int(text: str) -> Optional[int]:
 
 
 
-class App(GuiLayoutMixin, MessageMixin, SettingsMixin, GridMixin, LookupMixin, WorkerMixin, ExportMixin, BatchIdentityMixin, ThemeMixin, ProfileMixin, ToolsMixin, LoginMixin, LinksMixin, PeopleReportMixin, SettingsRuntimeMixin):
+
+
+
+
+class App(GuiLayoutMixin, MessageMixin, SettingsMixin, GridMixin, LookupMixin, WorkerMixin, ExportMixin, BatchIdentityMixin, ThemeMixin, ProfileMixin, ToolsMixin, LoginMixin, LinksMixin, PeopleReportMixin, SettingsRuntimeMixin, LoggingMixin):
     def __init__(self, root: tk.Tk) -> None:
         self.root = root
         self.log_queue: "queue.Queue[tuple]" = queue.Queue()
@@ -2328,8 +2303,8 @@ class App(GuiLayoutMixin, MessageMixin, SettingsMixin, GridMixin, LookupMixin, W
             field=self.people_field_var.get(),
             level=self.people_level_var.get(),
             mark=self.people_mark_var.get() if self._risk_enabled() else "全部",
-            min_level=_optional_int(self.people_min_var.get()),
-            max_level=_optional_int(self.people_max_var.get()),
+            min_level=optional_int(self.people_min_var.get()),
+            max_level=optional_int(self.people_max_var.get()),
         )
         for column, selected in getattr(self, "_people_col_filters", {}).items():
             if selected:

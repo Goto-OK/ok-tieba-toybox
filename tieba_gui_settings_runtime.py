@@ -8,7 +8,6 @@ import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 from typing import Any, List
 
-from tieba_gui_layout import APP_TITLE
 from tieba_reply_stats.blacklist import save_blacklist
 from tieba_reply_stats.config_backup import preview as backup_preview
 from tieba_reply_stats.config_backup import read_backup, write_backup
@@ -17,7 +16,6 @@ from tieba_reply_stats.fetch import parse_cookie_input
 from tieba_reply_stats.post_cache import DEFAULT_LIMIT_MB, MAX_LIMIT_MB, MIN_LIMIT_MB
 from tieba_reply_stats.post_cache import cache as post_cache
 from tieba_reply_stats.settings import save_settings
-from tieba_reply_stats.version import __version__ as VERSION
 
 
 class SettingsRuntimeMixin:
@@ -28,13 +26,6 @@ class SettingsRuntimeMixin:
     def __getattr__(self, name: str) -> Any:
         raise AttributeError(name)
 
-    def _on_people_paned_configure(self, event=None) -> None:
-        if getattr(self, "_people_sash_set", False):
-            return
-        if event is not None and event.width < 500:
-            return
-        self._people_sash_set = True
-        self.root.after_idle(self._set_people_sash)
 
 
     def _make_scrollable_settings_page(self, parent) -> tuple:
@@ -155,51 +146,6 @@ class SettingsRuntimeMixin:
             self._cache_limit_guard_until = time.monotonic() + 0.35
 
 
-    def _build_about_tab(self) -> None:
-        box = tk.Frame(self.tab_about, bg="#eef1f5", padx=14, pady=10)
-        box.pack(fill="both", expand=True)
-        tk.Label(
-            box,
-            text=f"{APP_TITLE} v{VERSION}",
-            bg="#eef1f5",
-            fg="#1F4E79",
-            font=("Microsoft YaHei UI", 12, "bold"),
-        ).pack(anchor="w")
-        tk.Label(
-            box,
-            text="作者：OK · GitHub：Goto-OK",
-            bg="#eef1f5",
-            fg="#64748b",
-            font=("Microsoft YaHei UI", 8),
-        ).pack(anchor="w", pady=(2, 2))
-        tk.Label(
-            box,
-            text="默认匿名 · 结果只存本机 · 不保存 STOKEN · 支持浅色/深色",
-            bg="#eef1f5",
-            fg="#8a94a6",
-            font=("Microsoft YaHei UI", 8),
-        ).pack(anchor="w", pady=(2, 8))
-
-        help_box = ttk.LabelFrame(box, text=" 帮助与诊断 ")
-        help_box.pack(fill="x", pady=(0, 6))
-        help_row = tk.Frame(help_box, bg="#eef1f5")
-        help_row.pack(anchor="w", padx=8, pady=(6, 2))
-        ttk.Button(help_row, text="打开使用说明", command=self._open_usage_window, width=14).pack(side="left")
-        ttk.Button(help_row, text="第三方许可", command=self._open_notice, width=12).pack(
-            side="left", padx=(8, 0)
-        )
-        ttk.Button(help_row, text="复制诊断信息", command=self._copy_diagnostics, width=14).pack(
-            side="left", padx=(8, 0)
-        )
-        tk.Label(
-            help_box,
-            text="第三方组件：Python / PyInstaller / lxml / openpyxl / Tcl-Tk，各自按其许可证分发。",
-            bg="#eef1f5",
-            fg="#8a94a6",
-            font=("Microsoft YaHei UI", 8),
-            wraplength=760,
-            justify="left",
-        ).pack(anchor="w", padx=8, pady=(2, 4))
 
 
     def _hidden_advanced_settings(self) -> List[str]:

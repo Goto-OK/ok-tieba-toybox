@@ -12,6 +12,7 @@ from tkinter import filedialog, messagebox, ttk
 from typing import Any, Dict, List, Optional
 from urllib.parse import quote
 
+from tieba_gui_utils import display_text
 from tieba_reply_stats import profile_pb, third_party
 from tieba_reply_stats.blacklist import LEVEL_LABEL, classify, marker
 from tieba_reply_stats.errors import friendly_error
@@ -20,10 +21,6 @@ from tieba_reply_stats.link_parser import parse_links
 from tieba_reply_stats.lookup_supplement import merge_current_threads
 from tieba_reply_stats.profile import cached_user_posts, fetch_user_profile, resolve_user
 from tieba_reply_stats.settings import save_settings
-
-
-def display_text(value) -> str:
-    return str(value or "")
 
 
 class ProfileMixin:

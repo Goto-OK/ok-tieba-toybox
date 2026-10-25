@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import ctypes
-import re
 import threading
 import time
 import tkinter as tk
@@ -13,21 +12,12 @@ from tkinter import messagebox, ttk
 from typing import Any, Dict, Optional
 from urllib.parse import quote
 
+from tieba_gui_utils import decode_display, display_text
 from tieba_reply_stats.blacklist import LEVEL_LABEL
 from tieba_reply_stats.fetch import Fetcher
 from tieba_reply_stats.lookup_supplement import fetch_feed_thread_supplements, merge_current_threads
 from tieba_reply_stats.profile import cached_user_posts, fetch_user_profile, resolve_user
 from tieba_reply_stats.settings import save_settings
-
-_EMOJI_CODE_RE = re.compile(r"\[U\+([0-9A-Fa-f]{4,6})\]", re.I)
-
-
-def display_text(value) -> str:
-    return str(value or "")
-
-
-def decode_display(value) -> str:
-    return _EMOJI_CODE_RE.sub(lambda match: chr(int(match.group(1), 16)), str(value or ""))
 
 
 class LookupMixin:
