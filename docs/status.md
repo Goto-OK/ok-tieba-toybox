@@ -279,7 +279,7 @@ Android 核心同步通过
 - GitHub 发布准备：README、PRIVACY、SECURITY、Issue/PR 模板、`docs/github-release.md`；
 - GitHub 仓库：`https://github.com/Goto-OK/ok-tieba-toybox`，Release `v1.7.3`；
 - 协作说明：`CREDITS.md`，作者 OK，AI 协作 DeepSeek；
-- 截图目录：`docs/images/`，README 留有注释占位，截图内容由作者决定。
+- 截图：`docs/images/01-main.png`、`02-user-lookup.png` 已上传并写入 README。
 
 ## 6. 已知限制
 
