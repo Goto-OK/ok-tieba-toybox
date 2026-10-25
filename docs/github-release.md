@@ -72,7 +72,7 @@ snapshots/*.jsonl
 推荐只上传：
 
 ```text
-OK的贴吧玩具箱_v1.7.3_绿色版.zip
+ok-tieba-toybox_v1.7.3.zip
 SHA256SUMS-1.7.3.txt
 ```
 
@@ -133,7 +133,7 @@ WebView2 登录窗口可打开（如环境支持）
 Windows PowerShell：
 
 ```powershell
-Get-FileHash -Algorithm SHA256 "dist\OK的贴吧玩具箱_v1.7.3_绿色版.zip"
+Get-FileHash -Algorithm SHA256 "dist\ok-tieba-toybox_v1.7.3.zip"
 Get-FileHash -Algorithm SHA256 "dist\OK的贴吧玩具箱_v1.7.3\OK的贴吧玩具箱.exe"
 ```
 

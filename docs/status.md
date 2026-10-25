@@ -272,7 +272,7 @@ Android 核心同步通过
 - 抓取页折叠登录区、滚动/滚轮、快捷键提示、按钮尺寸修复；
 - 版本号 1.7.3，Windows 成品已打包；
 - 发布目录：`dist/OK的贴吧玩具箱_v1.7.3`；
-- 绿色包：`dist/OK的贴吧玩具箱_v1.7.3_绿色版.zip`；
+- 绿色包：`dist/ok-tieba-toybox_v1.7.3.zip`；
 - 校验：`dist/SHA256SUMS-1.7.3.txt`；
 - 发布说明：`docs/release-notes-v1.7.3.md`；
 - GitHub 发布准备：README、PRIVACY、SECURITY、Issue/PR 模板、`docs/github-release.md`。

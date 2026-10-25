@@ -291,7 +291,7 @@
 Windows 绿色版：
 
 ```text
-OK的贴吧玩具箱_v1.7.3_绿色版.zip
+ok-tieba-toybox_v1.7.3.zip
 ```
 
 使用方式：
