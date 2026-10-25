@@ -30,7 +30,8 @@
 - 链接、导出、主题三个 mixin 移到独立模块；
 - 参与者/报表 mixin 移到独立 `tieba_gui_people.py`；
 - 身份补全/批量标记 mixin 移到独立 `tieba_gui_identity.py`；
-- 日志/测试中心/工具 mixin 移到独立 `tieba_gui_tools.py`。
+- 日志/测试中心/工具 mixin 移到独立 `tieba_gui_tools.py`；
+- 用户资料/登录 mixin 移到独立模块，`tieba_gui.py` 只保留 App 主类。
 
 ## [1.7.3] - 2026-10-26（已打包）
 

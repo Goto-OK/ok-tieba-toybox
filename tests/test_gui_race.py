@@ -4,6 +4,7 @@ import tkinter as tk
 import pytest
 
 import tieba_gui
+import tieba_gui_login
 from tieba_gui import App
 from tieba_reply_stats.models import ThreadData, ThreadMeta
 
@@ -203,7 +204,7 @@ def test_apply_cookie_starts_probe(root_app, monkeypatch):
     )
     app.cookie_var.set("BDUSS=test; TIEBA_SID=test; STOKEN=test")
     app.remember_cookie_var.set(False)
-    monkeypatch.setattr(tieba_gui, "clear_cookie", lambda: True)
+    monkeypatch.setattr(tieba_gui_login, "clear_cookie", lambda: True)
     app._apply_cookie()
     assert captured["cookies"].get("BDUSS") == "test"
     assert captured["token"] == app._login_probe_token
@@ -214,7 +215,7 @@ def test_apply_bduss_drops_full_cookie_cache(root_app, monkeypatch):
     app._full_cookie_cache = "BDUSS=old; TIEBAUID=old"
     app.bduss_var.set("new-bduss")
     app.remember_bduss_var.set(False)
-    monkeypatch.setattr(tieba_gui, "clear_cookie", lambda: True)
+    monkeypatch.setattr(tieba_gui_login, "clear_cookie", lambda: True)
     app._apply_bduss()
     assert app._full_cookie_cache == ""
 
@@ -244,7 +245,7 @@ def test_switch_login_done_replaces_profile(root_app, monkeypatch, tmp_path):
     app.settings["webview_remember_login"] = True
     app._set_mode("login")
     app.login_method_var.set("cookie")
-    monkeypatch.setattr(tieba_gui, "save_cookie", lambda _value: True)
+    monkeypatch.setattr(tieba_gui_login, "save_cookie", lambda _value: True)
     monkeypatch.setattr(app, "_offer_retry_incomplete", lambda *_args: None)
     app._handle_message(
         (
