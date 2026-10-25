@@ -16,7 +16,8 @@
 - 后台消息的 35 个 kind 分支全部拆出为独立 `tieba_gui_messages.py` 的 `MessageMixin`，`_handle_message` 从 783 行降到约 74 行；
 - 设置页构建方法拆出为独立 `tieba_gui_settings.py`；
 - 表格/网格页构建与刷新拆出为独立 `tieba_gui_grid.py`；
-- 查用户页拆出为独立 `tieba_gui_lookup.py`。
+- 查用户页拆出为独立 `tieba_gui_lookup.py`；
+- 抓取生命周期与 worker 拆出为 `WorkerMixin`。
 
 ## [1.7.3] - 2026-10-26（已打包）
 
