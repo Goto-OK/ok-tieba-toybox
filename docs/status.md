@@ -21,6 +21,7 @@ ruff     通过
 mypy     32 个源文件通过
 pytest   138 个通过
 selftest 通过
+GitHub Actions CI 通过
 Android 核心同步通过
 ```
 
