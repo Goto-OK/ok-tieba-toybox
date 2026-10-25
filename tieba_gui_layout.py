@@ -773,176 +773,9 @@ class GuiLayoutMixin:
 
 
     def _build_people_detail(self, right) -> None:
-        traffic = tk.Frame(right, bg="#fbfcfe")
-        traffic.pack(fill="x", padx=6, pady=(2, 0))
-        tk.Label(traffic, text="红绿灯：", bg="#fbfcfe", fg="#6b7280", font=("Microsoft YaHei UI", 9)).pack(
-            side="left"
-        )
-        self.traffic_labels = {}
-        for key, color in (("ban", "#dc2626"), ("warn", "#f59e0b"), ("safe", "#16a34a")):
-            label = tk.Label(traffic, text="●", fg="#d1d5db", bg="#fbfcfe", font=("Microsoft YaHei UI", 14))
-            label.pack(side="left", padx=(2, 0))
-            self.traffic_labels[key] = (label, color)
-        self.traffic_text = tk.Label(
-            traffic, text="", bg="#fbfcfe", fg="#6b7280", font=("Microsoft YaHei UI", 9)
-        )
-        self.traffic_text.pack(side="left", padx=(8, 0))
-
-        profile_bar = tk.Frame(right, bg="#fbfcfe")
-        profile_bar.pack(fill="x", padx=6, pady=(4, 4))
-        self.profile_status = tk.Label(
-            profile_bar,
-            text="选择左边一个人查看详情",
-            anchor="w",
-            bg="#fbfcfe",
-            fg="#6b7280",
-            font=("Microsoft YaHei UI", 9),
-        )
-        self.profile_status.pack(side="left", fill="x", expand=True)
-        self.profile_cache_label = tk.Label(
-            right,
-            text="",
-            anchor="w",
-            bg="#fbfcfe",
-            fg="#2563eb",
-            font=("Microsoft YaHei UI", 8),
-        )
-        self.profile_action_bar = tk.Frame(right, bg="#fbfcfe")
-        self.profile_action_bar.pack(fill="x", padx=6, pady=(0, 4))
-        profile_action_bar = self.profile_action_bar
-        self.profile_topic_btn = ttk.Button(
-            profile_action_bar, text="继续抓主题", command=self._continue_profile_topics
-        )
-        self.profile_topic_btn.pack(side="right", padx=(0, 4))
-        self.profile_topic_btn.pack_forget()
-        ttk.Button(profile_action_bar, text="刷新资料", command=self._reload_profile, width=8).pack(
-            side="right"
-        )
-
-        profile_footer = tk.Frame(right, bg="#fbfcfe")
-        profile_footer.pack(side="bottom", fill="x", padx=6, pady=(4, 4))
-        profile_actions = tk.Frame(profile_footer, bg="#fbfcfe")
-        profile_actions.pack(fill="x")
-        self.profile_report_btn = ttk.Button(
-            profile_actions, text="导出此人报告", command=self._export_profile_report, width=16
-        )
-        self.profile_posts_btn = ttk.Button(
-            profile_actions, text="导出发言", command=self._export_profile_posts, width=10
-        )
-        self.profile_follow_btn = ttk.Button(
-            profile_actions, text="加载公开关注", command=self._reload_profile_follow, width=16
-        )
-        self.profile_probe_btn = ttk.Button(
-            profile_actions, text="探测候选关注", command=self._probe_profile_forums, width=16
-        )
-        self.profile_forum_note = tk.Label(
-            profile_footer,
-            text="",
-            bg="#fbfcfe",
-            fg="#b45309",
-            wraplength=700,
-            justify="left",
-            font=("Microsoft YaHei UI", 8),
-        )
-        self.profile_forum_note.pack(fill="x", pady=(2, 0))
-
-        body_paned = ttk.PanedWindow(right, orient="horizontal")
-        body_paned.pack(fill="both", expand=True, padx=6)
-        forum_frame = tk.Frame(body_paned)
-        post_frame = tk.Frame(body_paned)
-        body_paned.add(forum_frame, weight=1)
-        body_paned.add(post_frame, weight=2)
-
-        tk.Label(
-            forum_frame,
-            text="关注贴吧",
-            bg="#fbfcfe",
-            fg="#475569",
-            font=("Microsoft YaHei UI", 9, "bold"),
-        ).pack(anchor="w")
-        profile_forum_wrap = tk.Frame(forum_frame, bg="#fbfcfe")
-        profile_forum_wrap.pack(fill="both", expand=True)
-        self.profile_forum_tree = ttk.Treeview(
-            profile_forum_wrap, columns=("bar", "level", "level_source", "source"), show="headings", height=12
-        )
-        self.profile_forum_tree.heading("bar", text="贴吧")
-        self.profile_forum_tree.heading("level", text="等级")
-        self.profile_forum_tree.heading("level_source", text="等级来源")
-        self.profile_forum_tree.heading("source", text="关注来源")
-        self.profile_forum_tree.column("bar", width=100, anchor="w")
-        self.profile_forum_tree.column("level", width=45, anchor="center")
-        self.profile_forum_tree.column("level_source", width=90, anchor="center")
-        self.profile_forum_tree.column("source", width=80, anchor="center")
-        profile_forum_yscroll = ttk.Scrollbar(
-            profile_forum_wrap, orient="vertical", command=self.profile_forum_tree.yview
-        )
-        self.profile_forum_tree.configure(yscrollcommand=profile_forum_yscroll.set)
-        self.profile_forum_tree.pack(side="left", fill="both", expand=True)
-        profile_forum_yscroll.pack(side="right", fill="y")
-        self.profile_forum_tree.bind("<Double-1>", lambda _event: self._open_profile_forum())
-        self._configure_colors(self.profile_forum_tree)
-        self._make_sortable(
-            self.profile_forum_tree,
-            {"bar": "贴吧", "level": "等级", "level_source": "等级来源", "source": "关注来源"},
-            {"level"},
-        )
-        self._bind_loaded_filter(
-            self.profile_forum_tree,
-            {"bar": ("贴吧", False), "level": None, "level_source": ("等级来源", False), "source": ("关注来源", False)},
-        )
-        self._profile_forum_names: Dict[str, str] = {}
-
-        tk.Label(
-            post_frame,
-            text="发言",
-            bg="#fbfcfe",
-            fg="#475569",
-            font=("Microsoft YaHei UI", 9, "bold"),
-        ).pack(anchor="w")
-        profile_post_wrap = tk.Frame(post_frame, bg="#fbfcfe")
-        profile_post_wrap.pack(fill="both", expand=True)
-        self.profile_post_tree = ttk.Treeview(
-            profile_post_wrap, columns=("time", "type", "bar", "title", "content", "source"), show="headings", height=12
-        )
-        self.profile_post_tree.heading("time", text="日期")
-        self.profile_post_tree.heading("type", text="类型")
-        self.profile_post_tree.heading("bar", text="贴吧")
-        self.profile_post_tree.heading("title", text="标题")
-        self.profile_post_tree.heading("content", text="内容")
-        self.profile_post_tree.heading("source", text="数据来源")
-        self.profile_post_tree.column("time", width=75, anchor="center")
-        self.profile_post_tree.column("type", width=52, anchor="center")
-        self.profile_post_tree.column("bar", width=100, anchor="w")
-        self.profile_post_tree.column("title", width=180, anchor="w")
-        self.profile_post_tree.column("content", width=220, anchor="w")
-        self.profile_post_tree.column("source", width=95, anchor="center")
-        self.profile_post_tree["displaycolumns"] = ("time", "type", "bar", "title", "content")
-        profile_post_yscroll = ttk.Scrollbar(
-            profile_post_wrap, orient="vertical", command=self.profile_post_tree.yview
-        )
-        self.profile_post_tree.configure(yscrollcommand=profile_post_yscroll.set)
-        self.profile_post_tree.pack(side="left", fill="both", expand=True)
-        profile_post_yscroll.pack(side="right", fill="y")
-        self.profile_post_tree.bind("<Double-1>", lambda _event: self._open_profile_post())
-        self._configure_colors(self.profile_post_tree)
-        self._make_sortable(
-            self.profile_post_tree,
-            {"time": "日期", "type": "类型", "bar": "贴吧", "title": "标题", "content": "内容"},
-            {"time"},
-        )
-        self._bind_loaded_filter(
-            self.profile_post_tree,
-            {
-                "time": ("日期", True),
-                "type": ("类型", False),
-                "bar": ("贴吧", False),
-                "title": ("标题", False),
-                "content": ("内容", False),
-            },
-        )
-        self._profile_post_urls: Dict[str, str] = {}
-
-        self.post_nb.bind("<<NotebookTabChanged>>", self._on_tab_changed)
+        self._build_profile_traffic(right)
+        self._build_profile_header(right)
+        self._build_profile_tables(right)
 
     def _build_lookup_tab(self) -> None:
         page = self.tab_lookup
@@ -1421,4 +1254,183 @@ class GuiLayoutMixin:
             font=("Microsoft YaHei UI", 8),
         ).pack(side="left", padx=(8, 0))
         self.login_switch_row.grid_remove()
+
+
+    def _build_profile_traffic(self, right) -> None:
+        traffic = tk.Frame(right, bg="#fbfcfe")
+        traffic.pack(fill="x", padx=6, pady=(2, 0))
+        tk.Label(traffic, text="红绿灯：", bg="#fbfcfe", fg="#6b7280", font=("Microsoft YaHei UI", 9)).pack(
+            side="left"
+        )
+        self.traffic_labels = {}
+        for key, color in (("ban", "#dc2626"), ("warn", "#f59e0b"), ("safe", "#16a34a")):
+            label = tk.Label(traffic, text="●", fg="#d1d5db", bg="#fbfcfe", font=("Microsoft YaHei UI", 14))
+            label.pack(side="left", padx=(2, 0))
+            self.traffic_labels[key] = (label, color)
+        self.traffic_text = tk.Label(
+            traffic, text="", bg="#fbfcfe", fg="#6b7280", font=("Microsoft YaHei UI", 9)
+        )
+        self.traffic_text.pack(side="left", padx=(8, 0))
+
+
+
+    def _build_profile_header(self, right) -> None:
+        profile_bar = tk.Frame(right, bg="#fbfcfe")
+        profile_bar.pack(fill="x", padx=6, pady=(4, 4))
+        self.profile_status = tk.Label(
+            profile_bar,
+            text="选择左边一个人查看详情",
+            anchor="w",
+            bg="#fbfcfe",
+            fg="#6b7280",
+            font=("Microsoft YaHei UI", 9),
+        )
+        self.profile_status.pack(side="left", fill="x", expand=True)
+        self.profile_cache_label = tk.Label(
+            right,
+            text="",
+            anchor="w",
+            bg="#fbfcfe",
+            fg="#2563eb",
+            font=("Microsoft YaHei UI", 8),
+        )
+        self.profile_action_bar = tk.Frame(right, bg="#fbfcfe")
+        self.profile_action_bar.pack(fill="x", padx=6, pady=(0, 4))
+        profile_action_bar = self.profile_action_bar
+        self.profile_topic_btn = ttk.Button(
+            profile_action_bar, text="继续抓主题", command=self._continue_profile_topics
+        )
+        self.profile_topic_btn.pack(side="right", padx=(0, 4))
+        self.profile_topic_btn.pack_forget()
+        ttk.Button(profile_action_bar, text="刷新资料", command=self._reload_profile, width=8).pack(
+            side="right"
+        )
+
+        profile_footer = tk.Frame(right, bg="#fbfcfe")
+        profile_footer.pack(side="bottom", fill="x", padx=6, pady=(4, 4))
+        profile_actions = tk.Frame(profile_footer, bg="#fbfcfe")
+        profile_actions.pack(fill="x")
+        self.profile_report_btn = ttk.Button(
+            profile_actions, text="导出此人报告", command=self._export_profile_report, width=16
+        )
+        self.profile_posts_btn = ttk.Button(
+            profile_actions, text="导出发言", command=self._export_profile_posts, width=10
+        )
+        self.profile_follow_btn = ttk.Button(
+            profile_actions, text="加载公开关注", command=self._reload_profile_follow, width=16
+        )
+        self.profile_probe_btn = ttk.Button(
+            profile_actions, text="探测候选关注", command=self._probe_profile_forums, width=16
+        )
+        self.profile_forum_note = tk.Label(
+            profile_footer,
+            text="",
+            bg="#fbfcfe",
+            fg="#b45309",
+            wraplength=700,
+            justify="left",
+            font=("Microsoft YaHei UI", 8),
+        )
+        self.profile_forum_note.pack(fill="x", pady=(2, 0))
+
+
+
+    def _build_profile_tables(self, right) -> None:
+        body_paned = ttk.PanedWindow(right, orient="horizontal")
+        body_paned.pack(fill="both", expand=True, padx=6)
+        forum_frame = tk.Frame(body_paned)
+        post_frame = tk.Frame(body_paned)
+        body_paned.add(forum_frame, weight=1)
+        body_paned.add(post_frame, weight=2)
+
+        tk.Label(
+            forum_frame,
+            text="关注贴吧",
+            bg="#fbfcfe",
+            fg="#475569",
+            font=("Microsoft YaHei UI", 9, "bold"),
+        ).pack(anchor="w")
+        profile_forum_wrap = tk.Frame(forum_frame, bg="#fbfcfe")
+        profile_forum_wrap.pack(fill="both", expand=True)
+        self.profile_forum_tree = ttk.Treeview(
+            profile_forum_wrap, columns=("bar", "level", "level_source", "source"), show="headings", height=12
+        )
+        self.profile_forum_tree.heading("bar", text="贴吧")
+        self.profile_forum_tree.heading("level", text="等级")
+        self.profile_forum_tree.heading("level_source", text="等级来源")
+        self.profile_forum_tree.heading("source", text="关注来源")
+        self.profile_forum_tree.column("bar", width=100, anchor="w")
+        self.profile_forum_tree.column("level", width=45, anchor="center")
+        self.profile_forum_tree.column("level_source", width=90, anchor="center")
+        self.profile_forum_tree.column("source", width=80, anchor="center")
+        profile_forum_yscroll = ttk.Scrollbar(
+            profile_forum_wrap, orient="vertical", command=self.profile_forum_tree.yview
+        )
+        self.profile_forum_tree.configure(yscrollcommand=profile_forum_yscroll.set)
+        self.profile_forum_tree.pack(side="left", fill="both", expand=True)
+        profile_forum_yscroll.pack(side="right", fill="y")
+        self.profile_forum_tree.bind("<Double-1>", lambda _event: self._open_profile_forum())
+        self._configure_colors(self.profile_forum_tree)
+        self._make_sortable(
+            self.profile_forum_tree,
+            {"bar": "贴吧", "level": "等级", "level_source": "等级来源", "source": "关注来源"},
+            {"level"},
+        )
+        self._bind_loaded_filter(
+            self.profile_forum_tree,
+            {"bar": ("贴吧", False), "level": None, "level_source": ("等级来源", False), "source": ("关注来源", False)},
+        )
+        self._profile_forum_names: Dict[str, str] = {}
+
+        tk.Label(
+            post_frame,
+            text="发言",
+            bg="#fbfcfe",
+            fg="#475569",
+            font=("Microsoft YaHei UI", 9, "bold"),
+        ).pack(anchor="w")
+        profile_post_wrap = tk.Frame(post_frame, bg="#fbfcfe")
+        profile_post_wrap.pack(fill="both", expand=True)
+        self.profile_post_tree = ttk.Treeview(
+            profile_post_wrap, columns=("time", "type", "bar", "title", "content", "source"), show="headings", height=12
+        )
+        self.profile_post_tree.heading("time", text="日期")
+        self.profile_post_tree.heading("type", text="类型")
+        self.profile_post_tree.heading("bar", text="贴吧")
+        self.profile_post_tree.heading("title", text="标题")
+        self.profile_post_tree.heading("content", text="内容")
+        self.profile_post_tree.heading("source", text="数据来源")
+        self.profile_post_tree.column("time", width=75, anchor="center")
+        self.profile_post_tree.column("type", width=52, anchor="center")
+        self.profile_post_tree.column("bar", width=100, anchor="w")
+        self.profile_post_tree.column("title", width=180, anchor="w")
+        self.profile_post_tree.column("content", width=220, anchor="w")
+        self.profile_post_tree.column("source", width=95, anchor="center")
+        self.profile_post_tree["displaycolumns"] = ("time", "type", "bar", "title", "content")
+        profile_post_yscroll = ttk.Scrollbar(
+            profile_post_wrap, orient="vertical", command=self.profile_post_tree.yview
+        )
+        self.profile_post_tree.configure(yscrollcommand=profile_post_yscroll.set)
+        self.profile_post_tree.pack(side="left", fill="both", expand=True)
+        profile_post_yscroll.pack(side="right", fill="y")
+        self.profile_post_tree.bind("<Double-1>", lambda _event: self._open_profile_post())
+        self._configure_colors(self.profile_post_tree)
+        self._make_sortable(
+            self.profile_post_tree,
+            {"time": "日期", "type": "类型", "bar": "贴吧", "title": "标题", "content": "内容"},
+            {"time"},
+        )
+        self._bind_loaded_filter(
+            self.profile_post_tree,
+            {
+                "time": ("日期", True),
+                "type": ("类型", False),
+                "bar": ("贴吧", False),
+                "title": ("标题", False),
+                "content": ("内容", False),
+            },
+        )
+        self._profile_post_urls: Dict[str, str] = {}
+
+        self.post_nb.bind("<<NotebookTabChanged>>", self._on_tab_changed)
 
