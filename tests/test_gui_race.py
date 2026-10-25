@@ -1,4 +1,5 @@
 import os
+import time
 import tkinter as tk
 
 import pytest
@@ -11,10 +12,20 @@ from tieba_reply_stats.models import ThreadData, ThreadMeta
 
 @pytest.fixture
 def root_app():
-    try:
-        root = tk.Tk()
-    except tk.TclError:
-        pytest.skip("no Tk display")
+    root = None
+    last_error = None
+    for _attempt in range(5):
+        try:
+            root = tk.Tk()
+            break
+        except tk.TclError as error:
+            last_error = error
+            time.sleep(0.1)
+    if root is None:
+        headless = os.name != "nt" and not os.environ.get("DISPLAY")
+        if os.environ.get("TIEBA_SKIP_TK_TESTS") or headless:
+            pytest.skip("no Tk display")
+        pytest.fail(f"Tk 初始化失败：{last_error}")
     root.withdraw()
     app = App(root)
     root.update_idletasks()

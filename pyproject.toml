@@ -34,7 +34,25 @@ tieba-stats = "tieba_reply_stats.cli:main"
 tieba-stats-gui = "tieba_gui:main"
 
 [tool.setuptools]
-py-modules = ["tieba_gui"]
+py-modules = [
+    "tieba_gui",
+    "tieba_gui_export",
+    "tieba_gui_grid",
+    "tieba_gui_identity",
+    "tieba_gui_layout",
+    "tieba_gui_links",
+    "tieba_gui_login",
+    "tieba_gui_lookup",
+    "tieba_gui_messages",
+    "tieba_gui_people",
+    "tieba_gui_profile",
+    "tieba_gui_settings",
+    "tieba_gui_settings_runtime",
+    "tieba_gui_theme",
+    "tieba_gui_tools",
+    "tieba_gui_utils",
+    "tieba_gui_workers",
+]
 
 [tool.setuptools.dynamic]
 version = { attr = "tieba_reply_stats.version.__version__" }
@@ -62,6 +80,25 @@ addopts = "-q"
 
 [tool.mypy]
 python_version = "3.10"
-files = ["tieba_reply_stats", "tieba_gui.py"]
+files = [
+    "tieba_reply_stats",
+    "tieba_gui.py",
+    "tieba_gui_export.py",
+    "tieba_gui_grid.py",
+    "tieba_gui_identity.py",
+    "tieba_gui_layout.py",
+    "tieba_gui_links.py",
+    "tieba_gui_login.py",
+    "tieba_gui_lookup.py",
+    "tieba_gui_messages.py",
+    "tieba_gui_people.py",
+    "tieba_gui_profile.py",
+    "tieba_gui_settings.py",
+    "tieba_gui_settings_runtime.py",
+    "tieba_gui_theme.py",
+    "tieba_gui_tools.py",
+    "tieba_gui_utils.py",
+    "tieba_gui_workers.py",
+]
 ignore_missing_imports = true
 check_untyped_defs = true

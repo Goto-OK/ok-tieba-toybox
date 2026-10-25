@@ -2853,6 +2853,8 @@ class App(GuiLayoutMixin, MessageMixin, SettingsMixin, GridMixin, LookupMixin, W
 
 
     def _poll_queue(self) -> None:
+        # 先续约，派发中的模态窗口/异常不能中断后续轮询。
+        self.root.after(120, self._poll_queue)
         try:
             while True:
                 message = self.log_queue.get_nowait()
@@ -2860,7 +2862,6 @@ class App(GuiLayoutMixin, MessageMixin, SettingsMixin, GridMixin, LookupMixin, W
         except queue.Empty:
             pass
         self._notify_cache_eviction()
-        self.root.after(120, self._poll_queue)
 
     def _handle_message(self, message: tuple) -> None:
         kind = message[0]

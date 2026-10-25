@@ -11,7 +11,10 @@
 - 页数硬上限固定为 500，避免服务端 total 驱动无限翻页；
 - 楼中楼跨页按 pid 去重；
 - 未知后台消息类型写入警告日志，不再静默丢弃；
-- ruff 增加 bugbear 规则，mypy 开启未注解函数体检查；
+- ruff 增加 bugbear 规则，mypy 开启未注解函数体检查并覆盖全部 GUI 模块；
+- 修复 pip 安装包缺少 GUI 拆分模块的问题，wheel 已实际安装并 `import tieba_gui` 验证；
+- 后台消息轮询改为先续约再派发，模态窗口不再阻塞下一轮轮询；
+- Tk 测试夹具增加初始化重试，Windows 上 Tk 失败不再静默跳过；
 - GUI 版面构建方法拆出为独立 `tieba_gui_layout.py`，App 主类减少约 1,300 行；
 - 后台消息的 35 个 kind 分支全部拆出为独立 `tieba_gui_messages.py` 的 `MessageMixin`，`_handle_message` 从 783 行降到约 74 行；
 - 设置页构建方法拆出为独立 `tieba_gui_settings.py`；

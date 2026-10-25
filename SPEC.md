@@ -4052,4 +4052,14 @@ count 是上限，不是保证必须返回 count 条
 - 主题流到 50 页时出现继续/一直抓/停止三个选项；
 - 热缓存到软件关闭仍可命中同一用户。
 
+### 25. 工程与发布约束
+
+- GUI 源码拆分为 `tieba_gui.py` 主类和若干 `tieba_gui_*.py` mixin 模块；
+- setuptools 的 `py-modules` 必须列全所有顶层 GUI 模块，保证 `pip install` 后 `import tieba_gui` 可用；
+- mypy 的 `files` 必须覆盖核心包、`tieba_gui.py` 和全部 `tieba_gui_*.py`；
+- 发布前必须实际构建 wheel 并执行 `import tieba_gui` 冒烟检查；
+- 后台消息轮询必须先续约 `after`，再派发队列消息，避免模态窗口阻塞轮询；
+- Tk 测试夹具只在确认无显示环境时跳过；Windows 上 Tk 初始化失败应视为测试失败，不得静默 skip；
+- `docs/code-map.md` 必须随 GUI 模块拆分同步更新。
+
 本文件为最终规范。实现与本文冲突时，以本文为准。

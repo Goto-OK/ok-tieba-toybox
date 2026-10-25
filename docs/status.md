@@ -18,8 +18,8 @@
 
 ```text
 ruff     通过
-mypy     32 个源文件通过
-pytest   145 项：本机 144 通过 + 1 跳过；CI 通过
+mypy     48 个源文件通过（含全部 GUI 模块）
+pytest   145 项；本机全过，CI 通过
 selftest 通过
 GitHub Actions CI 通过
 Android 核心同步通过
@@ -294,6 +294,7 @@ Android 核心同步通过
 - 打包版中文路径临时目录问题已修（系统 tmp 不可用时退回应用数据目录）；新包已从中文路径启动并读取 BDUSS；
 - 审查修复（仅 main，尚未重新打包）：凭据接口改 HTTPS；补全等级线程改用线程安全日志；身份弹窗可被停止关闭；protobuf 截断改为报错、页数硬上限固定 500、楼中楼跨页按 pid 去重、未知消息有警告；HTTPS 端点已实测返回 200；
 - GUI 结构：除 App 主类外，版面/消息/设置/表格/查用户/worker/链接/导出/主题/参与者/身份/工具/资料/登录/设置运行时均已独立成模块；App 约 2,800 行、146 个方法；
+- 打包配置已补全 `py-modules`，wheel 实际安装后 `import tieba_gui` 成功；mypy 覆盖 48 个源文件；`_poll_queue` 改为先续约再派发；Tk 测试夹具增加初始化重试；`docs/code-map.md` 已同步；
 - 仍未修：ruff C90/S 规则未启用，mypy 只开 check_untyped_defs，尚未全面严格化；
 - Android 不跟进 UI；
 - CLI 不跟 GUI 新功能。

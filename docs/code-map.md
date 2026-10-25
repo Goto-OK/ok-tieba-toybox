@@ -1,16 +1,35 @@
 # 代码地图
 
-最后更新：2026-10-22
+最后更新：2026-10-26
+
 规范以 [../SPEC.md](../SPEC.md) 为准；本文只说明代码位置。
 
-## 1. 入口
+## 1. 入口与 GUI 模块
 
 | 文件 | 作用 |
 |---|---|
-| `tieba_gui.py` | Windows tkinter GUI |
+| `tieba_gui.py` | GUI 入口、`App` 主类、消息轮询 |
+| `tieba_gui_layout.py` | 主窗口与各标签页版面构建 |
+| `tieba_gui_messages.py` | 后台消息 kind 处理器 |
+| `tieba_gui_settings.py` | 设置页构建 |
+| `tieba_gui_settings_runtime.py` | 设置应用、备份、界面模式 |
+| `tieba_gui_grid.py` | 回复统计/分帖/楼层/楼中楼表格 |
+| `tieba_gui_lookup.py` | 查用户页 |
+| `tieba_gui_workers.py` | 抓取生命周期与 worker |
+| `tieba_gui_links.py` | 链接解析页 |
+| `tieba_gui_export.py` | Excel/报告导出 |
+| `tieba_gui_theme.py` | 主题应用 |
+| `tieba_gui_people.py` | 参与者、筛选、分页、区间对话 |
+| `tieba_gui_identity.py` | 身份补全与批量标记 |
+| `tieba_gui_tools.py` | 日志、测试中心、使用说明、数据清理 |
+| `tieba_gui_profile.py` | 用户资料/关注页 |
+| `tieba_gui_login.py` | 登录、Cookie、WebView2 |
+| `tieba_gui_utils.py` | GUI 共用小工具 |
 | `tieba_stats.py` | 命令行包装 |
 | `scripts/build_desktop.ps1` | Windows 构建 |
 | `scripts/build_android.ps1` | Android 构建（暂停） |
+
+GUI 的 `App` 通过 mixin 组合上述模块；模块只依赖 `tieba_reply_stats` 和同层 GUI 工具，不反向 import `tieba_gui.py`。
 
 ## 2. 核心包
 
@@ -45,49 +64,22 @@
 | `version.py` | 版本唯一来源 |
 | `cli.py` | 基础命令行 |
 
-## 3. GUI 结构
+## 3. 测试
 
-`tieba_gui.py` 按职责分块：
+当前：145 个 pytest 用例，144 通过 + 1 跳过（无 WebView2 的本机环境检查）；`tests/selftest.py` 通过。
 
-- 初始化 / 主窗口 / 状态栏；
-- 抓取页；
-- 表格查看（回复统计、分帖、楼层、楼中楼、对比）；
-- 参与者页（筛选、分页、红绿灯、资料面板）；
-- 查用户页；
-- 链接解析页（官方链接）；
-- 恋文增强页（第三方发言）；
-- 设置页（左侧分类）；
-- 对话框 / 快捷键 / 单实例；
-- 持久化 / 导出 / 日志 / 主题。
-
-## 4. 测试
-
-| 文件 | 覆盖 |
+| 范围 | 文件 |
 |---|---|
-| `tests/selftest.py` | 离线抓取/导出端到端 |
-| `tests/test_page_pb.py` | page protobuf |
-| `tests/test_profile_pb.py` | profile protobuf |
-| `tests/test_userpost_pb.py` | userpost protobuf |
-| `tests/test_modes.py` | 抓取模式分流 |
-| `tests/test_settings.py` | 设置持久化 |
-| `tests/test_blacklist.py` | 标记优先级 |
-| `tests/test_filters.py` | 筛选、身份、曾用昵称 |
-| `tests/test_compare.py` | 多帖对比 |
-| `tests/test_report.py` | 用户报告 |
-| `tests/test_posts_export.py` | 导出发言三表/超链接 |
-| `tests/test_post_cache.py` | 发言缓存读写 |
-| `tests/test_parse_comments.py` | 楼中楼身份字段/username 兜底 |
-| `tests/test_profile_identity.py` | 昵称搜索 dict/list 兼容 |
-| `tests/test_config_backup.py` | 设置备份 |
-| `tests/test_follow_probe.py` | 候选探测 |
-| `tests/test_floor_depth.py` | 楼中楼深度/去重 |
-| `tests/test_storage.py` | SQLite/DPAPI/清理 |
-| `tests/test_errors.py` | 错误文案 |
-| `tests/test_version.py` | 版本一致性 |
+| GUI/竞态/身份 | `test_gui_race.py`、`test_identity_strategy.py`、`test_profile_fingerprint.py`、`test_profile_identity.py`、`test_profile_posts.py`、`test_post_cache.py`、`test_risk_order.py` |
+| GUI 视觉 | `test_emoji.py`、`test_theme.py` |
+| protobuf/解析 | `test_page_pb.py`、`test_profile_pb.py`、`test_userpost_pb.py`、`test_parse_comments.py`、`test_floor_depth.py` |
+| 抓取/模式 | `test_modes.py`、`test_follow_probe.py`、`test_identity_and_links.py` |
+| 导出/报告/对比 | `test_posts_export.py`、`test_export_split.py`、`test_report.py`、`test_compare.py` |
+| 筛选/标记 | `test_filters.py`、`test_blacklist.py` |
+| 存储/设置/安全 | `test_settings.py`、`test_storage.py`、`test_config_backup.py`、`test_safe_delete.py`、`test_errors.py`、`test_version.py` |
+| 离线端到端 | `tests/selftest.py` |
 
-当前：92 个 pytest 通过，selftest 通过。
-
-## 5. 脚本
+## 4. 脚本
 
 | 文件 | 作用 |
 |---|---|
@@ -96,13 +88,13 @@
 | `scripts/sync_android.py` | 核心包同步到 Android |
 | `scripts/write_version_info.py` | 生成 version_info |
 
-## 6. Android
+## 5. Android
 
 - `android/project/app/src/main/python/tieba_reply_stats/` 是生成副本；
 - 禁止手改，改源码后执行 `python scripts/sync_android.py`；
 - Android 已暂停，不跟进新功能。
 
-## 7. 数据与工具
+## 6. 数据与工具
 
 | 路径 | 说明 |
 |---|---|
