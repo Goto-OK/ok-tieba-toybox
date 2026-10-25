@@ -274,7 +274,8 @@ Android 核心同步通过
 - 发布目录：`dist/贴吧回复统计_v1.7.3`；
 - 绿色包：`dist/贴吧回复统计_v1.7.3_绿色版.zip`；
 - 校验：`dist/SHA256SUMS-1.7.3.txt`；
-- 发布说明：`docs/release-notes-v1.7.3.md`。
+- 发布说明：`docs/release-notes-v1.7.3.md`；
+- GitHub 发布准备：README、PRIVACY、SECURITY、Issue/PR 模板、`docs/github-release.md`。
 
 ## 6. 已知限制
 

@@ -23,7 +23,11 @@ python scripts/sync_android.py --check
   [docs/standards.md](docs/standards.md)；
 - 新接口先补 [docs/protocol.md](docs/protocol.md)；
 - 改核心包后执行 `python scripts/sync_android.py`；
-- 不要提交 Cookie、`dist/`、`.build/`、APK、Excel、快照数据。
+- 不要提交 Cookie、`dist/`、`.build/`、APK、Excel、快照数据；
+- 不要在 Issue/PR/截图中附带真实 Cookie、账号或用户隐私；
+- 修改登录、导出、删除数据、WebView2 行为时，先更新 `SPEC.md`；
+- 发布前按 [docs/github-release.md](docs/github-release.md) 检查；
+- 安全问题见 [SECURITY.md](SECURITY.md)。
 
 ## 提交信息
 

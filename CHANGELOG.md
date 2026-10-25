@@ -55,6 +55,13 @@
 - 修复 35 个 mypy 类型错误，核心包和 GUI 归零；
 - 修复打包版在中文路径下 WebView2/pythonnet 程序集加载失败（复制到 ASCII 缓存）。
 
+### 文档
+
+- README 更新到 v1.7.3，补下载、登录 Cookie、隐私、免责声明和构建说明；
+- 新增 `PRIVACY.md`、`SECURITY.md`；
+- 新增 GitHub 发布清单、Bug / 功能 Issue 模板和 PR 模板；
+- 新增用户署名、许可证和代码签名说明。
+
 ### 验证
 
 - pytest 138 个通过；

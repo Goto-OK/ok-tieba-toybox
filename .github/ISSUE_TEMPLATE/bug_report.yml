@@ -1,0 +1,69 @@
+name: Bug 报告
+description: 报告可复现的问题
+title: "[Bug] "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        不要在 Issue 中粘贴完整 Cookie、BDUSS、STOKEN、TIEBA_SID 或 WebView2 profile。
+        请先确认使用的是最新版本。
+  - type: input
+    id: version
+    attributes:
+      label: 软件版本
+      placeholder: v1.7.3
+    validations:
+      required: true
+  - type: input
+    id: system
+    attributes:
+      label: Windows 版本
+      placeholder: Windows 11 24H2 / Windows 10 22H2
+    validations:
+      required: true
+  - type: dropdown
+    id: mode
+    attributes:
+      label: 使用模式
+      options:
+        - 游客模式
+        - 登录模式：仅 BDUSS
+        - 登录模式：完整 Cookie
+        - 命令行
+        - 不确定
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: 复现步骤
+      placeholder: |
+        1. 打开...
+        2. 点击...
+        3. 出现...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: 期望结果
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: 实际结果
+      description: 可粘贴脱敏后的错误文本或截图
+    validations:
+      required: true
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: 确认
+      options:
+        - label: 我没有在 Issue 中附带完整 Cookie 或其他账号凭据
+          required: true
+        - label: 我已确认使用的是最新版本
+          required: true

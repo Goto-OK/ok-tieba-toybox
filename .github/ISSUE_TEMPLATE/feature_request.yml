@@ -1,0 +1,45 @@
+name: 功能建议
+description: 提出可落地的功能或交互改进
+title: "[Feature] "
+labels:
+  - enhancement
+body:
+  - type: markdown
+    attributes:
+      value: |
+        请先搜索已有 Issue，避免重复。
+        不要提交真实 Cookie、账号或用户隐私数据。
+  - type: textarea
+    id: problem
+    attributes:
+      label: 想解决的问题
+      placeholder: 现在做某件事时哪里不方便？
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: 建议方案
+      description: 描述操作流程、界面位置和预期结果
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: 备选方案
+    validations:
+      required: false
+  - type: dropdown
+    id: scope
+    attributes:
+      label: 功能范围
+      options:
+        - 抓取
+        - Excel 导出
+        - 查用户
+        - 登录 / 验证码
+        - 界面 / 设置
+        - 文档 / 构建
+        - 其他
+    validations:
+      required: true
