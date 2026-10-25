@@ -7,6 +7,8 @@
 
 作者：**OK**（GitHub: [Goto-OK](https://github.com/Goto-OK)）
 
+AI 协作：**DeepSeek**（代码实现、测试与文档整理，详见 [CREDITS.md](CREDITS.md)）
+
 仓库：[Goto-OK/ok-tieba-toybox](https://github.com/Goto-OK/ok-tieba-toybox)
 
 支持浅色 / 深色 / 跟随系统，以及蓝色、绿色、紫色、橘黄、粉色、青色、红色强调色。  

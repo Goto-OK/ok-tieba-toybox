@@ -275,7 +275,9 @@ Android 核心同步通过
 - 绿色包：`dist/ok-tieba-toybox_v1.7.3.zip`；
 - 校验：`dist/SHA256SUMS-1.7.3.txt`；
 - 发布说明：`docs/release-notes-v1.7.3.md`；
-- GitHub 发布准备：README、PRIVACY、SECURITY、Issue/PR 模板、`docs/github-release.md`。
+- GitHub 发布准备：README、PRIVACY、SECURITY、Issue/PR 模板、`docs/github-release.md`；
+- GitHub 仓库：`https://github.com/Goto-OK/ok-tieba-toybox`，Release `v1.7.3`；
+- 协作说明：`CREDITS.md`，作者 OK，AI 协作 DeepSeek。
 
 ## 6. 已知限制
 

@@ -2,6 +2,9 @@
 
 发布日期：2026-10-26
 
+作者：OK（GitHub: Goto-OK）  
+AI 协作：DeepSeek
+
 当前状态：
 
 - 源码：v1.7.3
