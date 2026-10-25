@@ -259,12 +259,11 @@ def collect_thread(
     warnings: List[str] = []
 
     total_page = meta.total_page or 0
-    if total_page and options.max_pages:
-        limit = min(total_page, options.max_pages)
-    elif total_page:
-        limit = total_page
+    if total_page:
+        limit = min(total_page, options.max_pages or HARD_PAGE_LIMIT)
     else:
         limit = options.max_pages or HARD_PAGE_LIMIT
+    hard_capped = bool(total_page and not options.max_pages and total_page > limit)
     log(f"  共 {total_page or '未知'} 页，计划抓取 {limit} 页")
 
     def partial_thread() -> ThreadData:
@@ -341,6 +340,9 @@ def collect_thread(
     if total_page and pages_fetched < total_page and not options.max_pages:
         thread.complete = False
         thread.warnings.append(f"只抓到 {pages_fetched}/{total_page} 页")
+    if hard_capped:
+        thread.complete = False
+        thread.warnings.append(f"页数超过上限 {limit}，仅抓取前 {limit} 页")
 
     if options.include_comments:
         try:

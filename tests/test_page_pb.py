@@ -1,3 +1,5 @@
+import pytest
+
 from tieba_reply_stats import page_pb
 from tieba_reply_stats.page_pb import _fb, _fields, _fv, _msg, _num, _text
 
@@ -111,7 +113,7 @@ def test_parse_response_without_comments():
     assert result["comments"] == []
 
 
-def test_fields_stop_at_truncated_payload():
-    assert list(_fields(b"\x08")) == []
-    assert list(_fields(b"\x0a\x05abc")) == []
-    assert list(_fields(b"\x15\x01")) == []
+def test_fields_reject_truncated_payload():
+    for payload in (b"\x08", b"\x0a\x05abc", b"\x15\x01"):
+        with pytest.raises(ValueError):
+            list(_fields(payload))

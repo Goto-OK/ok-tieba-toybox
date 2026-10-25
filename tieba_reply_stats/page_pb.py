@@ -35,6 +35,7 @@ from .fetch import (
 from .models import Comment, Floor, ThreadData, ThreadMeta
 
 PAGE_URL = "https://tiebac.baidu.com/c/f/pb/page?cmd=302001"
+HARD_PAGE_LIMIT = 500
 CLIENT_VERSION = b"12.64.1.1"
 USER_AGENT = "bdtb for Android 12.64.1.1"
 REPLY_PREFIX_RE = re.compile(r"^回复\s*@?([^:：\n]{1,40})\s*[:：]\s*")
@@ -77,35 +78,35 @@ def _fields(data: bytes):
     while index < len(data):
         try:
             key, index = _read_varint(data, index)
-        except IndexError:
-            return
+        except IndexError as error:
+            raise ValueError("protobuf 数据截断") from error
         number, wire = key >> 3, key & 7
         if wire == 0:
             try:
                 value, index = _read_varint(data, index)
-            except IndexError:
-                return
+            except IndexError as error:
+                raise ValueError("protobuf 数据截断") from error
         elif wire == 2:
             try:
                 length, index = _read_varint(data, index)
-            except IndexError:
-                return
+            except IndexError as error:
+                raise ValueError("protobuf 数据截断") from error
             if length < 0 or index + length > len(data):
-                return
+                raise ValueError("protobuf 长度超出剩余数据")
             value = data[index : index + length]
             index += length
         elif wire == 5:
             if index + 4 > len(data):
-                return
+                raise ValueError("protobuf fixed32 数据截断")
             value = data[index : index + 4]
             index += 4
         elif wire == 1:
             if index + 8 > len(data):
-                return
+                raise ValueError("protobuf fixed64 数据截断")
             value = data[index : index + 8]
             index += 8
         else:
-            return
+            raise ValueError(f"protobuf 未知 wire type：{wire}")
         yield number, wire, value
 
 
@@ -556,6 +557,7 @@ def collect_thread_anon(
     floors: List[Floor] = []
     comments: List[Comment] = []
     seen_floors = set()
+    seen_comments = set()
 
     def add_page(data: Dict) -> None:
         for row in data["floors"]:
@@ -579,6 +581,9 @@ def collect_thread_anon(
                 )
             )
         for row in data["comments"]:
+            if row["pid"] in seen_comments:
+                continue
+            seen_comments.add(row["pid"])
             comments.append(
                 Comment(
                     floor_no=row["floor_no"],
@@ -602,7 +607,9 @@ def collect_thread_anon(
     add_page(first)
 
     total = page.get("total") or 1
-    max_pages = options.max_pages or total
+    requested = options.max_pages or HARD_PAGE_LIMIT
+    max_pages = min(total, requested)
+    hard_capped = total > max_pages and not options.max_pages
     warnings: List[str] = []
     fetched_pages: List[int] = [1]
     failed_pages: List[int] = []
@@ -631,6 +638,9 @@ def collect_thread_anon(
                 options.log(f"  第 {pn} 页失败：{error}")
             break
 
+    if hard_capped:
+        complete = False
+        warnings.append(f"页数超过上限 {max_pages}，仅抓取前 {max_pages} 页")
     floors.sort(key=lambda item: item.post_no)
     thread_data = ThreadData(
         meta=meta,
