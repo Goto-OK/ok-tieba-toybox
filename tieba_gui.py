@@ -2137,7 +2137,7 @@ class App:
         self._set_supplement_running(True)
         self._supplement_stop.clear()
         set_stop_checker(self._supplement_stop.is_set)
-        self.retry_incomplete_btn.configure(state="disabled")
+        self.retry_incomplete_btn.state(["disabled"])
         self.people_hint.configure(text=f"正在重试 {len(targets)} 个帖子的失败部分…")
 
         def worker():
@@ -3821,7 +3821,10 @@ class App:
         )
         if hasattr(self, "retry_incomplete_btn"):
             incomplete = any(not getattr(thread, "complete", True) for thread in self.last_threads)
-            self.retry_incomplete_btn.configure(state="normal" if incomplete else "disabled")
+            if incomplete:
+                self.retry_incomplete_btn.state(["!disabled"])
+            else:
+                self.retry_incomplete_btn.state(["disabled"])
         if hasattr(self, "supplement_btn"):
             missing_identity = any(
                 (not user.get("uid") and (user.get("username") or user.get("portrait")))
@@ -10736,7 +10739,6 @@ class App:
             + (f"不完整 {incomplete} 帖；" if incomplete else "")
             + "缺失身份可点「补全身份」"
         )
-
     def _start_from_key(self, _event=None):
         self._on_start()
         return "break"

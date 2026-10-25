@@ -5,6 +5,7 @@ import pytest
 
 import tieba_gui
 from tieba_gui import App
+from tieba_reply_stats.models import ThreadData, ThreadMeta
 
 
 @pytest.fixture
@@ -123,6 +124,14 @@ def test_login_source_conflict_is_visible(root_app, monkeypatch):
     monkeypatch.setattr(tieba_gui.webview2, "match_profile_fingerprint", lambda _cookies: False)
     app._refresh_webview_status()
     assert "可能不是同一会话" in app.login_source_label.cget("text")
+
+
+def test_retry_button_enabled_for_incomplete(root_app):
+    _root, app = root_app
+    app.last_threads = [ThreadData(meta=ThreadMeta(tid="1", title="test"))]
+    app.last_threads[0].complete = False
+    app._refresh_people()
+    assert "disabled" not in app.retry_incomplete_btn.state()
 
 
 def test_retry_while_running_is_queued(root_app):
