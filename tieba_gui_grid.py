@@ -300,7 +300,7 @@ class GridMixin:
             )
 
 
-    def _add_grid_tab(
+    def _add_grid_tab(  # noqa: C901  (大表格构建，后续再拆)
         self,
         notebook,
         title: str,

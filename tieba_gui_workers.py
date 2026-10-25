@@ -267,7 +267,7 @@ class WorkerMixin:
         self.status_var.set("正在停止…")
 
 
-    def _run_worker(
+    def _run_worker(  # noqa: C901  (抓取状态机，后续再拆)
         self,
         urls,
         output,

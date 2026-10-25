@@ -67,7 +67,7 @@ GUI 的 `App` 通过 mixin 组合上述模块；模块只依赖 `tieba_reply_sta
 
 ## 3. 测试
 
-当前：145 个 pytest 用例，144 通过 + 1 跳过（无 WebView2 的本机环境检查）；`tests/selftest.py` 通过。
+当前：145 个 pytest 用例；设置 `TIEBA_SKIP_WEBVIEW2_CHECK=1`（CI 的做法）时 145 全过，未设置时 144 通过 + 1 跳过（本机无 WebView2 环境检查）；`tests/selftest.py` 通过。
 
 | 范围 | 文件 |
 |---|---|

@@ -180,6 +180,44 @@ COOKIE_HELP = """需要 Cookie 时，这样复制：
 
 
 
+_MESSAGE_HANDLERS = {
+    "log": "_handle_message_log",
+    "stage": "_handle_message_stage",
+    "done": "_handle_message_done",
+    "cancelled_partial": "_handle_message_cancelled_partial",
+    "probe_done": "_handle_message_probe_done",
+    "batch_profile": "_handle_message_batch_profile",
+    "batch_done": "_handle_message_batch_done",
+    "profile_ready": "_handle_message_profile_ready",
+    "enrich_done": "_handle_message_enrich_done",
+    "enrich_error": "_handle_message_enrich_error",
+    "identity_ask": "_handle_message_identity_ask",
+    "identity_supplement_progress": "_handle_message_identity_supplement_progress",
+    "identity_supplement_done": "_handle_message_identity_supplement_done",
+    "incomplete_retry_done": "_handle_message_incomplete_retry_done",
+    "incomplete_retry_stopped": "_handle_message_incomplete_retry_stopped",
+    "incomplete_retry_error": "_handle_message_incomplete_retry_error",
+    "identity_supplement_stopped": "_handle_message_identity_supplement_stopped",
+    "identity_supplement_error": "_handle_message_identity_supplement_error",
+    "identity_remember": "_handle_message_identity_remember",
+    "levels_filled": "_handle_message_levels_filled",
+    "levels_error": "_handle_message_levels_error",
+    "lookup_ready": "_handle_message_lookup_ready",
+    "levels_ready": "_handle_message_levels_ready",
+    "links_ready": "_handle_message_links_ready",
+    "love_ready": "_handle_message_love_ready",
+    "cancelled": "_handle_message_cancelled",
+    "captcha": "_handle_captcha_message",
+    "webview_test_done": "_handle_webview_test_done",
+    "embedded_done": "_handle_embedded_done",
+    "auto_login_done": "_handle_auto_login_done",
+    "switch_login_done": "_handle_switch_login_done",
+    "manual_cookie_probe": "_handle_message_manual_cookie_probe",
+    "rate_limit_ask": "_handle_message_rate_limit_ask",
+    "rate_limit": "_handle_message_rate_limit",
+    "error": "_handle_message_error",
+}
+
 class App(GuiLayoutMixin, MessageMixin, SettingsMixin, GridMixin, LookupMixin, WorkerMixin, ExportMixin, BatchIdentityMixin, ThemeMixin, ProfileMixin, ToolsMixin, LoginMixin, LinksMixin, PeopleReportMixin, SettingsRuntimeMixin, LoggingMixin):
     def __init__(self, root: tk.Tk) -> None:
         self.root = root
@@ -2840,78 +2878,11 @@ class App(GuiLayoutMixin, MessageMixin, SettingsMixin, GridMixin, LookupMixin, W
 
     def _handle_message(self, message: tuple) -> None:
         kind = message[0]
-        if kind == "log":
-            self._handle_message_log(message)
-        elif kind == "stage":
-            self._handle_message_stage(message)
-        elif kind == "done":
-            self._handle_message_done(message)
-        elif kind == "cancelled_partial":
-            self._handle_message_cancelled_partial(message)
-        elif kind == "probe_done":
-            self._handle_message_probe_done(message)
-        elif kind == "batch_profile":
-            self._handle_message_batch_profile(message)
-        elif kind == "batch_done":
-            self._handle_message_batch_done(message)
-        elif kind == "profile_ready":
-            self._handle_message_profile_ready(message)
-        elif kind == "enrich_done":
-            self._handle_message_enrich_done(message)
-        elif kind == "enrich_error":
-            self._handle_message_enrich_error(message)
-        elif kind == "identity_ask":
-            self._handle_message_identity_ask(message)
-        elif kind == "identity_supplement_progress":
-            self._handle_message_identity_supplement_progress(message)
-        elif kind == "identity_supplement_done":
-            self._handle_message_identity_supplement_done(message)
-        elif kind == "incomplete_retry_done":
-            self._handle_message_incomplete_retry_done(message)
-        elif kind == "incomplete_retry_stopped":
-            self._handle_message_incomplete_retry_stopped(message)
-        elif kind == "incomplete_retry_error":
-            self._handle_message_incomplete_retry_error(message)
-        elif kind == "identity_supplement_stopped":
-            self._handle_message_identity_supplement_stopped(message)
-        elif kind == "identity_supplement_error":
-            self._handle_message_identity_supplement_error(message)
-        elif kind == "identity_remember":
-            self._handle_message_identity_remember(message)
-        elif kind == "levels_filled":
-            self._handle_message_levels_filled(message)
-        elif kind == "levels_error":
-            self._handle_message_levels_error(message)
-        elif kind == "lookup_ready":
-            self._handle_message_lookup_ready(message)
-        elif kind == "levels_ready":
-            self._handle_message_levels_ready(message)
-        elif kind == "links_ready":
-            self._handle_message_links_ready(message)
-        elif kind == "love_ready":
-            self._handle_message_love_ready(message)
-        elif kind == "cancelled":
-            self._handle_message_cancelled(message)
-        elif kind == "captcha":
-            self._handle_captcha_message(message)
-        elif kind == "webview_test_done":
-            self._handle_webview_test_done(message)
-        elif kind == "embedded_done":
-            self._handle_embedded_done(message)
-        elif kind == "auto_login_done":
-            self._handle_auto_login_done(message)
-        elif kind == "switch_login_done":
-            self._handle_switch_login_done(message)
-        elif kind == "manual_cookie_probe":
-            self._handle_message_manual_cookie_probe(message)
-        elif kind == "rate_limit_ask":
-            self._handle_message_rate_limit_ask(message)
-        elif kind == "rate_limit":
-            self._handle_message_rate_limit(message)
-        elif kind == "error":
-            self._handle_message_error(message)
-        else:
+        handler_name = _MESSAGE_HANDLERS.get(kind)
+        if handler_name is None:
             self._append_log(f"未知消息类型：{kind}", "warn")
+            return
+        getattr(self, handler_name)(message)
 
     def _network_task_active(self) -> bool:
         return bool(
