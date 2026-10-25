@@ -24,7 +24,8 @@
 - 用户资料/关注页拆出为 `ProfileMixin`；
 - 日志/测试中心/使用说明/数据清理拆出为 `ToolsMixin`；
 - 登录/Cookie/WebView2 相关方法拆出为 `LoginMixin`；
-- 链接解析页拆出为 `LinksMixin`。
+- 链接解析页拆出为 `LinksMixin`；
+- 抓取 worker mixin 移到独立 `tieba_gui_workers.py`。
 
 ## [1.7.3] - 2026-10-26（已打包）
 
