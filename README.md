@@ -78,6 +78,19 @@ Android 旧 APK 保留，但已暂停更新，不再承诺与桌面版功能同�
 - **测试中心**：`Ctrl+Shift+C`，可做离线检查和验证码流程模拟；
 - **运行日志**：应用内查看/打开目录/删除，不写 Cookie 或正文。
 
+<!--
+截图占位：图片放到 docs/images/ 后，删除本注释并替换下面的路径。
+截图内容由作者决定，上传前必须脱敏。
+
+## 截图
+
+| 主界面 | 查用户 |
+|---|---|
+| ![主界面](docs/images/01-main.png) | ![查用户](docs/images/02-user-lookup.png) |
+
+![Excel 导出](docs/images/03-excel.png)
+-->
+
 ---
 
 ## 登录与 Cookie
