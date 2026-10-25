@@ -28,7 +28,8 @@
 - 抓取 worker mixin 移到独立 `tieba_gui_workers.py`；
 - 参与者/报表/区间对话拆出为 `PeopleReportMixin`；
 - 链接、导出、主题三个 mixin 移到独立模块；
-- 参与者/报表 mixin 移到独立 `tieba_gui_people.py`。
+- 参与者/报表 mixin 移到独立 `tieba_gui_people.py`；
+- 身份补全/批量标记 mixin 移到独立 `tieba_gui_identity.py`。
 
 ## [1.7.3] - 2026-10-26（已打包）
 
