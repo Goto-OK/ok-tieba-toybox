@@ -19,7 +19,8 @@
 - 查用户页拆出为独立 `tieba_gui_lookup.py`；
 - 抓取生命周期与 worker 拆出为 `WorkerMixin`；
 - 导出/打开结果方法拆出为 `ExportMixin`；
-- 身份补全与批量标记拆出为 `BatchIdentityMixin`。
+- 身份补全与批量标记拆出为 `BatchIdentityMixin`；
+- 主题应用拆出为 `ThemeMixin`。
 
 ## [1.7.3] - 2026-10-26（已打包）
 
