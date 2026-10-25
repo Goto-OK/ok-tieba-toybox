@@ -199,114 +199,19 @@ def _optional_int(text: str) -> Optional[int]:
         return None
 
 
-class App:
-    def __init__(self, root: tk.Tk) -> None:
-        self.root = root
-        self.log_queue: "queue.Queue[tuple]" = queue.Queue()
-        self.stop_event = threading.Event()
-        self.worker: threading.Thread | None = None
-        self.running = False
-        self.last_output: str | None = None
-        self.last_outputs: List[str] = []
-        self.last_threads: list = []
-        self._pending_retry = False
-        self._auto_filled = False
-        self._identity_choice_queue: "queue.Queue[tuple]" = queue.Queue()
-        self._rate_choice_queue: "queue.Queue[str]" = queue.Queue()
-        self._last_stage_times: Dict[str, float] = {}
-        self._manual_timing: Dict[str, float] = {}
-        self._supplement_stop = threading.Event()
-        self._guest_cookie: Dict[str, str] = {}
-        self._full_cookie_cache = ""
-        self._webview_cookie_session = False
-        self._tieba_uid_failed: set[str] = set()
-        self._user_id_failed: set[str] = set()
-        self._profile_topic_limit = 50
-        self._lookup_normalize_job: Optional[str] = None
-        self._emoji_window: Optional[tk.Toplevel] = None
-        self.lookup_entry: Optional[ttk.Entry] = None
-        self.lookup_native_edit: Optional[int] = None
-        self.lookup_native_host: Optional[tk.Frame] = None
-        self.love_native_edit: Optional[int] = None
-        self.love_native_host: Optional[tk.Frame] = None
-        self.emoji_btn: Optional[tk.Button] = None
-        self.blacklist = load_blacklist()
-        self.settings = load_settings()
-        post_cache().set_limit_mb(int(self.settings.get("post_cache_limit_mb", DEFAULT_LIMIT_MB)))
-        self.palette = resolve_palette(
-            str(self.settings.get("theme_mode", "light")),
-            str(self.settings.get("accent", "blue")),
-        )
-        self.mode_var = tk.StringVar(value="guest")
-        self._login_source = ""
-        self._last_webview_match: Optional[bool] = None
-        self._login_probe_token = 0
-        self._active_choice_window: Optional[tk.Toplevel] = None
-        self._usage_window: Optional[tk.Toplevel] = None
-        webview2.cleanup_profile_backup()
-        webview2.clear_switch_profile()
+class GuiLayoutMixin:
+    """版面构建方法，从 App 拆出，便于后续继续拆分。"""
 
-        self._build_ui()
-        self._apply_window_icon()
-        self._apply_theme()
-        self._apply_table_density()
-        self.notebook.bind("<<NotebookTabChanged>>", self._on_main_tab_changed)
-        saved_geometry = str(self.settings.get("window_geometry") or "")
-        match = re.match(r"(\d+)x(\d+)", saved_geometry)
-        if match:
-            saved_w, saved_h = int(match.group(1)), int(match.group(2))
-            # 旧版本可能记住了窄窗口；小于新默认值时恢复默认尺寸。
-            screen_w = self.root.winfo_screenwidth()
-            screen_h = self.root.winfo_screenheight()
-            width = max(1300, min(saved_w, screen_w - 100)) if saved_w >= 1300 else min(1400, screen_w - 100)
-            height = max(820, min(saved_h, screen_h - 120)) if saved_h >= 820 else min(900, screen_h - 120)
-            x = max(0, (screen_w - width) // 2)
-            y = max(0, (screen_h - height) // 2)
-            try:
-                self.root.geometry(f"{width}x{height}+{x}+{y}")
-            except tk.TclError:
-                pass
-        self._set_output(default_output_path())
-        self.root.after(120, self._poll_queue)
-        self.root.protocol("WM_DELETE_WINDOW", self._on_close)
-        self.root.bind("<F1>", lambda _event: self._open_usage_window())
-        self.root.bind("<Control-Shift-C>", self._show_test_center)
-        self.root.bind("<Escape>", self._on_escape)
+    lookup_entry: Any
+    lookup_native_edit: Any
+    lookup_native_host: Any
+    love_native_edit: Any
+    love_native_host: Any
+    emoji_btn: Any
 
-        saved = load_cookie()
-        if saved:
-            self.cookie_var.set(saved)
-            self._sync_login_from_cookie()
-            self._login_source = "已保存 Cookie"
-            self._append_log("已自动填入上次保存的登录信息（如果失效，请重新粘贴一次）。", "muted")
-        if self.settings.get("follow_enhance"):
-            self.mode_var.set("login")
-            if not parse_cookie_input(self.cookie_var.get()).get("BDUSS"):
-                self._append_log("关注检测已开启，但尚未完成登录；请先登录后再开始统计。", "muted")
-        else:
-            self.mode_var.set("guest")
-        self._apply_mode_ui()
-        self._refresh_webview_status()
-        self._apply_risk_ui()
-        self._apply_proxy()
-        self._restore_last_result()
-        self.root.after(300, self._maybe_onboarding)
+    def __getattr__(self, name: str) -> Any:
+        raise AttributeError(name)
 
-    def _apply_window_icon(self) -> None:
-        for path in (
-            os.path.join(resource_dir(), "assets", "app.ico"),
-            os.path.join(resource_dir(), "app.ico"),
-        ):
-            if not os.path.isfile(path):
-                continue
-            try:
-                self.root.iconbitmap(default=path)
-                self.root.iconbitmap(path)
-                return
-            except tk.TclError:
-                continue
-
-    # ------------------------------------------------------------------ UI
     def _build_ui(self) -> None:
         self.root.title(f"{APP_TITLE} v{VERSION}")
         screen_w = self.root.winfo_screenwidth()
@@ -893,356 +798,6 @@ class App:
         self.start_btn.configure(state="normal")
         self._append_log("把帖子链接粘贴到上面，然后点「开始统计」。", "muted")
 
-    # ------------------------------------------------------------- actions
-    def _set_output(self, path: str) -> None:
-        self.output_var.set(path)
-
-    def _choose_output(self) -> None:
-        path = filedialog.asksaveasfilename(
-            title="选择保存位置",
-            defaultextension=".xlsx",
-            filetypes=[("Excel 工作簿", "*.xlsx")],
-            initialfile=os.path.basename(self.output_var.get() or "OK的贴吧玩具箱.xlsx"),
-            initialdir=os.path.dirname(self.output_var.get() or ""),
-        )
-        if path:
-            self._set_output(path)
-
-    def _on_login_method_changed(self) -> None:
-        method = self.login_method_var.get()
-        if hasattr(self, "_refresh_webview_status"):
-            self._refresh_webview_status()
-        if not getattr(self, "_login_fields_expanded", True):
-            return
-        if method == "cookie":
-            self.bduss_frame.grid_remove()
-            self.cookie_frame.grid()
-        else:
-            self.cookie_frame.grid_remove()
-            self.bduss_frame.grid()
-
-    def _extract_bduss(self, raw: str) -> str:
-        text = (raw or "").strip()
-        if not text:
-            return ""
-        cookies = parse_cookie_input(text)
-        if cookies.get("BDUSS"):
-            return str(cookies["BDUSS"]).strip()
-        if text.upper().startswith("BDUSS="):
-            return text.split("=", 1)[1].strip()
-        if ";" not in text and " " not in text:
-            return text
-        return ""
-
-    def _paste_bduss(self) -> None:
-        try:
-            text = self.root.clipboard_get()
-        except tk.TclError:
-            return
-        value = self._extract_bduss(text)
-        if not value:
-            messagebox.showwarning("不是 BDUSS", "剪贴板里没有识别到 BDUSS。", parent=self.root)
-            return
-        self.login_method_var.set("bduss")
-        self.bduss_var.set(value)
-        self._apply_bduss()
-
-    def _apply_bduss(self) -> None:
-        value = self._extract_bduss(self.bduss_var.get())
-        if not value:
-            messagebox.showwarning("需要 BDUSS", "请填写 BDUSS。", parent=self.root)
-            self.bduss_entry.focus_set()
-            return
-        self.bduss_var.set(value)
-        self.cookie_var.set(f"BDUSS={value}")
-        self._full_cookie_cache = ""
-        self._login_source = "手动粘贴"
-        self._last_webview_match = None
-        self._login_probe_token += 1
-        if self.remember_bduss_var.get():
-            if save_cookie(self.cookie_var.get()):
-                self.status_var.set("BDUSS 已加密保存")
-            else:
-                self.status_var.set("BDUSS 保存失败，本次仍可使用")
-        else:
-            clear_cookie()
-            self.status_var.set("BDUSS 仅本次使用")
-        self._refresh_webview_status()
-        self._append_log("登录方式：仅 BDUSS", "muted")
-
-    def _cookie_completeness(self, cookies: Dict[str, str]) -> List[str]:
-        missing: List[str] = []
-        if not str(cookies.get("STOKEN") or "").strip():
-            missing.append("STOKEN（关注检测可能不完整）")
-        if not str(cookies.get("TIEBAUID") or "").strip() and not str(
-            cookies.get("TIEBA_SID") or ""
-        ).strip():
-            missing.append("TIEBAUID/TIEBA_SID（贴吧身份字段可能缺失）")
-        if not str(cookies.get("BAIDUID") or "").strip():
-            missing.append("BAIDUID（匿名标识缺失）")
-        return missing
-
-    def _start_cookie_probe(self, cookies: Dict[str, str], token: int) -> None:
-        if self._network_task_active():
-            return
-        self.status_var.set("正在预检登录信息…")
-        missing = self._cookie_completeness(cookies)
-
-        def worker() -> None:
-            warning = ""
-            logged = False
-            try:
-                probe = Fetcher(cookie=cookies, delay=0, verbose=False)
-            except Exception as error:  # noqa: BLE001
-                self._post(("manual_cookie_probe", token, f"预检初始化失败：{error}", False, missing))
-                return
-            try:
-                probe.get("https://tieba.baidu.com/")
-                info = probe.get("https://tieba.baidu.com/f/user/json_userinfo")
-                try:
-                    payload = json.loads(info.text)
-                except (TypeError, ValueError):
-                    warning = "预检返回无法解析，未能确认登录态"
-                else:
-                    data = payload.get("data") if isinstance(payload, dict) else None
-                    if not isinstance(data, dict):
-                        data = payload if isinstance(payload, dict) else {}
-                    logged = bool(
-                        data.get("user_id")
-                        or data.get("user_name")
-                        or data.get("name")
-                    )
-                    if not logged:
-                        warning = "预检未确认登录态，Cookie 可能已失效或只有 BDUSS"
-            except CaptchaError:
-                warning = "预检仍被验证码拦截，Cookie 可能不可用"
-            except Exception as error:  # noqa: BLE001
-                warning = f"预检失败：{error}"
-            finally:
-                probe.close()
-            self._post(("manual_cookie_probe", token, warning, logged, missing))
-
-        threading.Thread(target=worker, daemon=True).start()
-
-    def _apply_cookie(self) -> None:
-        raw = self.cookie_var.get().strip()
-        if not raw:
-            messagebox.showwarning("需要 Cookie", "请粘贴完整 Cookie。", parent=self.root)
-            self.cookie_entry.focus_set()
-            return
-        if not webview2.has_login_cookie(parse_cookie_input(raw)):
-            messagebox.showwarning(
-                "Cookie 不完整",
-                "完整 Cookie 里没有 BDUSS/TIEBA_SID，无法确认登录态。",
-                parent=self.root,
-            )
-            return
-        self._full_cookie_cache = raw
-        self._login_source = "手动粘贴"
-        self._last_webview_match = None
-        self.login_method_var.set("cookie")
-        self._on_login_method_changed()
-        if self.remember_cookie_var.get():
-            if save_cookie(raw):
-                self.status_var.set("完整 Cookie 已加密保存")
-            else:
-                self.status_var.set("完整 Cookie 保存失败，本次仍可使用")
-        else:
-            clear_cookie()
-            self.status_var.set("完整 Cookie 仅本次使用")
-        self._refresh_webview_status()
-        self._append_log("登录方式：完整 Cookie", "muted")
-        self._login_probe_token += 1
-        self._start_cookie_probe(parse_cookie_input(raw), self._login_probe_token)
-
-    def _remember_current_login(self) -> bool:
-        if self.login_method_var.get() == "bduss":
-            return bool(self.remember_bduss_var.get())
-        return bool(self.remember_cookie_var.get())
-
-    def _current_cookie_text(self) -> str:
-        if self.login_method_var.get() == "bduss":
-            value = self._extract_bduss(self.bduss_var.get())
-            return f"BDUSS={value}" if value else ""
-        return self.cookie_var.get().strip()
-
-    def _sync_bduss_from_cookie(self, *_args) -> None:
-        """完整 Cookie 变化时，同步提取 BDUSS，便于切换到仅 BDUSS。"""
-        raw = self.cookie_var.get().strip()
-        if not raw:
-            return
-        cookies = parse_cookie_input(raw)
-        value = cookies.get("BDUSS", "")
-        if value and set(cookies) != {"BDUSS"}:
-            self._full_cookie_cache = raw
-        if value and self.bduss_var.get() != value:
-            self.bduss_var.set(value)
-
-    def _sync_login_from_cookie(self) -> None:
-        raw = self.cookie_var.get().strip()
-        if not raw:
-            return
-        cookies = parse_cookie_input(raw)
-        if cookies.get("BDUSS") and set(cookies) == {"BDUSS"}:
-            self.login_method_var.set("bduss")
-            self.bduss_var.set(str(cookies["BDUSS"]))
-            self.remember_bduss_var.set(True)
-        else:
-            self.login_method_var.set("cookie")
-            self.remember_cookie_var.set(True)
-            self._full_cookie_cache = raw
-
-    def _clear_cookie(self) -> None:
-        self.cookie_var.set("")
-        self.bduss_var.set("")
-        self._full_cookie_cache = ""
-        self._login_source = ""
-        self._last_webview_match = None
-        self._login_probe_token += 1
-        if clear_cookie():
-            self._append_log("已清除本机保存的 Cookie。", "muted")
-        else:
-            self._append_log("已清空输入框（没有可删除的已保存 Cookie）。", "muted")
-
-    def _paste_cookie(self) -> None:
-        try:
-            text = self.root.clipboard_get()
-        except tk.TclError:
-            messagebox.showinfo(
-                "剪贴板是空的",
-                "先在浏览器里复制 Cookie，再点这个按钮。\n\n"
-                "复制方法：F12 → 网络/Network → 刷新 → 点第一个帖子请求 → "
-                "标头/Headers → 请求标头里的 Cookie，复制冒号后面的整段。",
-                parent=self.root,
-            )
-            return
-        text = text.strip()
-        if text.lower().startswith("cookie:"):
-            text = text.split(":", 1)[1].strip()
-        # 只保留有效的 k=v 片段
-        keep = [part.strip() for part in re.split(r"[;\n\r]+", text) if "=" in part]
-        if not keep:
-            messagebox.showwarning(
-                "剪贴板内容不像 Cookie", "剪贴板里没有找到 k=v 形式的 Cookie，请重新复制。", parent=self.root
-            )
-            return
-        self.cookie_var.set("; ".join(keep))
-        self._append_log("已从剪贴板粘贴 Cookie。", "ok")
-
-    def _show_bduss_help(self) -> None:
-        messagebox.showinfo("如何获取 BDUSS", BDUSS_HELP, parent=self.root)
-        self.bduss_entry.focus_set()
-
-    def _clear_bduss(self) -> None:
-        self.bduss_var.set("")
-        if self.login_method_var.get() == "bduss":
-            self.cookie_var.set("")
-        clear_cookie()
-        self.status_var.set("已清除 BDUSS")
-        self._append_log("已清除 BDUSS。", "muted")
-
-    def _show_cookie_help(self) -> None:
-        messagebox.showinfo("如何获取完整 Cookie", COOKIE_HELP, parent=self.root)
-        self.cookie_entry.focus_set()
-
-    def _open_readme(self) -> None:
-        for name in ("使用说明.txt", "README.md"):
-            path = os.path.join(resource_dir(), name)
-            if os.path.isfile(path):
-                try:
-                    os.startfile(path)  # type: ignore[attr-defined]
-                    return
-                except OSError:
-                    break
-        messagebox.showinfo(
-            "使用说明",
-            "1. 粘贴帖子链接（每行一个）\n"
-            "2. 选择保存位置\n"
-            "3. 点「开始统计」\n"
-            "4. 完成后点「打开 Excel」\n\n"
-            "如果提示被安全验证拦截，点「如何获取？」，按说明把 Cookie 粘贴进来。",
-            parent=self.root,
-        )
-
-    def _open_result(self) -> None:
-        raw = self.last_outputs or ([self.last_output] if self.last_output else [])
-        paths = [path for path in raw if isinstance(path, str) and os.path.isfile(path)]
-        if not paths:
-            return
-        if len(paths) > 1:
-            choice = self._ask_choice(
-                "打开拆分文件",
-                f"共 {len(paths)} 个文件，选择打开方式。",
-                [("只打开第一个", False), ("全部打开", True), ("取消", None)],
-                default=0,
-            )
-            if choice is None:
-                return
-            if not choice:
-                paths = paths[:1]
-        failed = []
-        for path in paths:
-            try:
-                os.startfile(path)  # type: ignore[attr-defined]
-            except OSError:
-                failed.append(path)
-        if failed:
-            messagebox.showerror(
-                "部分文件打不开", "打不开：" + chr(10) + chr(10).join(failed), parent=self.root
-            )
-
-    # ------------------------------------------------------- 参与者与查用户
-    def _aggregate_users(self, threads=None):
-        buckets: Dict[str, Dict[str, Any]] = {}
-        for thread in (self.last_threads if threads is None else threads):
-            for item in thread.user_stats():
-                key = (
-                    f"uid:{item['uid']}"
-                    if item.get("uid")
-                    else (
-                        f"portrait:{str(item.get('portrait') or '').split('?')[0]}"
-                        if item.get("portrait")
-                        else (f"name:{item['username']}" if item.get("username") else f"anon:{item['name']}")
-                    )
-                )
-                bucket = buckets.setdefault(
-                    key,
-                    {
-                        "name": item["name"],
-                        "username": item["username"],
-                        "uid": item["uid"],
-                        "tieba_uid": item.get("tieba_uid") or "",
-                        "portrait": item["portrait"],
-                        "level": item["level"],
-                        "badge": item["badge"],
-                        "floor": 0,
-                        "comment": 0,
-                        "total": 0,
-                        "aliases": set(),
-                    },
-                )
-                bucket["floor"] += item["floor_count"]
-                bucket["comment"] += item["comment_count"]
-                bucket["total"] += item["total"]
-                if item.get("name") and item["name"] != bucket["name"]:
-                    bucket["aliases"].add(bucket["name"])
-                    bucket["name"] = item["name"]
-                bucket["aliases"].update(item.get("aliases") or [])
-                if not bucket["username"] and item["username"]:
-                    bucket["username"] = item["username"]
-                if not bucket["portrait"] and item["portrait"]:
-                    bucket["portrait"] = item["portrait"]
-                if not bucket["tieba_uid"] and item.get("tieba_uid"):
-                    bucket["tieba_uid"] = item["tieba_uid"]
-                if not bucket["level"] and item["level"]:
-                    bucket["level"] = item["level"]
-                if not bucket["badge"] and item["badge"]:
-                    bucket["badge"] = item["badge"]
-        users = list(buckets.values())
-        for user in users:
-            user["aliases"] = sorted(a for a in user.get("aliases", ()) if a and a != user["name"])
-        users.sort(key=lambda item: (-item["total"], -item["floor"], item["name"]))
-        return users
 
     def _build_people_tab(self) -> None:
         self._profile_cache: Dict[str, Dict[str, Any]] = {}
@@ -1676,6 +1231,775 @@ class App:
         self._profile_post_urls: Dict[str, str] = {}
 
         self.post_nb.bind("<<NotebookTabChanged>>", self._on_tab_changed)
+
+
+    def _build_lookup_tab(self) -> None:
+        page = self.tab_lookup
+        query = tk.Frame(page, bg="#ffffff", padx=12, pady=8)
+        query.pack(fill="x")
+        self.lookup_query_bar = query
+        tk.Label(query, text="查询方式：", bg="#ffffff", fg="#475569", font=("Microsoft YaHei UI", 9)).pack(
+            side="left"
+        )
+        self.lookup_mode_var = tk.StringVar(value="用户名")
+        ttk.Combobox(
+            query,
+            values=("用户名", "贴吧ID", "昵称", "用户ID"),
+            textvariable=self.lookup_mode_var,
+            width=10,
+            state="readonly",
+        ).pack(side="left")
+        tk.Label(query, text="  内容：", bg="#ffffff", fg="#475569", font=("Microsoft YaHei UI", 9)).pack(
+            side="left"
+        )
+        self.lookup_query_var = tk.StringVar()
+        self.lookup_entry = None
+        self.lookup_native_edit = None
+        self.lookup_native_host = None
+        self.emoji_btn = None
+        query_button = tk.Button(
+            query,
+            text="查询",
+            command=self._on_lookup,
+            bg="#1F4E79",
+            fg="#ffffff",
+            activebackground="#163b5c",
+            activeforeground="#ffffff",
+            relief="flat",
+            padx=16,
+            pady=6,
+            cursor="hand2",
+            font=("Microsoft YaHei UI", 9, "bold"),
+        )
+        query_button.pack(side="right", padx=(8, 0))
+        if os.name == "nt" and self._create_lookup_native_edit():
+            self.lookup_query_var.trace_add("write", self._on_lookup_query_changed)
+            self.root.after(120, self._poll_native_lookup_text)
+        else:
+            self._build_lookup_fallback_entry(query, query_button)
+
+        options = tk.Frame(page, bg="#ffffff", padx=12, pady=4)
+        options.pack(fill="x")
+        self.lookup_options = options
+        tk.Label(options, text="条数：", bg="#ffffff", fg="#475569", font=("Microsoft YaHei UI", 8)).pack(
+            side="left"
+        )
+        self.lookup_count_var = tk.StringVar(value="50")
+        self.lookup_count_box = ttk.Spinbox(
+            options,
+            from_=5,
+            to=1000,
+            increment=10,
+            width=7,
+            textvariable=self.lookup_count_var,
+            state="normal",
+            takefocus=True,
+        )
+        self.lookup_count_box.pack(side="left")
+        self.lookup_count_box.bind(
+            "<FocusIn>",
+            lambda _event: self.lookup_count_box.selection_range(0, "end"),
+            add="+",
+        )
+        tk.Label(options, text="  日期：", bg="#ffffff", fg="#475569", font=("Microsoft YaHei UI", 8)).pack(
+            side="left"
+        )
+        self.lookup_date_mode_var = tk.StringVar(value="近期")
+        self.lookup_date_mode_box = ttk.Combobox(
+            options,
+            values=("近期", "指定日期"),
+            textvariable=self.lookup_date_mode_var,
+            width=9,
+            state="readonly",
+        )
+        self.lookup_date_mode_box.pack(side="left")
+        self.lookup_date_mode_box.bind("<<ComboboxSelected>>", lambda _event: self._on_lookup_date_changed())
+        self.lookup_status = tk.Label(
+            options, text="", bg="#ffffff", fg="#8a94a6", font=("Microsoft YaHei UI", 8)
+        )
+        self.lookup_status.pack(side="right")
+
+        date_row = tk.Frame(page, bg="#ffffff", padx=12, pady=2)
+        self.lookup_date_row = date_row
+        self.lookup_start_var = tk.StringVar()
+        self.lookup_end_var = tk.StringVar()
+        self.lookup_start_parts = self._date_group(date_row, "开始", 3)
+        self.lookup_end_parts = self._date_group(date_row, "结束")
+        tk.Label(
+            date_row, text="  时间偏向：", bg="#ffffff", fg="#475569", font=("Microsoft YaHei UI", 8)
+        ).pack(side="left")
+        self.lookup_prefer_var = tk.StringVar(value="优先最近")
+        ttk.Combobox(
+            date_row,
+            values=("优先最近", "优先最早"),
+            textvariable=self.lookup_prefer_var,
+            width=10,
+            state="readonly",
+        ).pack(side="left")
+        for _var in (*self.lookup_start_parts, *self.lookup_end_parts):
+            _var.trace_add("write", lambda *_: self._on_lookup_parts_changed())
+        self.lookup_start_var.set(self._group_date(self.lookup_start_parts))
+        self.lookup_end_var.set(self._group_date(self.lookup_end_parts))
+
+        summary = tk.Frame(page, bg="#eef1f5", padx=12, pady=4)
+        summary.pack(fill="x")
+        self.lookup_summary = summary
+        self.lookup_info = tk.Label(
+            summary,
+            text="查询方式：用户名 / 贴吧ID / 昵称 / 用户ID。贴吧ID是个人主页显示的ID。",
+            anchor="w",
+            bg="#eef1f5",
+            fg="#64748b",
+            font=("Microsoft YaHei UI", 9),
+            wraplength=590,
+            justify="left",
+        )
+        self.lookup_info.pack(fill="x")
+        self.lookup_info.bind("<Button-3>", lambda _event: self._copy_lookup_summary())
+        summary_bottom = tk.Frame(summary, bg="#eef1f5")
+        summary_bottom.pack(fill="x", pady=(2, 0))
+        self.lookup_copy_btn = ttk.Button(
+            summary_bottom, text="复制摘要", command=self._copy_lookup_summary, width=9
+        )
+        self.lookup_copy_btn.pack(side="right", padx=(6, 0))
+        traffic = tk.Frame(summary_bottom, bg="#eef1f5")
+        traffic.pack(side="right", padx=(8, 0))
+        tk.Label(
+            traffic, text="红绿灯：", bg="#eef1f5", fg="#6b7280", font=("Microsoft YaHei UI", 8)
+        ).pack(side="left")
+        self.lookup_traffic_labels = {}
+        for key, color in (
+            ("ban", self.palette["danger"]),
+            ("warn", self.palette["warning"]),
+            ("safe", self.palette["safe"]),
+        ):
+            label = tk.Label(
+                traffic,
+                text="●",
+                fg="#d1d5db",
+                bg="#eef1f5",
+                font=("Microsoft YaHei UI", 14),
+            )
+            label.pack(side="left", padx=(2, 0))
+            self.lookup_traffic_labels[key] = (label, color)
+        self.lookup_traffic_text = tk.Label(
+            traffic, text="", bg="#eef1f5", fg="#6b7280", font=("Microsoft YaHei UI", 8)
+        )
+        self.lookup_traffic_text.pack(side="left", padx=(8, 0))
+        self.lookup_summary.bind(
+            "<Configure>",
+            lambda event: self.lookup_info.configure(wraplength=max(300, event.width - 24)),
+        )
+
+        cache_row = tk.Frame(page, bg="#eef1f5", padx=12)
+        self.lookup_cache_row = cache_row
+        self.lookup_cache_label = tk.Label(
+            cache_row,
+            text="",
+            anchor="w",
+            bg="#eef1f5",
+            fg="#2563eb",
+            font=("Microsoft YaHei UI", 8),
+        )
+        self.lookup_cache_label.pack(side="left")
+
+        bottom = tk.Frame(page, bg="#eef1f5", padx=10, pady=6)
+        bottom.pack(side="bottom", fill="x")
+        self.lookup_bottom = bottom
+        self.lookup_report_btn = ttk.Button(
+            bottom, text="导出此人报告", command=self._export_lookup_report, width=14
+        )
+        self.lookup_posts_btn = ttk.Button(
+            bottom, text="导出发言", command=self._export_lookup_posts, width=10
+        )
+        self.lookup_open_profile_btn = ttk.Button(
+            bottom, text="打开主页", command=self._open_lookup_profile, width=10
+        )
+        self.lookup_open_profile_btn.pack(side="left", padx=(6, 0))
+        self.lookup_probe_btn = ttk.Button(
+            bottom, text="探测候选关注", command=self._probe_lookup_forums, width=14
+        )
+        ttk.Button(bottom, text="复制全部", command=self._copy_lookup, width=10).pack(side="right")
+        self.lookup_forum_note = tk.Label(
+            bottom,
+            text="",
+            bg="#eef1f5",
+            fg="#b45309",
+            wraplength=620,
+            justify="left",
+            font=("Microsoft YaHei UI", 8),
+        )
+        self.lookup_forum_note.pack(side="left", fill="x", expand=True)
+
+        paned = ttk.PanedWindow(page, orient="horizontal")
+        paned.pack(fill="both", expand=True, padx=10, pady=(0, 6))
+        self.lookup_paned = paned
+        left = tk.Frame(paned)
+        right = tk.Frame(paned)
+        paned.add(left, weight=1)
+        paned.add(right, weight=2)
+        tk.Label(
+            left,
+            text="关注的贴吧",
+            bg="#eef1f5",
+            fg="#475569",
+            font=("Microsoft YaHei UI", 9, "bold"),
+        ).pack(anchor="w")
+        lookup_forum_wrap = tk.Frame(left, bg="#eef1f5")
+        lookup_forum_wrap.pack(fill="both", expand=True)
+        self.lookup_forum_tree = ttk.Treeview(
+            lookup_forum_wrap, columns=("bar", "level", "level_source", "source"), show="headings", height=14
+        )
+        self.lookup_forum_tree.heading("bar", text="贴吧")
+        self.lookup_forum_tree.heading("level", text="等级")
+        self.lookup_forum_tree.heading("level_source", text="等级来源")
+        self.lookup_forum_tree.heading("source", text="关注来源")
+        self.lookup_forum_tree.column("bar", width=120, anchor="w")
+        self.lookup_forum_tree.column("level", width=50, anchor="center")
+        self.lookup_forum_tree.column("level_source", width=90, anchor="center")
+        self.lookup_forum_tree.column("source", width=80, anchor="center")
+        lookup_forum_yscroll = ttk.Scrollbar(
+            lookup_forum_wrap, orient="vertical", command=self.lookup_forum_tree.yview
+        )
+        self.lookup_forum_tree.configure(yscrollcommand=lookup_forum_yscroll.set)
+        self.lookup_forum_tree.pack(side="left", fill="both", expand=True)
+        lookup_forum_yscroll.pack(side="right", fill="y")
+        self.lookup_forum_tree.bind("<Double-1>", lambda _event: self._open_lookup_forum())
+        self._configure_colors(self.lookup_forum_tree)
+        self._make_sortable(
+            self.lookup_forum_tree,
+            {"bar": "贴吧", "level": "等级", "level_source": "等级来源", "source": "关注来源"},
+            {"level"},
+        )
+        self._bind_loaded_filter(
+            self.lookup_forum_tree,
+            {"bar": ("贴吧", False), "level": None, "level_source": ("等级来源", False), "source": ("关注来源", False)},
+        )
+
+        tk.Label(
+            right,
+            text="发言",
+            bg="#eef1f5",
+            fg="#475569",
+            font=("Microsoft YaHei UI", 9, "bold"),
+        ).pack(anchor="w")
+        post_wrap = tk.Frame(right, bg="#eef1f5")
+        post_wrap.pack(fill="both", expand=True)
+        self.lookup_post_tree = ttk.Treeview(
+            post_wrap, columns=("time", "type", "bar", "title", "content", "source"), show="headings", height=14
+        )
+        self.lookup_post_tree.heading("time", text="日期")
+        self.lookup_post_tree.heading("type", text="类型")
+        self.lookup_post_tree.heading("bar", text="贴吧")
+        self.lookup_post_tree.heading("title", text="标题")
+        self.lookup_post_tree.heading("content", text="内容")
+        self.lookup_post_tree.heading("source", text="数据来源")
+        self.lookup_post_tree.column("time", width=90, anchor="center")
+        self.lookup_post_tree.column("type", width=55, anchor="center")
+        self.lookup_post_tree.column("bar", width=100, anchor="w")
+        self.lookup_post_tree.column("title", width=230, anchor="w")
+        self.lookup_post_tree.column("content", width=300, anchor="w")
+        self.lookup_post_tree.column("source", width=100, anchor="center")
+        self.lookup_post_tree["displaycolumns"] = ("time", "type", "bar", "title", "content")
+        post_xscroll = ttk.Scrollbar(post_wrap, orient="horizontal", command=self.lookup_post_tree.xview)
+        post_yscroll = ttk.Scrollbar(post_wrap, orient="vertical", command=self.lookup_post_tree.yview)
+        self.lookup_post_tree.configure(xscrollcommand=post_xscroll.set, yscrollcommand=post_yscroll.set)
+        self.lookup_post_tree.grid(row=0, column=0, sticky="nsew")
+        post_yscroll.grid(row=0, column=1, sticky="ns")
+        post_xscroll.grid(row=1, column=0, sticky="ew")
+        post_wrap.rowconfigure(0, weight=1)
+        post_wrap.columnconfigure(0, weight=1)
+        self.lookup_post_tree.bind("<Double-1>", lambda _event: self._open_lookup_post())
+        self._configure_colors(self.lookup_post_tree)
+        self._make_sortable(
+            self.lookup_post_tree,
+            {"time": "日期", "type": "类型", "bar": "贴吧", "title": "标题", "content": "内容"},
+            {"time"},
+        )
+        self._bind_loaded_filter(
+            self.lookup_post_tree,
+            {
+                "time": ("日期", True),
+                "type": ("类型", False),
+                "bar": ("贴吧", False),
+                "title": ("标题", False),
+                "content": ("内容", False),
+            },
+        )
+        self._lookup_post_urls: Dict[str, str] = {}
+        self._lookup_forum_names: Dict[str, str] = {}
+        self._lookup_cache: Dict[str, tuple[float, Dict[str, Any]]] = {}
+        self._lookup_topic_limit = 50
+        self.lookup_topic_btn = ttk.Button(
+            bottom, text="继续抓主题", command=self._continue_lookup_topics, width=12
+        )
+        self._lookup_generation = 0
+        self.lookup_date_mode_var.trace_add("write", lambda *_: self._on_lookup_date_changed())
+        for _var in (self.lookup_count_var, self.lookup_prefer_var):
+            _var.trace_add("write", lambda *_: self._on_lookup_date_changed())
+        self._toggle_lookup_dates()
+
+
+class App(GuiLayoutMixin):
+    def __init__(self, root: tk.Tk) -> None:
+        self.root = root
+        self.log_queue: "queue.Queue[tuple]" = queue.Queue()
+        self.stop_event = threading.Event()
+        self.worker: threading.Thread | None = None
+        self.running = False
+        self.last_output: str | None = None
+        self.last_outputs: List[str] = []
+        self.last_threads: list = []
+        self._pending_retry = False
+        self._auto_filled = False
+        self._identity_choice_queue: "queue.Queue[tuple]" = queue.Queue()
+        self._rate_choice_queue: "queue.Queue[str]" = queue.Queue()
+        self._last_stage_times: Dict[str, float] = {}
+        self._manual_timing: Dict[str, float] = {}
+        self._supplement_stop = threading.Event()
+        self._guest_cookie: Dict[str, str] = {}
+        self._full_cookie_cache = ""
+        self._webview_cookie_session = False
+        self._tieba_uid_failed: set[str] = set()
+        self._user_id_failed: set[str] = set()
+        self._profile_topic_limit = 50
+        self._lookup_normalize_job: Optional[str] = None
+        self._emoji_window: Optional[tk.Toplevel] = None
+        self.lookup_entry: Optional[ttk.Entry] = None
+        self.lookup_native_edit: Optional[int] = None
+        self.lookup_native_host: Optional[tk.Frame] = None
+        self.love_native_edit: Optional[int] = None
+        self.love_native_host: Optional[tk.Frame] = None
+        self.emoji_btn: Optional[tk.Button] = None
+        self.blacklist = load_blacklist()
+        self.settings = load_settings()
+        post_cache().set_limit_mb(int(self.settings.get("post_cache_limit_mb", DEFAULT_LIMIT_MB)))
+        self.palette = resolve_palette(
+            str(self.settings.get("theme_mode", "light")),
+            str(self.settings.get("accent", "blue")),
+        )
+        self.mode_var = tk.StringVar(value="guest")
+        self._login_source = ""
+        self._last_webview_match: Optional[bool] = None
+        self._login_probe_token = 0
+        self._active_choice_window: Optional[tk.Toplevel] = None
+        self._usage_window: Optional[tk.Toplevel] = None
+        webview2.cleanup_profile_backup()
+        webview2.clear_switch_profile()
+
+        self._build_ui()
+        self._apply_window_icon()
+        self._apply_theme()
+        self._apply_table_density()
+        self.notebook.bind("<<NotebookTabChanged>>", self._on_main_tab_changed)
+        saved_geometry = str(self.settings.get("window_geometry") or "")
+        match = re.match(r"(\d+)x(\d+)", saved_geometry)
+        if match:
+            saved_w, saved_h = int(match.group(1)), int(match.group(2))
+            # 旧版本可能记住了窄窗口；小于新默认值时恢复默认尺寸。
+            screen_w = self.root.winfo_screenwidth()
+            screen_h = self.root.winfo_screenheight()
+            width = max(1300, min(saved_w, screen_w - 100)) if saved_w >= 1300 else min(1400, screen_w - 100)
+            height = max(820, min(saved_h, screen_h - 120)) if saved_h >= 820 else min(900, screen_h - 120)
+            x = max(0, (screen_w - width) // 2)
+            y = max(0, (screen_h - height) // 2)
+            try:
+                self.root.geometry(f"{width}x{height}+{x}+{y}")
+            except tk.TclError:
+                pass
+        self._set_output(default_output_path())
+        self.root.after(120, self._poll_queue)
+        self.root.protocol("WM_DELETE_WINDOW", self._on_close)
+        self.root.bind("<F1>", lambda _event: self._open_usage_window())
+        self.root.bind("<Control-Shift-C>", self._show_test_center)
+        self.root.bind("<Escape>", self._on_escape)
+
+        saved = load_cookie()
+        if saved:
+            self.cookie_var.set(saved)
+            self._sync_login_from_cookie()
+            self._login_source = "已保存 Cookie"
+            self._append_log("已自动填入上次保存的登录信息（如果失效，请重新粘贴一次）。", "muted")
+        if self.settings.get("follow_enhance"):
+            self.mode_var.set("login")
+            if not parse_cookie_input(self.cookie_var.get()).get("BDUSS"):
+                self._append_log("关注检测已开启，但尚未完成登录；请先登录后再开始统计。", "muted")
+        else:
+            self.mode_var.set("guest")
+        self._apply_mode_ui()
+        self._refresh_webview_status()
+        self._apply_risk_ui()
+        self._apply_proxy()
+        self._restore_last_result()
+        self.root.after(300, self._maybe_onboarding)
+
+    def _apply_window_icon(self) -> None:
+        for path in (
+            os.path.join(resource_dir(), "assets", "app.ico"),
+            os.path.join(resource_dir(), "app.ico"),
+        ):
+            if not os.path.isfile(path):
+                continue
+            try:
+                self.root.iconbitmap(default=path)
+                self.root.iconbitmap(path)
+                return
+            except tk.TclError:
+                continue
+
+    # ------------------------------------------------------------------ UI
+
+    # ------------------------------------------------------------- actions
+    def _set_output(self, path: str) -> None:
+        self.output_var.set(path)
+
+    def _choose_output(self) -> None:
+        path = filedialog.asksaveasfilename(
+            title="选择保存位置",
+            defaultextension=".xlsx",
+            filetypes=[("Excel 工作簿", "*.xlsx")],
+            initialfile=os.path.basename(self.output_var.get() or "OK的贴吧玩具箱.xlsx"),
+            initialdir=os.path.dirname(self.output_var.get() or ""),
+        )
+        if path:
+            self._set_output(path)
+
+    def _on_login_method_changed(self) -> None:
+        method = self.login_method_var.get()
+        if hasattr(self, "_refresh_webview_status"):
+            self._refresh_webview_status()
+        if not getattr(self, "_login_fields_expanded", True):
+            return
+        if method == "cookie":
+            self.bduss_frame.grid_remove()
+            self.cookie_frame.grid()
+        else:
+            self.cookie_frame.grid_remove()
+            self.bduss_frame.grid()
+
+    def _extract_bduss(self, raw: str) -> str:
+        text = (raw or "").strip()
+        if not text:
+            return ""
+        cookies = parse_cookie_input(text)
+        if cookies.get("BDUSS"):
+            return str(cookies["BDUSS"]).strip()
+        if text.upper().startswith("BDUSS="):
+            return text.split("=", 1)[1].strip()
+        if ";" not in text and " " not in text:
+            return text
+        return ""
+
+    def _paste_bduss(self) -> None:
+        try:
+            text = self.root.clipboard_get()
+        except tk.TclError:
+            return
+        value = self._extract_bduss(text)
+        if not value:
+            messagebox.showwarning("不是 BDUSS", "剪贴板里没有识别到 BDUSS。", parent=self.root)
+            return
+        self.login_method_var.set("bduss")
+        self.bduss_var.set(value)
+        self._apply_bduss()
+
+    def _apply_bduss(self) -> None:
+        value = self._extract_bduss(self.bduss_var.get())
+        if not value:
+            messagebox.showwarning("需要 BDUSS", "请填写 BDUSS。", parent=self.root)
+            self.bduss_entry.focus_set()
+            return
+        self.bduss_var.set(value)
+        self.cookie_var.set(f"BDUSS={value}")
+        self._full_cookie_cache = ""
+        self._login_source = "手动粘贴"
+        self._last_webview_match = None
+        self._login_probe_token += 1
+        if self.remember_bduss_var.get():
+            if save_cookie(self.cookie_var.get()):
+                self.status_var.set("BDUSS 已加密保存")
+            else:
+                self.status_var.set("BDUSS 保存失败，本次仍可使用")
+        else:
+            clear_cookie()
+            self.status_var.set("BDUSS 仅本次使用")
+        self._refresh_webview_status()
+        self._append_log("登录方式：仅 BDUSS", "muted")
+
+    def _cookie_completeness(self, cookies: Dict[str, str]) -> List[str]:
+        missing: List[str] = []
+        if not str(cookies.get("STOKEN") or "").strip():
+            missing.append("STOKEN（关注检测可能不完整）")
+        if not str(cookies.get("TIEBAUID") or "").strip() and not str(
+            cookies.get("TIEBA_SID") or ""
+        ).strip():
+            missing.append("TIEBAUID/TIEBA_SID（贴吧身份字段可能缺失）")
+        if not str(cookies.get("BAIDUID") or "").strip():
+            missing.append("BAIDUID（匿名标识缺失）")
+        return missing
+
+    def _start_cookie_probe(self, cookies: Dict[str, str], token: int) -> None:
+        if self._network_task_active():
+            return
+        self.status_var.set("正在预检登录信息…")
+        missing = self._cookie_completeness(cookies)
+
+        def worker() -> None:
+            warning = ""
+            logged = False
+            try:
+                probe = Fetcher(cookie=cookies, delay=0, verbose=False)
+            except Exception as error:  # noqa: BLE001
+                self._post(("manual_cookie_probe", token, f"预检初始化失败：{error}", False, missing))
+                return
+            try:
+                probe.get("https://tieba.baidu.com/")
+                info = probe.get("https://tieba.baidu.com/f/user/json_userinfo")
+                try:
+                    payload = json.loads(info.text)
+                except (TypeError, ValueError):
+                    warning = "预检返回无法解析，未能确认登录态"
+                else:
+                    data = payload.get("data") if isinstance(payload, dict) else None
+                    if not isinstance(data, dict):
+                        data = payload if isinstance(payload, dict) else {}
+                    logged = bool(
+                        data.get("user_id")
+                        or data.get("user_name")
+                        or data.get("name")
+                    )
+                    if not logged:
+                        warning = "预检未确认登录态，Cookie 可能已失效或只有 BDUSS"
+            except CaptchaError:
+                warning = "预检仍被验证码拦截，Cookie 可能不可用"
+            except Exception as error:  # noqa: BLE001
+                warning = f"预检失败：{error}"
+            finally:
+                probe.close()
+            self._post(("manual_cookie_probe", token, warning, logged, missing))
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _apply_cookie(self) -> None:
+        raw = self.cookie_var.get().strip()
+        if not raw:
+            messagebox.showwarning("需要 Cookie", "请粘贴完整 Cookie。", parent=self.root)
+            self.cookie_entry.focus_set()
+            return
+        if not webview2.has_login_cookie(parse_cookie_input(raw)):
+            messagebox.showwarning(
+                "Cookie 不完整",
+                "完整 Cookie 里没有 BDUSS/TIEBA_SID，无法确认登录态。",
+                parent=self.root,
+            )
+            return
+        self._full_cookie_cache = raw
+        self._login_source = "手动粘贴"
+        self._last_webview_match = None
+        self.login_method_var.set("cookie")
+        self._on_login_method_changed()
+        if self.remember_cookie_var.get():
+            if save_cookie(raw):
+                self.status_var.set("完整 Cookie 已加密保存")
+            else:
+                self.status_var.set("完整 Cookie 保存失败，本次仍可使用")
+        else:
+            clear_cookie()
+            self.status_var.set("完整 Cookie 仅本次使用")
+        self._refresh_webview_status()
+        self._append_log("登录方式：完整 Cookie", "muted")
+        self._login_probe_token += 1
+        self._start_cookie_probe(parse_cookie_input(raw), self._login_probe_token)
+
+    def _remember_current_login(self) -> bool:
+        if self.login_method_var.get() == "bduss":
+            return bool(self.remember_bduss_var.get())
+        return bool(self.remember_cookie_var.get())
+
+    def _current_cookie_text(self) -> str:
+        if self.login_method_var.get() == "bduss":
+            value = self._extract_bduss(self.bduss_var.get())
+            return f"BDUSS={value}" if value else ""
+        return self.cookie_var.get().strip()
+
+    def _sync_bduss_from_cookie(self, *_args) -> None:
+        """完整 Cookie 变化时，同步提取 BDUSS，便于切换到仅 BDUSS。"""
+        raw = self.cookie_var.get().strip()
+        if not raw:
+            return
+        cookies = parse_cookie_input(raw)
+        value = cookies.get("BDUSS", "")
+        if value and set(cookies) != {"BDUSS"}:
+            self._full_cookie_cache = raw
+        if value and self.bduss_var.get() != value:
+            self.bduss_var.set(value)
+
+    def _sync_login_from_cookie(self) -> None:
+        raw = self.cookie_var.get().strip()
+        if not raw:
+            return
+        cookies = parse_cookie_input(raw)
+        if cookies.get("BDUSS") and set(cookies) == {"BDUSS"}:
+            self.login_method_var.set("bduss")
+            self.bduss_var.set(str(cookies["BDUSS"]))
+            self.remember_bduss_var.set(True)
+        else:
+            self.login_method_var.set("cookie")
+            self.remember_cookie_var.set(True)
+            self._full_cookie_cache = raw
+
+    def _clear_cookie(self) -> None:
+        self.cookie_var.set("")
+        self.bduss_var.set("")
+        self._full_cookie_cache = ""
+        self._login_source = ""
+        self._last_webview_match = None
+        self._login_probe_token += 1
+        if clear_cookie():
+            self._append_log("已清除本机保存的 Cookie。", "muted")
+        else:
+            self._append_log("已清空输入框（没有可删除的已保存 Cookie）。", "muted")
+
+    def _paste_cookie(self) -> None:
+        try:
+            text = self.root.clipboard_get()
+        except tk.TclError:
+            messagebox.showinfo(
+                "剪贴板是空的",
+                "先在浏览器里复制 Cookie，再点这个按钮。\n\n"
+                "复制方法：F12 → 网络/Network → 刷新 → 点第一个帖子请求 → "
+                "标头/Headers → 请求标头里的 Cookie，复制冒号后面的整段。",
+                parent=self.root,
+            )
+            return
+        text = text.strip()
+        if text.lower().startswith("cookie:"):
+            text = text.split(":", 1)[1].strip()
+        # 只保留有效的 k=v 片段
+        keep = [part.strip() for part in re.split(r"[;\n\r]+", text) if "=" in part]
+        if not keep:
+            messagebox.showwarning(
+                "剪贴板内容不像 Cookie", "剪贴板里没有找到 k=v 形式的 Cookie，请重新复制。", parent=self.root
+            )
+            return
+        self.cookie_var.set("; ".join(keep))
+        self._append_log("已从剪贴板粘贴 Cookie。", "ok")
+
+    def _show_bduss_help(self) -> None:
+        messagebox.showinfo("如何获取 BDUSS", BDUSS_HELP, parent=self.root)
+        self.bduss_entry.focus_set()
+
+    def _clear_bduss(self) -> None:
+        self.bduss_var.set("")
+        if self.login_method_var.get() == "bduss":
+            self.cookie_var.set("")
+        clear_cookie()
+        self.status_var.set("已清除 BDUSS")
+        self._append_log("已清除 BDUSS。", "muted")
+
+    def _show_cookie_help(self) -> None:
+        messagebox.showinfo("如何获取完整 Cookie", COOKIE_HELP, parent=self.root)
+        self.cookie_entry.focus_set()
+
+    def _open_readme(self) -> None:
+        for name in ("使用说明.txt", "README.md"):
+            path = os.path.join(resource_dir(), name)
+            if os.path.isfile(path):
+                try:
+                    os.startfile(path)  # type: ignore[attr-defined]
+                    return
+                except OSError:
+                    break
+        messagebox.showinfo(
+            "使用说明",
+            "1. 粘贴帖子链接（每行一个）\n"
+            "2. 选择保存位置\n"
+            "3. 点「开始统计」\n"
+            "4. 完成后点「打开 Excel」\n\n"
+            "如果提示被安全验证拦截，点「如何获取？」，按说明把 Cookie 粘贴进来。",
+            parent=self.root,
+        )
+
+    def _open_result(self) -> None:
+        raw = self.last_outputs or ([self.last_output] if self.last_output else [])
+        paths = [path for path in raw if isinstance(path, str) and os.path.isfile(path)]
+        if not paths:
+            return
+        if len(paths) > 1:
+            choice = self._ask_choice(
+                "打开拆分文件",
+                f"共 {len(paths)} 个文件，选择打开方式。",
+                [("只打开第一个", False), ("全部打开", True), ("取消", None)],
+                default=0,
+            )
+            if choice is None:
+                return
+            if not choice:
+                paths = paths[:1]
+        failed = []
+        for path in paths:
+            try:
+                os.startfile(path)  # type: ignore[attr-defined]
+            except OSError:
+                failed.append(path)
+        if failed:
+            messagebox.showerror(
+                "部分文件打不开", "打不开：" + chr(10) + chr(10).join(failed), parent=self.root
+            )
+
+    # ------------------------------------------------------- 参与者与查用户
+    def _aggregate_users(self, threads=None):
+        buckets: Dict[str, Dict[str, Any]] = {}
+        for thread in (self.last_threads if threads is None else threads):
+            for item in thread.user_stats():
+                key = (
+                    f"uid:{item['uid']}"
+                    if item.get("uid")
+                    else (
+                        f"portrait:{str(item.get('portrait') or '').split('?')[0]}"
+                        if item.get("portrait")
+                        else (f"name:{item['username']}" if item.get("username") else f"anon:{item['name']}")
+                    )
+                )
+                bucket = buckets.setdefault(
+                    key,
+                    {
+                        "name": item["name"],
+                        "username": item["username"],
+                        "uid": item["uid"],
+                        "tieba_uid": item.get("tieba_uid") or "",
+                        "portrait": item["portrait"],
+                        "level": item["level"],
+                        "badge": item["badge"],
+                        "floor": 0,
+                        "comment": 0,
+                        "total": 0,
+                        "aliases": set(),
+                    },
+                )
+                bucket["floor"] += item["floor_count"]
+                bucket["comment"] += item["comment_count"]
+                bucket["total"] += item["total"]
+                if item.get("name") and item["name"] != bucket["name"]:
+                    bucket["aliases"].add(bucket["name"])
+                    bucket["name"] = item["name"]
+                bucket["aliases"].update(item.get("aliases") or [])
+                if not bucket["username"] and item["username"]:
+                    bucket["username"] = item["username"]
+                if not bucket["portrait"] and item["portrait"]:
+                    bucket["portrait"] = item["portrait"]
+                if not bucket["tieba_uid"] and item.get("tieba_uid"):
+                    bucket["tieba_uid"] = item["tieba_uid"]
+                if not bucket["level"] and item["level"]:
+                    bucket["level"] = item["level"]
+                if not bucket["badge"] and item["badge"]:
+                    bucket["badge"] = item["badge"]
+        users = list(buckets.values())
+        for user in users:
+            user["aliases"] = sorted(a for a in user.get("aliases", ()) if a and a != user["name"])
+        users.sort(key=lambda item: (-item["total"], -item["floor"], item["name"]))
+        return users
+
 
     def _on_tab_changed(self, _event=None) -> None:
         try:
@@ -2599,311 +2923,6 @@ class App:
         self._sync_lookup_text_from_native()
         self.root.after(120, self._poll_native_lookup_text)
 
-    def _build_lookup_tab(self) -> None:
-        page = self.tab_lookup
-        query = tk.Frame(page, bg="#ffffff", padx=12, pady=8)
-        query.pack(fill="x")
-        self.lookup_query_bar = query
-        tk.Label(query, text="查询方式：", bg="#ffffff", fg="#475569", font=("Microsoft YaHei UI", 9)).pack(
-            side="left"
-        )
-        self.lookup_mode_var = tk.StringVar(value="用户名")
-        ttk.Combobox(
-            query,
-            values=("用户名", "贴吧ID", "昵称", "用户ID"),
-            textvariable=self.lookup_mode_var,
-            width=10,
-            state="readonly",
-        ).pack(side="left")
-        tk.Label(query, text="  内容：", bg="#ffffff", fg="#475569", font=("Microsoft YaHei UI", 9)).pack(
-            side="left"
-        )
-        self.lookup_query_var = tk.StringVar()
-        self.lookup_entry = None
-        self.lookup_native_edit = None
-        self.lookup_native_host = None
-        self.emoji_btn = None
-        query_button = tk.Button(
-            query,
-            text="查询",
-            command=self._on_lookup,
-            bg="#1F4E79",
-            fg="#ffffff",
-            activebackground="#163b5c",
-            activeforeground="#ffffff",
-            relief="flat",
-            padx=16,
-            pady=6,
-            cursor="hand2",
-            font=("Microsoft YaHei UI", 9, "bold"),
-        )
-        query_button.pack(side="right", padx=(8, 0))
-        if os.name == "nt" and self._create_lookup_native_edit():
-            self.lookup_query_var.trace_add("write", self._on_lookup_query_changed)
-            self.root.after(120, self._poll_native_lookup_text)
-        else:
-            self._build_lookup_fallback_entry(query, query_button)
-
-        options = tk.Frame(page, bg="#ffffff", padx=12, pady=4)
-        options.pack(fill="x")
-        self.lookup_options = options
-        tk.Label(options, text="条数：", bg="#ffffff", fg="#475569", font=("Microsoft YaHei UI", 8)).pack(
-            side="left"
-        )
-        self.lookup_count_var = tk.StringVar(value="50")
-        self.lookup_count_box = ttk.Spinbox(
-            options,
-            from_=5,
-            to=1000,
-            increment=10,
-            width=7,
-            textvariable=self.lookup_count_var,
-            state="normal",
-            takefocus=True,
-        )
-        self.lookup_count_box.pack(side="left")
-        self.lookup_count_box.bind(
-            "<FocusIn>",
-            lambda _event: self.lookup_count_box.selection_range(0, "end"),
-            add="+",
-        )
-        tk.Label(options, text="  日期：", bg="#ffffff", fg="#475569", font=("Microsoft YaHei UI", 8)).pack(
-            side="left"
-        )
-        self.lookup_date_mode_var = tk.StringVar(value="近期")
-        self.lookup_date_mode_box = ttk.Combobox(
-            options,
-            values=("近期", "指定日期"),
-            textvariable=self.lookup_date_mode_var,
-            width=9,
-            state="readonly",
-        )
-        self.lookup_date_mode_box.pack(side="left")
-        self.lookup_date_mode_box.bind("<<ComboboxSelected>>", lambda _event: self._on_lookup_date_changed())
-        self.lookup_status = tk.Label(
-            options, text="", bg="#ffffff", fg="#8a94a6", font=("Microsoft YaHei UI", 8)
-        )
-        self.lookup_status.pack(side="right")
-
-        date_row = tk.Frame(page, bg="#ffffff", padx=12, pady=2)
-        self.lookup_date_row = date_row
-        self.lookup_start_var = tk.StringVar()
-        self.lookup_end_var = tk.StringVar()
-        self.lookup_start_parts = self._date_group(date_row, "开始", 3)
-        self.lookup_end_parts = self._date_group(date_row, "结束")
-        tk.Label(
-            date_row, text="  时间偏向：", bg="#ffffff", fg="#475569", font=("Microsoft YaHei UI", 8)
-        ).pack(side="left")
-        self.lookup_prefer_var = tk.StringVar(value="优先最近")
-        ttk.Combobox(
-            date_row,
-            values=("优先最近", "优先最早"),
-            textvariable=self.lookup_prefer_var,
-            width=10,
-            state="readonly",
-        ).pack(side="left")
-        for _var in (*self.lookup_start_parts, *self.lookup_end_parts):
-            _var.trace_add("write", lambda *_: self._on_lookup_parts_changed())
-        self.lookup_start_var.set(self._group_date(self.lookup_start_parts))
-        self.lookup_end_var.set(self._group_date(self.lookup_end_parts))
-
-        summary = tk.Frame(page, bg="#eef1f5", padx=12, pady=4)
-        summary.pack(fill="x")
-        self.lookup_summary = summary
-        self.lookup_info = tk.Label(
-            summary,
-            text="查询方式：用户名 / 贴吧ID / 昵称 / 用户ID。贴吧ID是个人主页显示的ID。",
-            anchor="w",
-            bg="#eef1f5",
-            fg="#64748b",
-            font=("Microsoft YaHei UI", 9),
-            wraplength=590,
-            justify="left",
-        )
-        self.lookup_info.pack(fill="x")
-        self.lookup_info.bind("<Button-3>", lambda _event: self._copy_lookup_summary())
-        summary_bottom = tk.Frame(summary, bg="#eef1f5")
-        summary_bottom.pack(fill="x", pady=(2, 0))
-        self.lookup_copy_btn = ttk.Button(
-            summary_bottom, text="复制摘要", command=self._copy_lookup_summary, width=9
-        )
-        self.lookup_copy_btn.pack(side="right", padx=(6, 0))
-        traffic = tk.Frame(summary_bottom, bg="#eef1f5")
-        traffic.pack(side="right", padx=(8, 0))
-        tk.Label(
-            traffic, text="红绿灯：", bg="#eef1f5", fg="#6b7280", font=("Microsoft YaHei UI", 8)
-        ).pack(side="left")
-        self.lookup_traffic_labels = {}
-        for key, color in (
-            ("ban", self.palette["danger"]),
-            ("warn", self.palette["warning"]),
-            ("safe", self.palette["safe"]),
-        ):
-            label = tk.Label(
-                traffic,
-                text="●",
-                fg="#d1d5db",
-                bg="#eef1f5",
-                font=("Microsoft YaHei UI", 14),
-            )
-            label.pack(side="left", padx=(2, 0))
-            self.lookup_traffic_labels[key] = (label, color)
-        self.lookup_traffic_text = tk.Label(
-            traffic, text="", bg="#eef1f5", fg="#6b7280", font=("Microsoft YaHei UI", 8)
-        )
-        self.lookup_traffic_text.pack(side="left", padx=(8, 0))
-        self.lookup_summary.bind(
-            "<Configure>",
-            lambda event: self.lookup_info.configure(wraplength=max(300, event.width - 24)),
-        )
-
-        cache_row = tk.Frame(page, bg="#eef1f5", padx=12)
-        self.lookup_cache_row = cache_row
-        self.lookup_cache_label = tk.Label(
-            cache_row,
-            text="",
-            anchor="w",
-            bg="#eef1f5",
-            fg="#2563eb",
-            font=("Microsoft YaHei UI", 8),
-        )
-        self.lookup_cache_label.pack(side="left")
-
-        bottom = tk.Frame(page, bg="#eef1f5", padx=10, pady=6)
-        bottom.pack(side="bottom", fill="x")
-        self.lookup_bottom = bottom
-        self.lookup_report_btn = ttk.Button(
-            bottom, text="导出此人报告", command=self._export_lookup_report, width=14
-        )
-        self.lookup_posts_btn = ttk.Button(
-            bottom, text="导出发言", command=self._export_lookup_posts, width=10
-        )
-        self.lookup_open_profile_btn = ttk.Button(
-            bottom, text="打开主页", command=self._open_lookup_profile, width=10
-        )
-        self.lookup_open_profile_btn.pack(side="left", padx=(6, 0))
-        self.lookup_probe_btn = ttk.Button(
-            bottom, text="探测候选关注", command=self._probe_lookup_forums, width=14
-        )
-        ttk.Button(bottom, text="复制全部", command=self._copy_lookup, width=10).pack(side="right")
-        self.lookup_forum_note = tk.Label(
-            bottom,
-            text="",
-            bg="#eef1f5",
-            fg="#b45309",
-            wraplength=620,
-            justify="left",
-            font=("Microsoft YaHei UI", 8),
-        )
-        self.lookup_forum_note.pack(side="left", fill="x", expand=True)
-
-        paned = ttk.PanedWindow(page, orient="horizontal")
-        paned.pack(fill="both", expand=True, padx=10, pady=(0, 6))
-        self.lookup_paned = paned
-        left = tk.Frame(paned)
-        right = tk.Frame(paned)
-        paned.add(left, weight=1)
-        paned.add(right, weight=2)
-        tk.Label(
-            left,
-            text="关注的贴吧",
-            bg="#eef1f5",
-            fg="#475569",
-            font=("Microsoft YaHei UI", 9, "bold"),
-        ).pack(anchor="w")
-        lookup_forum_wrap = tk.Frame(left, bg="#eef1f5")
-        lookup_forum_wrap.pack(fill="both", expand=True)
-        self.lookup_forum_tree = ttk.Treeview(
-            lookup_forum_wrap, columns=("bar", "level", "level_source", "source"), show="headings", height=14
-        )
-        self.lookup_forum_tree.heading("bar", text="贴吧")
-        self.lookup_forum_tree.heading("level", text="等级")
-        self.lookup_forum_tree.heading("level_source", text="等级来源")
-        self.lookup_forum_tree.heading("source", text="关注来源")
-        self.lookup_forum_tree.column("bar", width=120, anchor="w")
-        self.lookup_forum_tree.column("level", width=50, anchor="center")
-        self.lookup_forum_tree.column("level_source", width=90, anchor="center")
-        self.lookup_forum_tree.column("source", width=80, anchor="center")
-        lookup_forum_yscroll = ttk.Scrollbar(
-            lookup_forum_wrap, orient="vertical", command=self.lookup_forum_tree.yview
-        )
-        self.lookup_forum_tree.configure(yscrollcommand=lookup_forum_yscroll.set)
-        self.lookup_forum_tree.pack(side="left", fill="both", expand=True)
-        lookup_forum_yscroll.pack(side="right", fill="y")
-        self.lookup_forum_tree.bind("<Double-1>", lambda _event: self._open_lookup_forum())
-        self._configure_colors(self.lookup_forum_tree)
-        self._make_sortable(
-            self.lookup_forum_tree,
-            {"bar": "贴吧", "level": "等级", "level_source": "等级来源", "source": "关注来源"},
-            {"level"},
-        )
-        self._bind_loaded_filter(
-            self.lookup_forum_tree,
-            {"bar": ("贴吧", False), "level": None, "level_source": ("等级来源", False), "source": ("关注来源", False)},
-        )
-
-        tk.Label(
-            right,
-            text="发言",
-            bg="#eef1f5",
-            fg="#475569",
-            font=("Microsoft YaHei UI", 9, "bold"),
-        ).pack(anchor="w")
-        post_wrap = tk.Frame(right, bg="#eef1f5")
-        post_wrap.pack(fill="both", expand=True)
-        self.lookup_post_tree = ttk.Treeview(
-            post_wrap, columns=("time", "type", "bar", "title", "content", "source"), show="headings", height=14
-        )
-        self.lookup_post_tree.heading("time", text="日期")
-        self.lookup_post_tree.heading("type", text="类型")
-        self.lookup_post_tree.heading("bar", text="贴吧")
-        self.lookup_post_tree.heading("title", text="标题")
-        self.lookup_post_tree.heading("content", text="内容")
-        self.lookup_post_tree.heading("source", text="数据来源")
-        self.lookup_post_tree.column("time", width=90, anchor="center")
-        self.lookup_post_tree.column("type", width=55, anchor="center")
-        self.lookup_post_tree.column("bar", width=100, anchor="w")
-        self.lookup_post_tree.column("title", width=230, anchor="w")
-        self.lookup_post_tree.column("content", width=300, anchor="w")
-        self.lookup_post_tree.column("source", width=100, anchor="center")
-        self.lookup_post_tree["displaycolumns"] = ("time", "type", "bar", "title", "content")
-        post_xscroll = ttk.Scrollbar(post_wrap, orient="horizontal", command=self.lookup_post_tree.xview)
-        post_yscroll = ttk.Scrollbar(post_wrap, orient="vertical", command=self.lookup_post_tree.yview)
-        self.lookup_post_tree.configure(xscrollcommand=post_xscroll.set, yscrollcommand=post_yscroll.set)
-        self.lookup_post_tree.grid(row=0, column=0, sticky="nsew")
-        post_yscroll.grid(row=0, column=1, sticky="ns")
-        post_xscroll.grid(row=1, column=0, sticky="ew")
-        post_wrap.rowconfigure(0, weight=1)
-        post_wrap.columnconfigure(0, weight=1)
-        self.lookup_post_tree.bind("<Double-1>", lambda _event: self._open_lookup_post())
-        self._configure_colors(self.lookup_post_tree)
-        self._make_sortable(
-            self.lookup_post_tree,
-            {"time": "日期", "type": "类型", "bar": "贴吧", "title": "标题", "content": "内容"},
-            {"time"},
-        )
-        self._bind_loaded_filter(
-            self.lookup_post_tree,
-            {
-                "time": ("日期", True),
-                "type": ("类型", False),
-                "bar": ("贴吧", False),
-                "title": ("标题", False),
-                "content": ("内容", False),
-            },
-        )
-        self._lookup_post_urls: Dict[str, str] = {}
-        self._lookup_forum_names: Dict[str, str] = {}
-        self._lookup_cache: Dict[str, tuple[float, Dict[str, Any]]] = {}
-        self._lookup_topic_limit = 50
-        self.lookup_topic_btn = ttk.Button(
-            bottom, text="继续抓主题", command=self._continue_lookup_topics, width=12
-        )
-        self._lookup_generation = 0
-        self.lookup_date_mode_var.trace_add("write", lambda *_: self._on_lookup_date_changed())
-        for _var in (self.lookup_count_var, self.lookup_prefer_var):
-            _var.trace_add("write", lambda *_: self._on_lookup_date_changed())
-        self._toggle_lookup_dates()
 
     def _open_lookup_profile(self) -> None:
         profile = getattr(self, "_last_lookup_profile", None)
