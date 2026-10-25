@@ -22,7 +22,8 @@
 - 身份补全与批量标记拆出为 `BatchIdentityMixin`；
 - 主题应用拆出为 `ThemeMixin`；
 - 用户资料/关注页拆出为 `ProfileMixin`；
-- 日志/测试中心/使用说明/数据清理拆出为 `ToolsMixin`。
+- 日志/测试中心/使用说明/数据清理拆出为 `ToolsMixin`；
+- 登录/Cookie/WebView2 相关方法拆出为 `LoginMixin`。
 
 ## [1.7.3] - 2026-10-26（已打包）
 
