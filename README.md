@@ -80,9 +80,9 @@ Android 旧 APK 保留，但已暂停更新，不再承诺与桌面版功能同�
 
 ## 截图
 
-| 主界面 | 查用户 |
+| 主界面（简洁模式） | 查用户 |
 |---|---|
-| ![主界面](docs/images/01-main.png) | ![查用户](docs/images/02-user-lookup.png) |
+| ![主界面（简洁模式）](docs/images/01-main.png) | ![查用户](docs/images/02-user-lookup.png) |
 
 ---
 
