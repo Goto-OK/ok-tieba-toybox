@@ -239,6 +239,7 @@ class App:
         self.mode_var = tk.StringVar(value="guest")
         self._login_source = ""
         self._last_webview_match: Optional[bool] = None
+        self._login_probe_token = 0
         self._active_choice_window: Optional[tk.Toplevel] = None
         self._usage_window: Optional[tk.Toplevel] = None
         webview2.cleanup_profile_backup()
@@ -956,6 +957,7 @@ class App:
         self._full_cookie_cache = ""
         self._login_source = "手动粘贴"
         self._last_webview_match = None
+        self._login_probe_token += 1
         if self.remember_bduss_var.get():
             if save_cookie(self.cookie_var.get()):
                 self.status_var.set("BDUSS 已加密保存")
@@ -966,6 +968,60 @@ class App:
             self.status_var.set("BDUSS 仅本次使用")
         self._refresh_webview_status()
         self._append_log("登录方式：仅 BDUSS", "muted")
+
+    def _cookie_completeness(self, cookies: Dict[str, str]) -> List[str]:
+        missing: List[str] = []
+        if not str(cookies.get("STOKEN") or "").strip():
+            missing.append("STOKEN（关注检测可能不完整）")
+        if not str(cookies.get("TIEBAUID") or "").strip() and not str(
+            cookies.get("TIEBA_SID") or ""
+        ).strip():
+            missing.append("TIEBAUID/TIEBA_SID（贴吧身份字段可能缺失）")
+        if not str(cookies.get("BAIDUID") or "").strip():
+            missing.append("BAIDUID（匿名标识缺失）")
+        return missing
+
+    def _start_cookie_probe(self, cookies: Dict[str, str], token: int) -> None:
+        if self._network_task_active():
+            return
+        self.status_var.set("正在预检登录信息…")
+        missing = self._cookie_completeness(cookies)
+
+        def worker() -> None:
+            warning = ""
+            logged = False
+            try:
+                probe = Fetcher(cookie=cookies, delay=0, verbose=False)
+            except Exception as error:  # noqa: BLE001
+                self._post(("manual_cookie_probe", token, f"预检初始化失败：{error}", False, missing))
+                return
+            try:
+                probe.get("https://tieba.baidu.com/")
+                info = probe.get("https://tieba.baidu.com/f/user/json_userinfo")
+                try:
+                    payload = json.loads(info.text)
+                except (TypeError, ValueError):
+                    warning = "预检返回无法解析，未能确认登录态"
+                else:
+                    data = payload.get("data") if isinstance(payload, dict) else None
+                    if not isinstance(data, dict):
+                        data = payload if isinstance(payload, dict) else {}
+                    logged = bool(
+                        data.get("user_id")
+                        or data.get("user_name")
+                        or data.get("name")
+                    )
+                    if not logged:
+                        warning = "预检未确认登录态，Cookie 可能已失效或只有 BDUSS"
+            except CaptchaError:
+                warning = "预检仍被验证码拦截，Cookie 可能不可用"
+            except Exception as error:  # noqa: BLE001
+                warning = f"预检失败：{error}"
+            finally:
+                probe.close()
+            self._post(("manual_cookie_probe", token, warning, logged, missing))
+
+        threading.Thread(target=worker, daemon=True).start()
 
     def _apply_cookie(self) -> None:
         raw = self.cookie_var.get().strip()
@@ -995,6 +1051,8 @@ class App:
             self.status_var.set("完整 Cookie 仅本次使用")
         self._refresh_webview_status()
         self._append_log("登录方式：完整 Cookie", "muted")
+        self._login_probe_token += 1
+        self._start_cookie_probe(parse_cookie_input(raw), self._login_probe_token)
 
     def _remember_current_login(self) -> bool:
         if self.login_method_var.get() == "bduss":
@@ -1039,6 +1097,7 @@ class App:
         self._full_cookie_cache = ""
         self._login_source = ""
         self._last_webview_match = None
+        self._login_probe_token += 1
         if clear_cookie():
             self._append_log("已清除本机保存的 Cookie。", "muted")
         else:
@@ -5092,6 +5151,7 @@ class App:
             self.cookie_var.set(full)
             self._webview_cookie_session = True
         self._login_source = "内置浏览器"
+        self._login_probe_token += 1
         self._on_login_method_changed()
         self._set_login_fields_expanded(False)
         if hasattr(self, "_refresh_webview_status"):
@@ -11945,6 +12005,21 @@ class App:
                 self._append_log(f"登录预检警告：{warning}", "warn")
             self._offer_retry_incomplete("登录信息")
             self._refresh_webview_status()
+            self._refresh_log_summary()
+        elif kind == "manual_cookie_probe":
+            _, token, warning, logged, missing = message
+            if token != self._login_probe_token:
+                return
+            if warning:
+                self.status_var.set("登录信息预检未通过")
+                self._append_log(f"登录预检：{warning}", "warn")
+            else:
+                self.status_var.set(
+                    "登录信息预检通过（可能不完整）" if missing else "登录信息预检通过"
+                )
+                self._append_log("登录信息预检通过。", "ok")
+                if missing:
+                    self._append_log("Cookie 可能不完整：缺少 " + "；".join(missing), "warn")
             self._refresh_log_summary()
         elif kind == "rate_limit_ask":
             _, detail, retry_after, _url = message

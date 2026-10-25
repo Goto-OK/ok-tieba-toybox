@@ -151,6 +151,30 @@ def test_login_baidu_uses_current_method(root_app, monkeypatch):
     assert captured["target"] == "cookie"
 
 
+def test_cookie_completeness_reports_missing_fields(root_app):
+    _root, app = root_app
+    missing = app._cookie_completeness({"BDUSS": "x"})
+    assert any("STOKEN" in item for item in missing)
+    assert any("TIEBAUID" in item for item in missing)
+    assert any("BAIDUID" in item for item in missing)
+
+
+def test_apply_cookie_starts_probe(root_app, monkeypatch):
+    _root, app = root_app
+    captured = {}
+    monkeypatch.setattr(
+        app,
+        "_start_cookie_probe",
+        lambda cookies, token: captured.update(cookies=cookies, token=token),
+    )
+    app.cookie_var.set("BDUSS=test; TIEBA_SID=test; STOKEN=test")
+    app.remember_cookie_var.set(False)
+    monkeypatch.setattr(tieba_gui, "clear_cookie", lambda: True)
+    app._apply_cookie()
+    assert captured["cookies"].get("BDUSS") == "test"
+    assert captured["token"] == app._login_probe_token
+
+
 def test_apply_bduss_drops_full_cookie_cache(root_app, monkeypatch):
     _root, app = root_app
     app._full_cookie_cache = "BDUSS=old; TIEBAUID=old"
