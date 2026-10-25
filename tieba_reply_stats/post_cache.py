@@ -26,6 +26,17 @@ PRIORITY_LOW = 0
 PRIORITY_HIGH = 1
 
 
+def _cache_dir() -> str:
+    """返回可写的缓存目录；系统临时目录不可用时退回本机应用数据目录。"""
+    try:
+        base = tempfile.gettempdir()
+    except (OSError, FileNotFoundError):
+        base = os.environ.get("LOCALAPPDATA") or os.environ.get("APPDATA") or os.getcwd()
+    folder = os.path.join(base, "TiebaReplyStats")
+    os.makedirs(folder, exist_ok=True)
+    return folder
+
+
 def _json_size(value: Any) -> int:
     try:
         return len(json.dumps(value, ensure_ascii=False, separators=(",", ":")))
@@ -50,10 +61,10 @@ class PostCache:
     # ---------- lifecycle ----------
 
     def _open(self) -> None:
-        os.makedirs(os.path.join(tempfile.gettempdir(), "TiebaReplyStats"), exist_ok=True)
-        self._cleanup_stale()
+        folder = _cache_dir()
+        self._cleanup_stale(folder)
         name = f"post-cache-{os.getpid()}-{uuid.uuid4().hex[:8]}.db"
-        self._path = os.path.join(tempfile.gettempdir(), "TiebaReplyStats", name)
+        self._path = os.path.join(folder, name)
         self._conn = sqlite3.connect(self._path, check_same_thread=False)
         self._conn.execute("PRAGMA journal_mode=WAL")
         self._conn.execute("PRAGMA synchronous=NORMAL")
@@ -88,8 +99,8 @@ class PostCache:
             pass
         self._conn.commit()
 
-    def _cleanup_stale(self) -> None:
-        folder = os.path.join(tempfile.gettempdir(), "TiebaReplyStats")
+    def _cleanup_stale(self, folder: str = "") -> None:
+        folder = folder or _cache_dir()
         try:
             for name in os.listdir(folder):
                 if not name.startswith("post-cache-") or not name.endswith(".db"):

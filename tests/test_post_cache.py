@@ -6,6 +6,20 @@ def _post(day: str, ts: int) -> dict:
     return {"time": day, "ts": ts}
 
 
+def test_cache_falls_back_when_temp_unavailable(monkeypatch, tmp_path):
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
+
+    def fail():
+        raise FileNotFoundError("no temp")
+
+    monkeypatch.setattr(post_cache.tempfile, "gettempdir", fail)
+    cache = post_cache.PostCache()
+    try:
+        assert str(tmp_path) in cache._path
+    finally:
+        cache.close()
+
+
 def test_post_cache_roundtrip():
     cache = post_cache.cache()
     cache.clear()
