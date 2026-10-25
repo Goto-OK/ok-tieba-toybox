@@ -209,6 +209,7 @@ class App:
         self.last_output: str | None = None
         self.last_outputs: List[str] = []
         self.last_threads: list = []
+        self._pending_retry = False
         self._auto_filled = False
         self._identity_choice_queue: "queue.Queue[tuple]" = queue.Queue()
         self._rate_choice_queue: "queue.Queue[str]" = queue.Queue()
@@ -2105,11 +2106,16 @@ class App:
             parent=self.root,
             default=messagebox.YES,
         ):
-            self._retry_incomplete_threads()
+            # 登录更新回调可能仍处于原任务收尾阶段；延后到主循环再启动。
+            self._pending_retry = True
+            self.root.after(200, self._retry_incomplete_threads)
 
     def _retry_incomplete_threads(self) -> None:
         if getattr(self, "_supplement_running", False) or self.running:
+            self._pending_retry = True
+            self._append_log("当前任务尚未结束，稍后重试失败部分。", "muted")
             return
+        self._pending_retry = False
         targets = [thread for thread in self.last_threads if not getattr(thread, "complete", True)]
         if not targets:
             messagebox.showinfo("没有失败部分", "当前帖子都是完整的。", parent=self.root)
@@ -12125,6 +12131,8 @@ class App:
             except tk.TclError:
                 pass
             self.progress.pack_forget()
+            if getattr(self, "_pending_retry", False):
+                self.root.after(200, self._retry_incomplete_threads)
 
     def _append_log(self, text: str, tag: str | None = None) -> None:
         self.log_text.configure(state="normal")

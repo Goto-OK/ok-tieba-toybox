@@ -125,6 +125,14 @@ def test_login_source_conflict_is_visible(root_app, monkeypatch):
     assert "可能不是同一会话" in app.login_source_label.cget("text")
 
 
+def test_retry_while_running_is_queued(root_app):
+    _root, app = root_app
+    app.running = True
+    app._pending_retry = False
+    app._retry_incomplete_threads()
+    assert app._pending_retry is True
+
+
 def test_login_button_text_follows_method(root_app, monkeypatch):
     _root, app = root_app
     monkeypatch.setattr(tieba_gui.webview2, "login_profile_exists", lambda: False)
