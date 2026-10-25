@@ -302,7 +302,7 @@ dist/OK的贴吧玩具箱_v1.7.3/
 ```
 
 - 版本：1.7.3；
-- 构建：2026-10-26 01:37；
+- 构建：2026-10-26 03:05；
 - 主程序：`OK的贴吧玩具箱.exe`，约 6.3MB；
 - 绿色包：`dist/ok-tieba-toybox_v1.7.3.zip`，约 24.5MB；
 - 校验：`dist/SHA256SUMS-1.7.3.txt`；
@@ -314,8 +314,10 @@ dist/OK的贴吧玩具箱_v1.7.3/
 - 数据目录保持 `%APPDATA%\TiebaReplyStats`，不随产品改名；
 - Authenticode：`NotSigned`，当前未做代码签名；
 - SmartScreen 可能提示“未知发布者”；
-- SHA256（exe）：`894BA87A38901BF8C97923BAF0096A2997A5243E2E0D4178D2D0B87A6632476F`；
-- SHA256（zip）：`BAAD378B24922CE2421772C7373BFDCF2DCD499D172938EC566E06737C1032F4`；
+- 绿色包解压到独立目录后 `--selftest` 通过；
+- 从中文路径启动确认可用，内置登录读取 BDUSS 成功；
+- SHA256（exe）：`4DA5F1923FD4CF0DDC6027B66079525243A50C32F7A1D4A916D10957DB3741F2`；
+- SHA256（zip）：`BB4429DB4F7C3129DC8F8A34D211E5886837B1056E2C794CC207061B17E9A850`；
 - GitHub Release：<https://github.com/Goto-OK/ok-tieba-toybox/releases/tag/v1.7.3>。
 
 源码运行：
