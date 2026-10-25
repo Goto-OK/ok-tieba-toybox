@@ -8,6 +8,9 @@ on:
 jobs:
   test:
     runs-on: windows-latest
+    env:
+      # CI 不安装可选 WebView2 依赖；该离线检查在界面中只作信息展示。
+      TIEBA_SKIP_WEBVIEW2_CHECK: "1"
     steps:
       - uses: actions/checkout@v4
 

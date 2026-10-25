@@ -1,3 +1,4 @@
+import os
 import tkinter as tk
 
 import pytest
@@ -250,6 +251,9 @@ def test_offline_checks_have_no_failures(root_app):
     _root, app = root_app
     results = app._offline_checks()
     assert results
+    if os.environ.get("TIEBA_SKIP_WEBVIEW2_CHECK") == "1":
+        # CI 不安装可选的 pywebview/pythonnet，该检查本身只作信息展示。
+        results = [item for item in results if item[0] != "WebView2 组件可用"]
     assert all(status == "PASS" for _name, status, _detail in results)
 
 
