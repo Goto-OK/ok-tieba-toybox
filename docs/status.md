@@ -290,15 +290,44 @@ Android 核心同步通过
 - Android 不跟进 UI；
 - CLI 不跟 GUI 新功能。
 
-## 7. 成品
+## 7. 当前成品（1.7.3）
 
-当前桌面成品：
+```text
+dist/OK的贴吧玩具箱_v1.7.3/
+```
+
+- 版本：1.7.3；
+- 构建：2026-10-26 01:37；
+- 主程序：`OK的贴吧玩具箱.exe`，约 6.3MB；
+- 绿色包：`dist/ok-tieba-toybox_v1.7.3.zip`，约 24.5MB；
+- 校验：`dist/SHA256SUMS-1.7.3.txt`；
+- `--selftest` 通过；
+- 源码 `ruff` / `mypy` / `pytest` 通过；
+- exe 启动确认标题为 `OK的贴吧玩具箱 v1.7.3`；
+- 含 `使用说明.txt`、`THIRD_PARTY_NOTICES.md`；
+- 图标采用平色深蓝 A 方案；以 `assets/app.svg` 为矢量母版，`scripts/make_icon.py` 生成多尺寸 ICO；
+- 数据目录保持 `%APPDATA%\TiebaReplyStats`，不随产品改名；
+- Authenticode：`NotSigned`，当前未做代码签名；
+- SmartScreen 可能提示“未知发布者”；
+- SHA256（exe）：`894BA87A38901BF8C97923BAF0096A2997A5243E2E0D4178D2D0B87A6632476F`；
+- SHA256（zip）：`BAAD378B24922CE2421772C7373BFDCF2DCD499D172938EC566E06737C1032F4`；
+- GitHub Release：<https://github.com/Goto-OK/ok-tieba-toybox/releases/tag/v1.7.3>。
+
+源码运行：
+
+```bash
+python tieba_gui.py
+```
+
+## 8. 历史成品
+
+### 1.7.1
 
 ```text
 dist/贴吧回复统计_v1.7.1/
 ```
 
-- v1.7.1，2026-10-23 02:20 构建；该包未含最新“原生 Edit 释放焦点”修复，需重建后再验收；
+- v1.7.1，2026-10-23 02:20 构建；该包未含“原生 Edit 释放焦点”修复，已被 1.7.3 取代；
 - 图标采用平色深蓝 A 方案；以 `assets/app.svg` 为矢量母版，`scripts/make_icon.py` 生成多尺寸 ICO；小尺寸另行锐化；
 - `--selftest` 通过；
 - 版本信息 1.7.1；
@@ -311,13 +340,7 @@ dist/贴吧回复统计_v1.7.1/
 - 已在临时目录解压并运行 `--selftest` 通过，确认不依赖源码目录；
 - SHA256：`dist/SHA256SUMS-1.7.1.txt`。
 
-源码运行：
-
-```bash
-python tieba_gui.py
-```
-
-## 8. 文档
+## 9. 文档
 
 - [../SPEC.md](../SPEC.md)
 - [README.md](README.md)
