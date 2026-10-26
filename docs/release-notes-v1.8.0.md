@@ -59,10 +59,11 @@ dist/OK的贴吧玩具箱_v1.8.0/
     _internal/
 ```
 
-绿色包与校验文件：
+绿色包与校验文件（两个 zip 内容相同，任选一个下载）：
 
 ```text
 dist/ok-tieba-toybox_v1.8.0.zip
+dist/OK的贴吧玩具箱_v1.8.0.zip
 dist/SHA256SUMS-1.8.0.txt
 ```
 

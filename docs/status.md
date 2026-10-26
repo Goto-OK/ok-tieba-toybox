@@ -287,10 +287,10 @@ Android 核心同步通过
 - 完成 GUI 拆分、数据安全修复、wheel 打包修复、测试隔离；
 - 自动化与 wheel 导入验证通过；
 - 已本地构建 `dist/OK的贴吧玩具箱_v1.8.0`，`--selftest` exit 0，标题为 v1.8.0；
-- 已生成 `dist/ok-tieba-toybox_v1.8.0.zip`、`dist/SHA256SUMS-1.8.0.txt`；
+- 已生成 `dist/ok-tieba-toybox_v1.8.0.zip`、中文名同内容副本 `dist/OK的贴吧玩具箱_v1.8.0.zip`、`dist/SHA256SUMS-1.8.0.txt`；
 - 尚未打 tag/Release，尚未上传 GitHub；
 - SHA256（exe）：`009F2E76730C25799F4D0201960E2006E7C8FD5346F177737279E695C7B7FC32`；
-- SHA256（zip）：`CDBAE29DB47AA2EF54381328CEA87E23F00C621A29A09D01AA5CE4E897FD40C6`；
+- SHA256（两个 zip 相同）：`CDBAE29DB47AA2EF54381328CEA87E23F00C621A29A09D01AA5CE4E897FD40C6`；
 - 发布说明草稿：`docs/release-notes-v1.8.0.md`。
 
 ## 6. 已知限制
