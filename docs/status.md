@@ -8,8 +8,8 @@
 | 项目 | 版本 | 说明 |
 |---|---|---|
 | 规范 | 1.8.0 | 结构重构、数据安全与测试隔离增补 |
-| 源码 | 1.8.0 已打包未发布 | 已含 1.7.3 修复、结构重构、wheel/测试修复 |
-| Windows 成品 | 1.7.3 / 1.8.0 本地 | 1.7.3 最新已发布；1.8.0 已本地构建、未上传 |
+| 源码 | 1.8.0 已发布 | 已含 1.7.3 修复、结构重构、wheel/测试修复 |
+| Windows 成品 | 1.8.0 | 2026-10-26 09:31 发布；绿色包和 SHA256 已生成 |
 | 安装包 | 无 | 免安装目录 |
 | Android | 暂停 | 核心同步，但不跟进 UI |
 | CLI | 基础 | 只做抓取/导出 |
@@ -281,17 +281,19 @@ Android 核心同步通过
 - 协作说明：`CREDITS.md`，作者 OK，AI 协作 DeepSeek；
 - 截图：`docs/images/01-main.png`、`02-user-lookup.png` 已上传并写入 README。
 
-### 5.6 1.8.0 构建状态（未发布）
+### 5.6 1.8.0 构建/发布状态
 
 - 版本号已改为 1.8.0，`assets/version_info.txt` 已重新生成；
 - 完成 GUI 拆分、数据安全修复、wheel 打包修复、测试隔离；
 - 自动化与 wheel 导入验证通过；
 - 已本地构建 `dist/OK的贴吧玩具箱_v1.8.0`，`--selftest` exit 0，标题为 v1.8.0；
 - 已生成 `dist/ok-tieba-toybox_v1.8.0.zip`、中文名同内容副本 `dist/OK的贴吧玩具箱_v1.8.0.zip`、`dist/SHA256SUMS-1.8.0.txt`；
-- 尚未打 tag/Release，尚未上传 GitHub；
+- 已打 tag `v1.8.0` 并发布 GitHub Release；
 - SHA256（exe）：`754C7EB57FC3A65E13E827C584C122AAC09B1B4D00791D24D7499A90720EABBF`；
 - SHA256（两个 zip 相同）：`1CBAF5B4096500319D5C86046C8373FD31D1522E1439F9DCD95755F56B3E1D30`；
-- 发布说明草稿：`docs/release-notes-v1.8.0.md`。
+- 发布说明：`docs/release-notes-v1.8.0.md`；
+- Release：<https://github.com/Goto-OK/ok-tieba-toybox/releases/tag/v1.8.0>；
+- GitHub 附件：`ok-tieba-toybox_v1.8.0.zip`、`OK._v1.8.0.zip`（中文名被清理）、`SHA256SUMS-1.8.0.txt`。
 
 ## 6. 已知限制
 
@@ -304,7 +306,7 @@ Android 核心同步通过
 - 2026-10-26 真实双账号切换验收通过：临时 profile 登录 B 后替换正式 profile，应用显示“已切换百度账号”；旧 A 手工备份保留，`.bak` 和 switch 临时目录已清理；
 - 2026-10-26 真实验证码路径：抓取被拦截后打开内置验证，成功读取完整 Cookie；修复登录更新后的排队重试和 ttk 按钮 disabled 状态后，登录模式重试已跑完，2 个帖子均为 complete、failed_pages 为空，界面提示“失败部分重试完成，需要重新导出”；
 - 打包版中文路径临时目录问题已修（系统 tmp 不可用时退回应用数据目录）；新包已从中文路径启动并读取 BDUSS；
-- 审查修复（仅 main，尚未重新打包）：凭据接口改 HTTPS；补全等级线程改用线程安全日志；身份弹窗可被停止关闭；protobuf 截断改为报错、页数硬上限固定 500、楼中楼跨页按 pid 去重、未知消息有警告；HTTPS 端点已实测返回 200；
+- 审查修复（已包含在 1.8.0）：凭据接口改 HTTPS；补全等级线程改用线程安全日志；身份弹窗可被停止关闭；protobuf 截断改为报错、页数硬上限固定 500、楼中楼跨页按 pid 去重、未知消息有警告；HTTPS 端点已实测返回 200；
 - GUI 结构：除 App 主类外，版面/消息/设置/表格/查用户/worker/链接/导出/主题/参与者/身份/工具/资料/登录/设置运行时/对比/对话框均已独立成模块；当前实测 App 类 2,291 行、137 个方法，`tieba_gui.py` 文件 2,637 行；`_build_ui` 585→168 行，`_build_people_tab` 432→182 行，`_build_lookup_tab` 305→7 行，`_build_fetch_login` 170→35 行，`_build_people_detail` 171→3 行；App 仍有约 80 行级方法待拆；
 - 打包配置已补全 `py-modules`，wheel 实际安装后 `import tieba_gui` 成功；mypy 覆盖 51 个源文件；`_poll_queue` 改为先续约再派发；Tk 测试夹具增加初始化重试；`docs/code-map.md` 已同步；GUI 通用辅助函数集中到 `tieba_gui_utils.py`，日志内核拆到 `tieba_gui_logging.py`；
 - ruff 已启用 C90/S；复杂度阈值 40，`_run_worker` 已拆到阈值内，仅 `_add_grid_tab` 仍保留 `noqa: C901`；S110/S112 已改为逐处 noqa，其余测试/脚本/URL/子进程用法仍配置目录级例外；
@@ -312,30 +314,30 @@ Android 核心同步通过
 - Android 不跟进 UI；
 - CLI 不跟 GUI 新功能。
 
-## 7. 当前成品（1.7.3）
+## 7. 当前成品（1.8.0）
 
 ```text
-dist/OK的贴吧玩具箱_v1.7.3/
+dist/OK的贴吧玩具箱_v1.8.0/
 ```
 
-- 版本：1.7.3；
-- 构建：2026-10-26 03:54；
-- 主程序：`OK的贴吧玩具箱.exe`，约 6.3MB；
-- 绿色包：`dist/ok-tieba-toybox_v1.7.3.zip`，约 24.5MB；
-- 校验：`dist/SHA256SUMS-1.7.3.txt`；
+- 版本：1.8.0；
+- 发布：2026-10-26 09:31；
+- 主程序：`OK的贴吧玩具箱.exe`；
+- 绿色包：`dist/ok-tieba-toybox_v1.8.0.zip`、`dist/OK的贴吧玩具箱_v1.8.0.zip`；
+- 校验：`dist/SHA256SUMS-1.8.0.txt`；
 - `--selftest` 通过；
 - 源码 `ruff` / `mypy` / `pytest` 通过；
-- exe 启动确认标题为 `OK的贴吧玩具箱 v1.7.3`；
+- exe 启动确认标题为 `OK的贴吧玩具箱 v1.8.0`；
 - 含 `使用说明.txt`、`THIRD_PARTY_NOTICES.md`；
-- 图标采用平色深蓝 A 方案；以 `assets/app.svg` 为矢量母版，`scripts/make_icon.py` 生成多尺寸 ICO；
 - 数据目录保持 `%APPDATA%\TiebaReplyStats`，不随产品改名；
 - Authenticode：`NotSigned`，当前未做代码签名；
 - SmartScreen 可能提示“未知发布者”；
 - 绿色包解压到独立目录后 `--selftest` 通过；
-- 从中文路径启动确认可用，内置登录读取 BDUSS 成功；
-- SHA256（exe）：`D36B63ADEFFA661DDC9C49D7AC5E73DAA05E19F277EFD289D6CE9F74C9EABB4F`；
-- SHA256（zip）：`51DD555010D86A86337DD4735D21DDA6C8C0CD85099E9C4ACE24CCC30F92E262`；
-- GitHub Release：<https://github.com/Goto-OK/ok-tieba-toybox/releases/tag/v1.7.3>。
+- 从中文路径启动确认可用；
+- SHA256（exe）：`754C7EB57FC3A65E13E827C584C122AAC09B1B4D00791D24D7499A90720EABBF`；
+- SHA256（两个 zip 相同）：`1CBAF5B4096500319D5C86046C8373FD31D1522E1439F9DCD95755F56B3E1D30`；
+- GitHub Release：<https://github.com/Goto-OK/ok-tieba-toybox/releases/tag/v1.8.0>；
+- GitHub 将中文附件名清理为 `OK._v1.8.0.zip`，与 `ok-tieba-toybox_v1.8.0.zip` 内容相同。
 
 源码运行：
 

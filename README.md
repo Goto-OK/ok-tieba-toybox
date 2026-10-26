@@ -3,8 +3,7 @@
 输入贴吧帖子链接，抓取**主题楼层 + 楼中楼**，按用户汇总，导出 Excel。  
 默认匿名使用，不需要 Cookie；可选登录，用于验证码、关注检测和更完整的资料。
 
-当前开发版本：**v1.8.0（已打包，未发布）**  
-最新已发布版本：**v1.7.3**
+当前已发布版本：**v1.8.0**
 
 作者：**OK**（GitHub: [Goto-OK](https://github.com/Goto-OK)）
 
@@ -23,13 +22,13 @@ AI 协作：**DeepSeek**（代码实现、测试与文档整理，详见 [CREDIT
 
 ### Windows 绿色版
 
-当前已发布的是 v1.7.3；v1.8.0 仍在源码阶段，尚未打包。
-
-从 GitHub **Releases** 下载最新已发布版本：
+从 GitHub **Releases** 下载最新版本：
 
 ```text
-ok-tieba-toybox_v1.7.3.zip
+ok-tieba-toybox_v1.8.0.zip
 ```
+
+v1.8.0 同时附带 `OK._v1.8.0.zip`，内容与上面的 zip 完全相同；这是 GitHub 对中文附件名清理后的结果。
 
 使用：
 
@@ -42,7 +41,7 @@ ok-tieba-toybox_v1.7.3.zip
 校验文件：
 
 ```text
-SHA256SUMS-1.7.3.txt
+SHA256SUMS-1.8.0.txt
 ```
 
 ### 从源码运行
