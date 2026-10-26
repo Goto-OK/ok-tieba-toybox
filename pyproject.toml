@@ -37,6 +37,7 @@ tieba-stats-gui = "tieba_gui:main"
 py-modules = [
     "tieba_gui",
     "tieba_gui_compare",
+    "tieba_gui_dialogs",
     "tieba_gui_export",
     "tieba_gui_grid",
     "tieba_gui_identity",
@@ -97,6 +98,7 @@ files = [
     "tieba_reply_stats",
     "tieba_gui.py",
     "tieba_gui_compare.py",
+    "tieba_gui_dialogs.py",
     "tieba_gui_export.py",
     "tieba_gui_grid.py",
     "tieba_gui_identity.py",

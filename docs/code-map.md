@@ -20,6 +20,7 @@
 | `tieba_gui_logging.py` | 日志写入与后台线程安全日志 |
 | `tieba_gui_export.py` | Excel/报告导出 |
 | `tieba_gui_compare.py` | 多帖对比页与导出 |
+| `tieba_gui_dialogs.py` | 通用选择框、提示窗口 |
 | `tieba_gui_theme.py` | 主题应用 |
 | `tieba_gui_people.py` | 参与者、筛选、分页、区间对话 |
 | `tieba_gui_identity.py` | 身份补全与批量标记 |

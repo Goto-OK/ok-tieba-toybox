@@ -22,7 +22,9 @@
 - `_build_lookup_tab` 拆分为查询区、摘要区、底部按钮、双表格四个构建器；
 - `_build_fetch_login` 拆分为头部、登录方式、BDUSS、Cookie、切换账号五个构建器；
 - `_build_people_detail` 拆分为红绿灯、资料头、双表格三个构建器；
-- 多帖对比拆出为独立 `tieba_gui_compare.py`。
+- 多帖对比拆出为独立 `tieba_gui_compare.py`；
+- 通用选择/提示窗口拆出为 `tieba_gui_dialogs.py`；
+- `_merge_forum_lists` 移到资料模块，`_retry_incomplete_threads` / `_expand_large_threads` 移到 worker 模块。
 - ruff 启用 C90/S 规则；复杂度阈值 40，两个入口方法保留 noqa，安全规则按目录配置已知例外。
 - GUI 版面构建方法拆出为独立 `tieba_gui_layout.py`，App 主类减少约 1,300 行；
 - 后台消息的 35 个 kind 分支全部拆出为独立 `tieba_gui_messages.py` 的 `MessageMixin`，`_handle_message` 从 783 行降到约 74 行；

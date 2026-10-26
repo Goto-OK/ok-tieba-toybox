@@ -9,8 +9,9 @@ import threading
 import time
 import tkinter as tk
 import traceback
+from dataclasses import replace
 from tkinter import messagebox
-from typing import Any, Dict
+from typing import Any, Dict, List
 
 from tieba_gui_utils import default_output_path
 from tieba_reply_stats import webview2
@@ -540,4 +541,119 @@ class WorkerMixin:
             self._write_log("error", error=type(error).__name__)
             self._post(("log", traceback.format_exc(), "muted"))
             self._post(("error", friendly_error(error)))
+
+    def _retry_incomplete_threads(self) -> None:
+        if getattr(self, "_supplement_running", False) or self.running:
+            self._pending_retry = True
+            self._append_log("当前任务尚未结束，稍后重试失败部分。", "muted")
+            return
+        self._pending_retry = False
+        targets = [thread for thread in self.last_threads if not getattr(thread, "complete", True)]
+        if not targets:
+            messagebox.showinfo("没有失败部分", "当前帖子都是完整的。", parent=self.root)
+            return
+        mode = self.mode_var.get()
+        if mode == "login":
+            cookie = self._request_cookie()
+            if not webview2.has_login_cookie(cookie):
+                messagebox.showwarning(
+                    "需要登录 Cookie",
+                    "登录模式续抓需要 BDUSS/TIEBA_SID，请先重新获取登录信息。",
+                    parent=self.root,
+                )
+                return
+        else:
+            cookie = {}
+        resume_requests()
+        configure_gate(float(self.delay_var.get() or 0.8))
+        self._set_supplement_running(True)
+        self._supplement_stop.clear()
+        set_stop_checker(self._supplement_stop.is_set)
+        self.retry_incomplete_btn.state(["disabled"])
+        self.people_hint.configure(text=f"正在重试 {len(targets)} 个帖子的失败部分…")
+
+        def worker():
+            try:
+                fetcher = Fetcher(cookie=cookie, delay=0, verbose=False)
+                options = CollectOptions(
+                    mode=mode,
+                    include_comments=self.comments_var.get(),
+                    comment_depth=self._comment_depth_value(),
+                    comment_concurrency=max(
+                        1, min(3, int(self.comment_concurrency_var.get() or 1))
+                    ),
+                    verbose=True,
+                    log=self._log_from_thread,
+                    should_stop=self._supplement_stop.is_set,
+                )
+                for thread in targets:
+                    url = thread.meta.url or f"https://tieba.baidu.com/p/{thread.meta.tid}"
+                    collect_thread(url, fetcher, options, resume_thread=thread)
+                self._persist_result(self.last_threads)
+                self._post(("incomplete_retry_done", len(targets)))
+            except CollectCancelled:
+                self._persist_result(self.last_threads)
+                self._post(("incomplete_retry_stopped",))
+            except Exception as error:  # noqa: BLE001
+                self._post(("incomplete_retry_error", str(error)))
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _expand_large_threads(self, threads, limit: int = 500_000):
+        result: list = []
+        for thread in threads:
+            size = len(thread.floors) + len(thread.comments)
+            if size <= limit:
+                result.append(thread)
+                continue
+            by_floor: Dict[int, List] = {}
+            for comment in thread.comments:
+                by_floor.setdefault(comment.floor_no, []).append(comment)
+            groups: list = []
+            part_floors: list = []
+            part_comments: list = []
+            rows = 0
+            for floor in thread.floors:
+                comments = by_floor.pop(floor.post_no, [])
+                block = 1 + len(comments)
+                if block > limit:
+                    if part_floors or part_comments:
+                        groups.append((part_floors, part_comments))
+                        part_floors, part_comments, rows = [], [], 0
+                    chunk_size = max(1, limit - 1)
+                    for start in range(0, len(comments), chunk_size):
+                        groups.append(([floor], comments[start : start + chunk_size]))
+                    continue
+                if part_floors and rows + block > limit:
+                    groups.append((part_floors, part_comments))
+                    part_floors, part_comments, rows = [], [], 0
+                part_floors.append(floor)
+                part_comments.extend(comments)
+                rows += block
+            for comments in by_floor.values():
+                if not comments:
+                    continue
+                if part_floors or part_comments:
+                    groups.append((part_floors, part_comments))
+                    part_floors, part_comments, rows = [], [], 0
+                chunk_size = max(1, limit)
+                for start in range(0, len(comments), chunk_size):
+                    groups.append(([], comments[start : start + chunk_size]))
+            if part_floors or part_comments:
+                groups.append((part_floors, part_comments))
+            total = len(groups)
+            for index, (floors, comments) in enumerate(groups, start=1):
+                meta = replace(
+                    thread.meta,
+                    title=f"{thread.meta.title or thread.meta.tid}（分片 {index}/{total}）",
+                )
+                result.append(
+                    replace(
+                        thread,
+                        meta=meta,
+                        floors=list(floors),
+                        comments=list(comments),
+                    )
+                )
+        return result
 

@@ -978,3 +978,84 @@ class ProfileMixin:
         self.profile_status.configure(text=status)
         self._set_profile_cache_note(self._cache_age_note(profile))
 
+    def _merge_forum_lists(self, profile, bar_name: str = "", bar_level: str = "") -> list:
+        forums = profile.get("followed_forums") or []
+        hidden = profile.get("hidden_forums") or []
+        base = forums or hidden
+        merged = {}
+        for forum in base:
+            name = forum.get("name")
+            if not name:
+                continue
+            item = dict(forum)
+            if forums:
+                item["source"] = "公开关注"
+            elif "BDUSS" in str(profile.get("follow_error") or ""):
+                item["source"] = "profile片段"
+            else:
+                item["source"] = "隐藏关注"
+            item["level_source"] = "官方" if int(item.get("level") or 0) > 0 else "-"
+            merged[name] = item
+        if not forums:
+            for forum in profile.get("like_forum") or []:
+                name = forum.get("name")
+                if name and name not in merged:
+                    merged[name] = {
+                        "name": name,
+                        "level": 0,
+                        "level_name": "",
+                        "source": "精选",
+                        "level_source": "-",
+                    }
+        if bar_name and bar_level:
+            name = bar_name[:-1] if bar_name.endswith("吧") and len(bar_name) > 2 else bar_name
+            level_int = int(bar_level or 0)
+            if name and level_int > 0:
+                existing = merged.get(name)
+                if existing is None:
+                    merged[name] = {
+                        "name": name,
+                        "level": level_int,
+                        "level_name": "",
+                        "source": "等级",
+                        "level_source": "主题",
+                    }
+                elif not existing.get("level"):
+                    existing["level"] = level_int
+                    existing["level_source"] = "主题"
+        for forum in profile.get("probed_forums") or []:
+            name = forum.get("name")
+            if not name:
+                continue
+            existing = merged.get(name)
+            if existing is None:
+                merged[name] = {
+                    "name": name,
+                    "level": int(forum.get("level") or 0),
+                    "level_name": forum.get("level_name") or "",
+                    "source": "候选确认",
+                    "level_source": "官方" if int(forum.get("level") or 0) > 0 else "-",
+                }
+            elif existing.get("source") != "公开关注":
+                if int(forum.get("level") or 0) > int(existing.get("level") or 0):
+                    existing["level"] = int(forum.get("level") or 0)
+                existing["source"] = "候选确认"
+        if self.settings.get("love_level_enabled", False):
+            for forum in profile.get("level_forums") or []:
+                name = str(forum.get("name") or "")
+                if not name:
+                    continue
+                existing = merged.get(name)
+                if existing is None:
+                    merged[name] = {
+                        "name": name,
+                        "level": int(forum.get("level") or 0),
+                        "level_name": "",
+                        "source": "恋文等级",
+                        "level_source": "恋文（第三方）",
+                    }
+                elif not int(existing.get("level") or 0):
+                    existing["level"] = int(forum.get("level") or 0)
+                    existing["level_source"] = "恋文（第三方）"
+        return sorted(merged.values(), key=lambda item: int(item.get("level") or 0), reverse=True)
+

@@ -21,6 +21,7 @@ from tkinter import filedialog, messagebox, ttk
 from typing import Any, Dict, List, Optional
 
 from tieba_gui_compare import CompareMixin
+from tieba_gui_dialogs import DialogsMixin
 from tieba_gui_export import ExportMixin
 from tieba_gui_grid import GridMixin
 from tieba_gui_identity import BatchIdentityMixin
@@ -59,17 +60,11 @@ from tieba_reply_stats.blacklist import (
 from tieba_reply_stats.blacklist import (
     import_xlsx as import_blacklist_xlsx,
 )
-from tieba_reply_stats.collect import (
-    CollectCancelled,
-    CollectOptions,
-    collect_thread,
-)
 from tieba_reply_stats.cookie_store import load_cookie
 from tieba_reply_stats.errors import friendly_error
 from tieba_reply_stats.export import export_workbook
 from tieba_reply_stats.fetch import (
     Fetcher,
-    configure_gate,
     parse_cookie_input,
     resume_requests,
     set_stop_checker,
@@ -218,7 +213,7 @@ _MESSAGE_HANDLERS = {
     "error": "_handle_message_error",
 }
 
-class App(GuiLayoutMixin, MessageMixin, SettingsMixin, GridMixin, LookupMixin, WorkerMixin, ExportMixin, BatchIdentityMixin, ThemeMixin, ProfileMixin, ToolsMixin, LoginMixin, LinksMixin, PeopleReportMixin, SettingsRuntimeMixin, LoggingMixin, CompareMixin):
+class App(GuiLayoutMixin, MessageMixin, SettingsMixin, GridMixin, LookupMixin, WorkerMixin, ExportMixin, BatchIdentityMixin, ThemeMixin, ProfileMixin, ToolsMixin, LoginMixin, LinksMixin, PeopleReportMixin, SettingsRuntimeMixin, LoggingMixin, CompareMixin, DialogsMixin):
     def __init__(self, root: tk.Tk) -> None:
         self.root = root
         self.log_queue: "queue.Queue[tuple]" = queue.Queue()
@@ -779,62 +774,6 @@ class App(GuiLayoutMixin, MessageMixin, SettingsMixin, GridMixin, LookupMixin, W
             self._pending_retry = True
             self.root.after(200, self._retry_incomplete_threads)
 
-    def _retry_incomplete_threads(self) -> None:
-        if getattr(self, "_supplement_running", False) or self.running:
-            self._pending_retry = True
-            self._append_log("当前任务尚未结束，稍后重试失败部分。", "muted")
-            return
-        self._pending_retry = False
-        targets = [thread for thread in self.last_threads if not getattr(thread, "complete", True)]
-        if not targets:
-            messagebox.showinfo("没有失败部分", "当前帖子都是完整的。", parent=self.root)
-            return
-        mode = self.mode_var.get()
-        if mode == "login":
-            cookie = self._request_cookie()
-            if not webview2.has_login_cookie(cookie):
-                messagebox.showwarning(
-                    "需要登录 Cookie",
-                    "登录模式续抓需要 BDUSS/TIEBA_SID，请先重新获取登录信息。",
-                    parent=self.root,
-                )
-                return
-        else:
-            cookie = {}
-        resume_requests()
-        configure_gate(float(self.delay_var.get() or 0.8))
-        self._set_supplement_running(True)
-        self._supplement_stop.clear()
-        set_stop_checker(self._supplement_stop.is_set)
-        self.retry_incomplete_btn.state(["disabled"])
-        self.people_hint.configure(text=f"正在重试 {len(targets)} 个帖子的失败部分…")
-
-        def worker():
-            try:
-                fetcher = Fetcher(cookie=cookie, delay=0, verbose=False)
-                options = CollectOptions(
-                    mode=mode,
-                    include_comments=self.comments_var.get(),
-                    comment_depth=self._comment_depth_value(),
-                    comment_concurrency=max(
-                        1, min(3, int(self.comment_concurrency_var.get() or 1))
-                    ),
-                    verbose=True,
-                    log=self._log_from_thread,
-                    should_stop=self._supplement_stop.is_set,
-                )
-                for thread in targets:
-                    url = thread.meta.url or f"https://tieba.baidu.com/p/{thread.meta.tid}"
-                    collect_thread(url, fetcher, options, resume_thread=thread)
-                self._persist_result(self.last_threads)
-                self._post(("incomplete_retry_done", len(targets)))
-            except CollectCancelled:
-                self._persist_result(self.last_threads)
-                self._post(("incomplete_retry_stopped",))
-            except Exception as error:  # noqa: BLE001
-                self._post(("incomplete_retry_error", str(error)))
-
-        threading.Thread(target=worker, daemon=True).start()
 
 
 
@@ -1613,56 +1552,6 @@ class App(GuiLayoutMixin, MessageMixin, SettingsMixin, GridMixin, LookupMixin, W
             text=f"旧版本残留：{len(files)} 个，{size / 1024 / 1024:.1f} MB"
         )
 
-    def _open_notice(self) -> None:
-        path = os.path.join(resource_dir(), "THIRD_PARTY_NOTICES.md")
-        if not os.path.isfile(path):
-            messagebox.showinfo("第三方许可", "许可文件未找到。", parent=self.root)
-            return
-        existing = getattr(self, "_notice_window", None)
-        try:
-            if existing is not None and existing.winfo_exists():
-                existing.lift()
-                existing.focus_set()
-                return
-        except tk.TclError:
-            pass
-        try:
-            with open(path, "r", encoding="utf-8") as handle:
-                content = handle.read()
-        except OSError as error:
-            messagebox.showerror("打不开许可文件", friendly_error(error), parent=self.root)
-            return
-        win = tk.Toplevel(self.root)
-        self._notice_window = win
-        win.title("第三方许可")
-        win.geometry("760x600")
-        win.minsize(560, 360)
-        win.configure(bg="#eef1f5")
-        win.transient(self.root)
-        frame = tk.Frame(win, bg="#eef1f5", padx=10, pady=8)
-        frame.pack(fill="both", expand=True)
-        top = tk.Frame(frame, bg="#eef1f5")
-        top.pack(fill="x", pady=(0, 6))
-        tk.Label(
-            top, text="第三方组件与许可", bg="#eef1f5", fg="#1F4E79",
-            font=("Microsoft YaHei UI", 12, "bold"),
-        ).pack(side="left")
-        ttk.Button(top, text="关闭", command=win.destroy, width=8).pack(side="right")
-        text = tk.Text(
-            frame, wrap="word", font=("Microsoft YaHei UI", 9), relief="flat",
-            padx=10, pady=8, bg="#fbfcfe", state="disabled",
-        )
-        scroll = ttk.Scrollbar(frame, orient="vertical", command=text.yview)
-        text.configure(yscrollcommand=scroll.set)
-        scroll.pack(side="right", fill="y")
-        text.pack(side="left", fill="both", expand=True)
-        text.configure(state="normal")
-        text.insert("1.0", content)
-        text.configure(state="disabled")
-        self._theme_widget_tree(win)
-        self._center_toplevel(win, 760, 600)
-        win.protocol("WM_DELETE_WINDOW", win.destroy)
-        win.focus_set()
 
     def _open_folder(self, path: str) -> None:
         try:
@@ -1751,80 +1640,6 @@ class App(GuiLayoutMixin, MessageMixin, SettingsMixin, GridMixin, LookupMixin, W
 
 
 
-    def _ask_choice(self, title: str, message: str, choices, default: int = 0):
-        """带明确按钮文案的模态选择框；choices=[(label,value),...]，None 表示取消。"""
-        win = tk.Toplevel(self.root)
-        win.title(title)
-        win.configure(bg="#ffffff")
-        win.resizable(False, False)
-        win.transient(self.root)
-        win.grab_set()
-        self._active_choice_window = win
-        frame = tk.Frame(win, bg="#ffffff", padx=20, pady=16)
-        frame.pack(fill="both", expand=True)
-        tk.Label(
-            frame,
-            text=title,
-            bg="#ffffff",
-            fg="#1f2937",
-            font=("Microsoft YaHei UI", 12, "bold"),
-        ).pack(anchor="w")
-        tk.Label(
-            frame,
-            text=message,
-            bg="#ffffff",
-            fg="#475569",
-            font=("Microsoft YaHei UI", 9),
-            wraplength=440,
-            justify="left",
-            anchor="w",
-        ).pack(fill="x", pady=(8, 14))
-        result: Dict[str, Any] = {"value": None}
-        buttons = tk.Frame(frame, bg="#ffffff")
-        buttons.pack(fill="x")
-
-        def finish(value) -> None:
-            result["value"] = value
-            win.destroy()
-
-        def command(value):
-            return lambda: finish(value)
-
-        for index in range(len(choices) - 1, -1, -1):
-            label, value = choices[index]
-            if index == default:
-                tk.Button(
-                    buttons,
-                    text=label,
-                    command=command(value),
-                    bg="#1F4E79",
-                    fg="#ffffff",
-                    activebackground="#163b5c",
-                    activeforeground="#ffffff",
-                    relief="flat",
-                    padx=14,
-                    pady=5,
-                    cursor="hand2",
-                    font=("Microsoft YaHei UI", 9, "bold"),
-                ).pack(side="right", padx=(8, 0))
-            else:
-                ttk.Button(buttons, text=label, command=command(value)).pack(
-                    side="right", padx=(8, 0)
-                )
-        win.bind("<Return>", lambda _event: finish(choices[default][1]))
-        win.bind("<Escape>", lambda _event: finish(None))
-        win.protocol("WM_DELETE_WINDOW", lambda: finish(None))
-        win.update_idletasks()
-        width = max(win.winfo_reqwidth(), buttons.winfo_reqwidth() + 40)
-        height = win.winfo_reqheight()
-        x = self.root.winfo_rootx() + max(0, (self.root.winfo_width() - width) // 2)
-        y = self.root.winfo_rooty() + max(0, (self.root.winfo_height() - height) // 2)
-        self._theme_widget_tree(win)
-        win.geometry(f"{width}x{height}+{x}+{y}")
-        self.root.wait_window(win)
-        if getattr(self, "_active_choice_window", None) is win:
-            self._active_choice_window = None
-        return result["value"]
 
 
 
@@ -2250,7 +2065,6 @@ class App(GuiLayoutMixin, MessageMixin, SettingsMixin, GridMixin, LookupMixin, W
         return users
 
     def _filtered_threads(self) -> list:
-        from dataclasses import replace
 
         selected = set()
         filtered = self._visible_people()
@@ -2298,63 +2112,6 @@ class App(GuiLayoutMixin, MessageMixin, SettingsMixin, GridMixin, LookupMixin, W
                 parts.append(f"{title}筛选 {len(selected)} 项")
         return "；".join(parts) or "无"
 
-    def _expand_large_threads(self, threads, limit: int = 500_000):
-        result: list = []
-        for thread in threads:
-            size = len(thread.floors) + len(thread.comments)
-            if size <= limit:
-                result.append(thread)
-                continue
-            by_floor: Dict[int, List] = {}
-            for comment in thread.comments:
-                by_floor.setdefault(comment.floor_no, []).append(comment)
-            groups: list = []
-            part_floors: list = []
-            part_comments: list = []
-            rows = 0
-            for floor in thread.floors:
-                comments = by_floor.pop(floor.post_no, [])
-                block = 1 + len(comments)
-                if block > limit:
-                    if part_floors or part_comments:
-                        groups.append((part_floors, part_comments))
-                        part_floors, part_comments, rows = [], [], 0
-                    chunk_size = max(1, limit - 1)
-                    for start in range(0, len(comments), chunk_size):
-                        groups.append(([floor], comments[start : start + chunk_size]))
-                    continue
-                if part_floors and rows + block > limit:
-                    groups.append((part_floors, part_comments))
-                    part_floors, part_comments, rows = [], [], 0
-                part_floors.append(floor)
-                part_comments.extend(comments)
-                rows += block
-            for comments in by_floor.values():
-                if not comments:
-                    continue
-                if part_floors or part_comments:
-                    groups.append((part_floors, part_comments))
-                    part_floors, part_comments, rows = [], [], 0
-                chunk_size = max(1, limit)
-                for start in range(0, len(comments), chunk_size):
-                    groups.append(([], comments[start : start + chunk_size]))
-            if part_floors or part_comments:
-                groups.append((part_floors, part_comments))
-            total = len(groups)
-            for index, (floors, comments) in enumerate(groups, start=1):
-                meta = replace(
-                    thread.meta,
-                    title=f"{thread.meta.title or thread.meta.tid}（分片 {index}/{total}）",
-                )
-                result.append(
-                    replace(
-                        thread,
-                        meta=meta,
-                        floors=list(floors),
-                        comments=list(comments),
-                    )
-                )
-        return result
 
 
 
@@ -2469,86 +2226,6 @@ class App(GuiLayoutMixin, MessageMixin, SettingsMixin, GridMixin, LookupMixin, W
         level, _ = classify([bar], getattr(self, "blacklist", {}))
         return (level,) if level else ()
 
-    def _merge_forum_lists(self, profile, bar_name: str = "", bar_level: str = "") -> list:
-        forums = profile.get("followed_forums") or []
-        hidden = profile.get("hidden_forums") or []
-        base = forums or hidden
-        merged = {}
-        for forum in base:
-            name = forum.get("name")
-            if not name:
-                continue
-            item = dict(forum)
-            if forums:
-                item["source"] = "公开关注"
-            elif "BDUSS" in str(profile.get("follow_error") or ""):
-                item["source"] = "profile片段"
-            else:
-                item["source"] = "隐藏关注"
-            item["level_source"] = "官方" if int(item.get("level") or 0) > 0 else "-"
-            merged[name] = item
-        if not forums:
-            for forum in profile.get("like_forum") or []:
-                name = forum.get("name")
-                if name and name not in merged:
-                    merged[name] = {
-                        "name": name,
-                        "level": 0,
-                        "level_name": "",
-                        "source": "精选",
-                        "level_source": "-",
-                    }
-        if bar_name and bar_level:
-            name = bar_name[:-1] if bar_name.endswith("吧") and len(bar_name) > 2 else bar_name
-            level_int = int(bar_level or 0)
-            if name and level_int > 0:
-                existing = merged.get(name)
-                if existing is None:
-                    merged[name] = {
-                        "name": name,
-                        "level": level_int,
-                        "level_name": "",
-                        "source": "等级",
-                        "level_source": "主题",
-                    }
-                elif not existing.get("level"):
-                    existing["level"] = level_int
-                    existing["level_source"] = "主题"
-        for forum in profile.get("probed_forums") or []:
-            name = forum.get("name")
-            if not name:
-                continue
-            existing = merged.get(name)
-            if existing is None:
-                merged[name] = {
-                    "name": name,
-                    "level": int(forum.get("level") or 0),
-                    "level_name": forum.get("level_name") or "",
-                    "source": "候选确认",
-                    "level_source": "官方" if int(forum.get("level") or 0) > 0 else "-",
-                }
-            elif existing.get("source") != "公开关注":
-                if int(forum.get("level") or 0) > int(existing.get("level") or 0):
-                    existing["level"] = int(forum.get("level") or 0)
-                existing["source"] = "候选确认"
-        if self.settings.get("love_level_enabled", False):
-            for forum in profile.get("level_forums") or []:
-                name = str(forum.get("name") or "")
-                if not name:
-                    continue
-                existing = merged.get(name)
-                if existing is None:
-                    merged[name] = {
-                        "name": name,
-                        "level": int(forum.get("level") or 0),
-                        "level_name": "",
-                        "source": "恋文等级",
-                        "level_source": "恋文（第三方）",
-                    }
-                elif not int(existing.get("level") or 0):
-                    existing["level"] = int(forum.get("level") or 0)
-                    existing["level_source"] = "恋文（第三方）"
-        return sorted(merged.values(), key=lambda item: int(item.get("level") or 0), reverse=True)
 
     def _forum_note(self, profile, bar_name: str = "", bar_level: str = "") -> str:
         forums = profile.get("followed_forums") or []
