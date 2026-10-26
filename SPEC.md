@@ -4065,6 +4065,7 @@ count 是上限，不是保证必须返回 count 条
 ### 26. 数据安全与测试隔离
 
 - `cleanup_profile_backup()` 必须对目录删除/改名重试；失败时保留 `.bak` 并向调用方报告，不得静默吞掉；
+- `clear_switch_profile()` 必须重试并报告失败；`prepare_switch_profile()` 不得在旧临时目录清不掉时继续使用它，应改名隔离或显式失败；
 - 启动时清理失败要写入运行日志并显示警告；
 - GUI 测试夹具必须把 `LOCALAPPDATA` 指向临时目录，并把设置、Cookie、黑名单、最近结果的数据路径常量指向临时目录，禁止读写开发者真实数据；
 - `APP_TITLE` 统一放在 `tieba_gui_utils.py`，设置页不得依赖版面模块；

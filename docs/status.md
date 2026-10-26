@@ -19,7 +19,7 @@
 ```text
 ruff     通过
 mypy     51 个源文件通过（含全部 GUI 模块）
-pytest   146 项；本机全过，CI 通过
+pytest   149 项；本机全过，CI 通过
 selftest 通过
 GitHub Actions CI 通过
 Android 核心同步通过
@@ -289,8 +289,8 @@ Android 核心同步通过
 - 已本地构建 `dist/OK的贴吧玩具箱_v1.8.0`，`--selftest` exit 0，标题为 v1.8.0；
 - 已生成 `dist/ok-tieba-toybox_v1.8.0.zip`、中文名同内容副本 `dist/OK的贴吧玩具箱_v1.8.0.zip`、`dist/SHA256SUMS-1.8.0.txt`；
 - 尚未打 tag/Release，尚未上传 GitHub；
-- SHA256（exe）：`4EC5772D83123F42DCCA6883DD38557A71E02A3EE915AC541C9E93B12D00016E`；
-- SHA256（两个 zip 相同）：`2C0A8AC5A0947AFC86843EBA801DA62AD533E9DBB04718917D141443821574B4`；
+- SHA256（exe）：`754C7EB57FC3A65E13E827C584C122AAC09B1B4D00791D24D7499A90720EABBF`；
+- SHA256（两个 zip 相同）：`1CBAF5B4096500319D5C86046C8373FD31D1522E1439F9DCD95755F56B3E1D30`；
 - 发布说明草稿：`docs/release-notes-v1.8.0.md`。
 
 ## 6. 已知限制
@@ -308,7 +308,7 @@ Android 核心同步通过
 - GUI 结构：除 App 主类外，版面/消息/设置/表格/查用户/worker/链接/导出/主题/参与者/身份/工具/资料/登录/设置运行时/对比/对话框均已独立成模块；当前实测 App 类 2,291 行、137 个方法，`tieba_gui.py` 文件 2,637 行；`_build_ui` 585→168 行，`_build_people_tab` 432→182 行，`_build_lookup_tab` 305→7 行，`_build_fetch_login` 170→35 行，`_build_people_detail` 171→3 行；App 仍有约 80 行级方法待拆；
 - 打包配置已补全 `py-modules`，wheel 实际安装后 `import tieba_gui` 成功；mypy 覆盖 51 个源文件；`_poll_queue` 改为先续约再派发；Tk 测试夹具增加初始化重试；`docs/code-map.md` 已同步；GUI 通用辅助函数集中到 `tieba_gui_utils.py`，日志内核拆到 `tieba_gui_logging.py`；
 - ruff 已启用 C90/S；复杂度阈值 40，`_run_worker` 已拆到阈值内，仅 `_add_grid_tab` 仍保留 `noqa: C901`；S110/S112 已改为逐处 noqa，其余测试/脚本/URL/子进程用法仍配置目录级例外；
-- 内置登录备份清理失败会重试 3 次并保留 `.bak`，启动时写入警告/运行日志；GUI 测试夹具已隔离 `LOCALAPPDATA` 及设置/Cookie/黑名单/最近结果路径；`APP_TITLE` 已移到 `tieba_gui_utils.py`；
+- 内置登录备份清理失败会重试 3 次并保留 `.bak`，启动时写入警告/运行日志；GUI 测试夹具已隔离 `LOCALAPPDATA` 及设置/Cookie/黑名单/最近结果路径；切换临时目录清理失败会重试、报告并改名隔离；`APP_TITLE` 已移到 `tieba_gui_utils.py`；
 - Android 不跟进 UI；
 - CLI 不跟 GUI 新功能。
 

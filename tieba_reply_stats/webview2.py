@@ -149,21 +149,42 @@ def switch_profile_dir() -> str:
     return str(Path(base) / "TiebaReplyStats" / "webview2-switch")
 
 
+def _remove_tree_with_retry(path: str, attempts: int = 3) -> Optional[OSError]:
+    if not os.path.isdir(path):
+        return None
+    last_error: Optional[OSError] = None
+    for attempt in range(attempts):
+        try:
+            shutil.rmtree(path)
+            return None
+        except OSError as error:
+            last_error = error
+            if attempt + 1 < attempts:
+                time.sleep(0.5)
+    return last_error
+
+
 def prepare_switch_profile() -> str:
+    """返回干净的切换目录；清不掉旧目录时改名隔离，绝不继续用脏目录。"""
     path = switch_profile_dir()
-    try:
-        shutil.rmtree(path)
-    except OSError:
-        pass
+    error = _remove_tree_with_retry(path)
+    if error is not None:
+        stale = f"{path}.stale-{int(time.time())}"
+        try:
+            os.replace(path, stale)
+        except OSError as move_error:
+            raise RuntimeError(
+                f"临时切换登录目录被占用，无法清理：{path}"
+            ) from move_error
+        _remove_tree_with_retry(stale, attempts=1)
     Path(path).mkdir(parents=True, exist_ok=True)
     return path
 
 
-def clear_switch_profile() -> None:
-    try:
-        shutil.rmtree(switch_profile_dir())
-    except OSError:
-        pass
+def clear_switch_profile(on_error: Optional[Callable[[str], None]] = None) -> None:
+    error = _remove_tree_with_retry(switch_profile_dir())
+    if error is not None and on_error is not None:
+        on_error(f"临时切换登录目录清理失败：{switch_profile_dir()}（{error}）")
 
 
 def cleanup_profile_backup(on_error: Optional[Callable[[str], None]] = None) -> None:

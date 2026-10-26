@@ -260,7 +260,7 @@ class App(GuiLayoutMixin, MessageMixin, SettingsMixin, GridMixin, LookupMixin, W
         self._usage_window: Optional[tk.Toplevel] = None
         startup_warnings: list[str] = []
         webview2.cleanup_profile_backup(startup_warnings.append)
-        webview2.clear_switch_profile()
+        webview2.clear_switch_profile(startup_warnings.append)
 
         self._build_ui()
         for warning in startup_warnings:

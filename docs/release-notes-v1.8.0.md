@@ -44,7 +44,7 @@ AI 协作：DeepSeek
 ```text
 ruff check . --no-cache   通过
 mypy                      51 个源文件通过
-pytest                    146 passed
+pytest                    149 passed
 tests/selftest.py         通过
 CI                        success
 ```

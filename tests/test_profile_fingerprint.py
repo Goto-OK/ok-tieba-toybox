@@ -89,6 +89,43 @@ def test_cleanup_profile_backup_reports_failure(monkeypatch, tmp_path):
     assert os.path.isdir(profile + ".bak")
 
 
+def test_clear_switch_profile_reports_failure(monkeypatch, tmp_path):
+    _use_temp_profile(monkeypatch, tmp_path)
+    switch = webview2.switch_profile_dir()
+    os.makedirs(switch)
+    messages = []
+    monkeypatch.setattr(webview2.shutil, "rmtree", lambda *_args, **_kwargs: (_ for _ in ()).throw(OSError("locked")))
+    monkeypatch.setattr(webview2.time, "sleep", lambda _seconds: None)
+    webview2.clear_switch_profile(messages.append)
+    assert messages and "临时切换登录目录清理失败" in messages[0]
+    assert os.path.isdir(switch)
+
+
+def test_prepare_switch_profile_isolates_dirty_dir(monkeypatch, tmp_path):
+    _use_temp_profile(monkeypatch, tmp_path)
+    switch = webview2.switch_profile_dir()
+    os.makedirs(switch)
+    open(os.path.join(switch, "old.txt"), "w", encoding="utf-8").write("old")
+    monkeypatch.setattr(webview2.shutil, "rmtree", lambda *_args, **_kwargs: (_ for _ in ()).throw(OSError("locked")))
+    monkeypatch.setattr(webview2.time, "sleep", lambda _seconds: None)
+    prepared = webview2.prepare_switch_profile()
+    assert prepared == switch
+    assert os.path.isdir(switch)
+    assert not os.path.exists(os.path.join(switch, "old.txt"))
+    assert any(name.startswith("webview2-switch.stale-") for name in os.listdir(os.path.dirname(switch)))
+
+
+def test_prepare_switch_profile_fails_when_dirty_dir_cannot_move(monkeypatch, tmp_path):
+    _use_temp_profile(monkeypatch, tmp_path)
+    switch = webview2.switch_profile_dir()
+    os.makedirs(switch)
+    monkeypatch.setattr(webview2.shutil, "rmtree", lambda *_args, **_kwargs: (_ for _ in ()).throw(OSError("locked")))
+    monkeypatch.setattr(webview2.time, "sleep", lambda _seconds: None)
+    monkeypatch.setattr(webview2.os, "replace", lambda *_args, **_kwargs: (_ for _ in ()).throw(OSError("busy")))
+    with pytest.raises(RuntimeError):
+        webview2.prepare_switch_profile()
+
+
 def test_profile_metadata_contains_no_raw_cookie(monkeypatch, tmp_path):
     profile = _use_temp_profile(monkeypatch, tmp_path)
     webview2.save_profile_fingerprint({"TIEBAUID": "uid-secret", "BDUSS": "bduss-secret"})
