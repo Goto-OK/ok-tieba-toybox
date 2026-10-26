@@ -289,6 +289,7 @@ Android 核心同步通过
 - 已本地构建 `dist/OK的贴吧玩具箱_v1.8.0`，`--selftest` exit 0，标题为 v1.8.0；
 - 已生成 `dist/ok-tieba-toybox_v1.8.0.zip`、中文名同内容副本 `dist/OK的贴吧玩具箱_v1.8.0.zip`、`dist/SHA256SUMS-1.8.0.txt`；
 - 已打 tag `v1.8.0` 并发布 GitHub Release；
+- tag 已移动到脱敏提交 `c213bf6`，Release 源码归档同步为脱敏版本；旧 commit 未重写，仍可按 hash 访问；
 - SHA256（exe）：`754C7EB57FC3A65E13E827C584C122AAC09B1B4D00791D24D7499A90720EABBF`；
 - SHA256（两个 zip 相同）：`1CBAF5B4096500319D5C86046C8373FD31D1522E1439F9DCD95755F56B3E1D30`；
 - 发布说明：`docs/release-notes-v1.8.0.md`；
