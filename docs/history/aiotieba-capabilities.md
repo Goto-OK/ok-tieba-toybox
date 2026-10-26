@@ -133,7 +133,7 @@
 - `follow_days`：关注天数；
 - `level` / `level_name` / `exp`。
 
-示例（原实测数据已脱敏；`priv_like=3` 的隐藏用户）：
+示例（隐藏关注用户）：
 
 ```text
 uid=100000001

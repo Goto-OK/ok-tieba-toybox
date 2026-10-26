@@ -90,7 +90,7 @@ x_bd_data_type: protobuf
 因此免登录可以抓完整楼中楼，不必受 `page` 接口每层 10 条预览的限制。
 
 证据：`aiotieba 4.8.1` 的 `get_comments` 源码 + 2026-10-19 匿名实测
-（示例 tid=1234567890；原实测 tid 已脱敏）。
+（示例 tid=1234567890；具体实测细节已省略）。
 
 楼中楼 HTML 的 `lzl_single_post` 可能只有 `showname/portrait`，没有 `user_name`；
 同一节点的 `j_user_card` 可能带 `username`、`user_id`，解析时必须兜底读取。
