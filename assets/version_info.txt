@@ -1,7 +1,7 @@
 VSVersionInfo(
   ffi=FixedFileInfo(
-    filevers=(1, 7, 3, 0),
-    prodvers=(1, 7, 3, 0),
+    filevers=(1, 8, 0, 0),
+    prodvers=(1, 8, 0, 0),
     mask=0x3f,
     flags=0x0,
     OS=0x40004,
@@ -17,11 +17,11 @@ VSVersionInfo(
           [
             StringStruct('CompanyName', 'OK'),
             StringStruct('FileDescription', 'OK的贴吧玩具箱'),
-            StringStruct('FileVersion', '1.7.3'),
+            StringStruct('FileVersion', '1.8.0'),
             StringStruct('InternalName', 'ok_tieba_toybox'),
             StringStruct('OriginalFilename', 'OK的贴吧玩具箱.exe'),
             StringStruct('ProductName', 'OK的贴吧玩具箱'),
-            StringStruct('ProductVersion', '1.7.3')
+            StringStruct('ProductVersion', '1.8.0')
           ]
         )
       ]

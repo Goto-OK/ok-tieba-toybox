@@ -3,7 +3,8 @@
 输入贴吧帖子链接，抓取**主题楼层 + 楼中楼**，按用户汇总，导出 Excel。  
 默认匿名使用，不需要 Cookie；可选登录，用于验证码、关注检测和更完整的资料。
 
-当前版本：**v1.7.3**
+当前开发版本：**v1.8.0（未打包）**  
+最新已发布版本：**v1.7.3**
 
 作者：**OK**（GitHub: [Goto-OK](https://github.com/Goto-OK)）
 
@@ -22,7 +23,9 @@ AI 协作：**DeepSeek**（代码实现、测试与文档整理，详见 [CREDIT
 
 ### Windows 绿色版
 
-从 GitHub **Releases** 下载：
+当前已发布的是 v1.7.3；v1.8.0 仍在源码阶段，尚未打包。
+
+从 GitHub **Releases** 下载最新已发布版本：
 
 ```text
 ok-tieba-toybox_v1.7.3.zip
@@ -190,13 +193,13 @@ tieba_reply_stats/version.py
 ### 构建 Windows 版
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build_desktop.ps1 -Version 1.7.3
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build_desktop.ps1 -Version 1.8.0
 ```
 
 构建完成后：
 
 ```text
-dist/OK的贴吧玩具箱_v1.7.3/
+dist/OK的贴吧玩具箱_v1.8.0/
 ```
 
 发布时同时生成绿色包和 `SHA256SUMS`。
