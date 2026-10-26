@@ -25,7 +25,7 @@
 - 多帖对比拆出为独立 `tieba_gui_compare.py`；
 - 通用选择/提示窗口拆出为 `tieba_gui_dialogs.py`；
 - 内置登录备份清理失败改为重试并在启动日志/运行日志中警告，不再静默丢弃；
-- GUI 测试隔离 `LOCALAPPDATA`，不再触碰开发者真实内置登录目录；
+- GUI 测试同时隔离 `LOCALAPPDATA` 与设置/Cookie/黑名单/最近结果路径，不再触碰开发者真实数据；
 - `APP_TITLE` 集中到 `tieba_gui_utils.py`；
 - S110/S112 改为逐处 noqa，收紧目录级例外；
 - `_run_worker` 拆出单帖抓取器后移除 C901 noqa；

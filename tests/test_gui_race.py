@@ -6,13 +6,27 @@ import pytest
 
 import tieba_gui
 import tieba_gui_login
+import tieba_gui_tools
 from tieba_gui import App
+from tieba_reply_stats import blacklist, cookie_store, settings, storage
 from tieba_reply_stats.models import ThreadData, ThreadMeta
 
 
 @pytest.fixture
 def root_app(monkeypatch, tmp_path):
     monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / "localappdata"))
+    data_dir = tmp_path / "appdata"
+    data_dir.mkdir()
+    monkeypatch.setattr(settings, "APP_DIR", str(data_dir))
+    monkeypatch.setattr(settings, "SETTINGS_PATH", str(data_dir / "settings.json"))
+    monkeypatch.setattr(blacklist, "APP_DIR", str(data_dir))
+    monkeypatch.setattr(blacklist, "CONFIG_PATH", str(data_dir / "blacklist.json"))
+    monkeypatch.setattr(cookie_store, "APP_DIR", str(data_dir))
+    monkeypatch.setattr(cookie_store, "COOKIE_FILE", str(data_dir / "cookie.bin"))
+    monkeypatch.setattr(storage, "APP_DIR", str(data_dir))
+    monkeypatch.setattr(storage, "DB_PATH", str(data_dir / "last_result.db"))
+    monkeypatch.setattr(storage, "ENC_PATH", str(data_dir / "last_result.enc"))
+    monkeypatch.setattr(tieba_gui_tools, "APP_DIR", str(data_dir))
     root = None
     last_error = None
     for _attempt in range(5):
