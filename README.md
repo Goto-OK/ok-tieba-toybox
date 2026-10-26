@@ -28,7 +28,7 @@ AI 协作：**DeepSeek**（代码实现、测试与文档整理，详见 [CREDIT
 ok-tieba-toybox_v1.8.0.zip
 ```
 
-v1.8.0 同时附带 `OK._v1.8.0.zip`，内容与上面的 zip 完全相同；这是 GitHub 对中文附件名清理后的结果。
+GitHub Release 只保留 ASCII 附件名；中文名 zip 保留在本地，便于站外分享。
 
 使用：
 

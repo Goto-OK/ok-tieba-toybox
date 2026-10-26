@@ -293,7 +293,7 @@ Android 核心同步通过
 - SHA256（两个 zip 相同）：`1CBAF5B4096500319D5C86046C8373FD31D1522E1439F9DCD95755F56B3E1D30`；
 - 发布说明：`docs/release-notes-v1.8.0.md`；
 - Release：<https://github.com/Goto-OK/ok-tieba-toybox/releases/tag/v1.8.0>；
-- GitHub 附件：`ok-tieba-toybox_v1.8.0.zip`、`OK._v1.8.0.zip`（中文名被清理）、`SHA256SUMS-1.8.0.txt`。
+- GitHub 附件：`ok-tieba-toybox_v1.8.0.zip`、`SHA256SUMS-1.8.0.txt`；中文名 zip 仅保留在本地，用于站外分享。
 
 ## 6. 已知限制
 
@@ -337,7 +337,7 @@ dist/OK的贴吧玩具箱_v1.8.0/
 - SHA256（exe）：`754C7EB57FC3A65E13E827C584C122AAC09B1B4D00791D24D7499A90720EABBF`；
 - SHA256（两个 zip 相同）：`1CBAF5B4096500319D5C86046C8373FD31D1522E1439F9DCD95755F56B3E1D30`；
 - GitHub Release：<https://github.com/Goto-OK/ok-tieba-toybox/releases/tag/v1.8.0>；
-- GitHub 将中文附件名清理为 `OK._v1.8.0.zip`，与 `ok-tieba-toybox_v1.8.0.zip` 内容相同。
+- GitHub Release 只保留 ASCII 附件；中文名 zip 保留在本地。
 
 源码运行：
 

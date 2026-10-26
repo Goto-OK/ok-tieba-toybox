@@ -63,7 +63,7 @@ dist/OK的贴吧玩具箱_v1.8.0/
 
 ```text
 ok-tieba-toybox_v1.8.0.zip
-OK._v1.8.0.zip（中文名附件被 GitHub 清理后的名称，内容相同）
+（GitHub Release 仅保留 ASCII 名；中文名 zip 保留在本地，用于站外分享）
 SHA256SUMS-1.8.0.txt
 ```
 
