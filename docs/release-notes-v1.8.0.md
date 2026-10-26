@@ -8,7 +8,7 @@ AI 协作：DeepSeek
 ## 版本说明
 
 - 版本：1.8.0
-- 状态：未打包
+- 状态：已打包，未发布
 - 前一个正式发布：1.7.3
 - 本版本是 1.7.3 之后的结构重构与健壮性修复版本
 
@@ -51,12 +51,19 @@ CI                        success
 
 ## 下载与安装
 
-本版本尚未打包。打包后会提供：
+本版本已在本机构建，尚未上传 GitHub Release。构建目录：
 
 ```text
-OK的贴吧玩具箱_v1.8.0/
+dist/OK的贴吧玩具箱_v1.8.0/
     OK的贴吧玩具箱.exe
     _internal/
+```
+
+绿色包与校验文件：
+
+```text
+dist/ok-tieba-toybox_v1.8.0.zip
+dist/SHA256SUMS-1.8.0.txt
 ```
 
 必须保留 `_internal` 目录，不能只复制 exe。

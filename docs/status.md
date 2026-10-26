@@ -8,8 +8,8 @@
 | 项目 | 版本 | 说明 |
 |---|---|---|
 | 规范 | 1.8.0 | 结构重构、数据安全与测试隔离增补 |
-| 源码 | 1.8.0 未打包 | 已含 1.7.3 修复、结构重构、wheel/测试修复 |
-| Windows 成品 | 1.7.3 | 最新已发布；1.8.0 尚未构建 |
+| 源码 | 1.8.0 已打包未发布 | 已含 1.7.3 修复、结构重构、wheel/测试修复 |
+| Windows 成品 | 1.7.3 / 1.8.0 本地 | 1.7.3 最新已发布；1.8.0 已本地构建、未上传 |
 | 安装包 | 无 | 免安装目录 |
 | Android | 暂停 | 核心同步，但不跟进 UI |
 | CLI | 基础 | 只做抓取/导出 |
@@ -281,12 +281,16 @@ Android 核心同步通过
 - 协作说明：`CREDITS.md`，作者 OK，AI 协作 DeepSeek；
 - 截图：`docs/images/01-main.png`、`02-user-lookup.png` 已上传并写入 README。
 
-### 5.6 1.8.0 源码状态（未打包）
+### 5.6 1.8.0 构建状态（未发布）
 
 - 版本号已改为 1.8.0，`assets/version_info.txt` 已重新生成；
 - 完成 GUI 拆分、数据安全修复、wheel 打包修复、测试隔离；
 - 自动化与 wheel 导入验证通过；
-- 尚未构建 exe、尚未生成 1.8.0 绿色包、尚未打 tag/Release；
+- 已本地构建 `dist/OK的贴吧玩具箱_v1.8.0`，`--selftest` exit 0，标题为 v1.8.0；
+- 已生成 `dist/ok-tieba-toybox_v1.8.0.zip`、`dist/SHA256SUMS-1.8.0.txt`；
+- 尚未打 tag/Release，尚未上传 GitHub；
+- SHA256（exe）：`009F2E76730C25799F4D0201960E2006E7C8FD5346F177737279E695C7B7FC32`；
+- SHA256（zip）：`CDBAE29DB47AA2EF54381328CEA87E23F00C621A29A09D01AA5CE4E897FD40C6`；
 - 发布说明草稿：`docs/release-notes-v1.8.0.md`。
 
 ## 6. 已知限制
