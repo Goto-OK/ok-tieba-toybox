@@ -8,10 +8,9 @@ from functools import partial
 from tkinter import ttk
 from typing import Any, Dict, List
 
+from tieba_gui_utils import APP_TITLE
 from tieba_reply_stats.filters import FIELD_OPTIONS, LEVEL_OPTIONS
 from tieba_reply_stats.version import __version__ as VERSION
-
-APP_TITLE = "OK的贴吧玩具箱"
 
 
 class GuiLayoutMixin:

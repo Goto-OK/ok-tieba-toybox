@@ -7,7 +7,7 @@ import tkinter as tk
 from tkinter import ttk
 from typing import Any
 
-from tieba_gui_layout import APP_TITLE
+from tieba_gui_utils import APP_TITLE
 from tieba_reply_stats.post_cache import DEFAULT_LIMIT_MB, MAX_LIMIT_MB, MIN_LIMIT_MB
 from tieba_reply_stats.settings import APP_DIR
 from tieba_reply_stats.version import __version__ as VERSION

@@ -525,7 +525,7 @@ class SettingsRuntimeMixin:
                 self.settings,
                 self.blacklist,
             )
-        except Exception:  # noqa: BLE001
+        except Exception:  # noqa: S110, BLE001
             pass
         self.settings.update(data["settings"])
         save_settings(self.settings)

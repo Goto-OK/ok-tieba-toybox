@@ -120,7 +120,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         try:
             stdout.reconfigure(encoding="utf-8", errors="replace")
             stderr.reconfigure(encoding="utf-8", errors="replace")
-        except Exception:  # noqa: BLE001 - 个别 Windows 控制台不支持重设编码
+        except Exception:  # noqa: S110, BLE001 - 个别 Windows 控制台不支持重设编码
             pass
 
     parser = build_parser()

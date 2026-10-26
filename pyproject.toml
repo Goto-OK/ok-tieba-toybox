@@ -85,8 +85,8 @@ max-complexity = 40
 "tests/**" = ["S101", "S105", "S106", "S107", "S108", "S311", "S324", "S603", "S605", "S606"]
 "scripts/**" = ["S603", "S605", "S606"]
 "tools/**" = ["S310", "S311", "S324", "S603", "S606"]
-"tieba_reply_stats/**" = ["S110", "S112", "S310", "S311", "S324", "S603", "S606"]
-"tieba_gui*.py" = ["S110", "S310", "S311", "S603", "S606"]
+"tieba_reply_stats/**" = ["S310", "S311", "S324", "S603", "S606"]
+"tieba_gui*.py" = ["S310", "S311", "S603", "S606"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

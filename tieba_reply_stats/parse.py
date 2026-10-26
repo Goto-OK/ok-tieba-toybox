@@ -131,7 +131,7 @@ def _xpath_text(tree, expressions: Iterable[str]) -> str:
     for expression in expressions:
         try:
             found = tree.xpath(expression)
-        except Exception:  # noqa: BLE001
+        except Exception:  # noqa: S112, BLE001
             continue
         for item in found:
             text = item.text_content().strip() if hasattr(item, "text_content") else str(item).strip()

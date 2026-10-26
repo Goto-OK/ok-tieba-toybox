@@ -17,7 +17,7 @@ TITLE = "贴吧安全验证"
 def _center(width: int, height: int) -> tuple[int, int]:
     try:
         ctypes.windll.shcore.SetProcessDpiAwareness(2)
-    except Exception:  # noqa: BLE001
+    except Exception:  # noqa: S110, BLE001
         pass
     try:
         screen_w = int(ctypes.windll.user32.GetSystemMetrics(0))
@@ -129,7 +129,7 @@ def _install_clr_loader_path_workaround() -> None:
             return str(ascii_lib / dll_name)
 
         webview_util.interop_dll_path = _interop_dll_path
-    except Exception:  # noqa: BLE001
+    except Exception:  # noqa: S110, BLE001
         pass
 
 
@@ -214,7 +214,7 @@ def main() -> int:
                             "path": morsel["path"] or "/",
                         }
                     )
-            except Exception:  # noqa: BLE001
+            except Exception:  # noqa: S112, BLE001
                 continue
         return result
 
@@ -234,7 +234,7 @@ def main() -> int:
             return
         try:
             cookies = normalize_cookies(window.get_cookies())
-        except Exception:  # noqa: BLE001
+        except Exception:  # noqa: S110, BLE001
             pass
 
     def monitor() -> None:

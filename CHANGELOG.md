@@ -24,6 +24,10 @@
 - `_build_people_detail` 拆分为红绿灯、资料头、双表格三个构建器；
 - 多帖对比拆出为独立 `tieba_gui_compare.py`；
 - 通用选择/提示窗口拆出为 `tieba_gui_dialogs.py`；
+- 内置登录备份清理失败改为重试并在启动日志/运行日志中警告，不再静默丢弃；
+- GUI 测试隔离 `LOCALAPPDATA`，不再触碰开发者真实内置登录目录；
+- `APP_TITLE` 集中到 `tieba_gui_utils.py`；
+- S110/S112 改为逐处 noqa，收紧目录级例外；
 - `_merge_forum_lists` 移到资料模块，`_retry_incomplete_threads` / `_expand_large_threads` 移到 worker 模块。
 - ruff 启用 C90/S 规则；复杂度阈值 40，两个入口方法保留 noqa，安全规则按目录配置已知例外。
 - GUI 版面构建方法拆出为独立 `tieba_gui_layout.py`，App 主类减少约 1,300 行；

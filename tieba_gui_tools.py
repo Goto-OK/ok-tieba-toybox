@@ -213,7 +213,7 @@ class ToolsMixin:
         self._center_toplevel(win, 820, 560)
         try:
             self._theme_widget_tree(win)
-        except Exception:  # noqa: BLE001
+        except Exception:  # noqa: S110, BLE001
             pass
 
 

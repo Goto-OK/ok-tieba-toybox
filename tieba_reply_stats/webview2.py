@@ -17,6 +17,7 @@ import sys
 import time
 import winreg
 from pathlib import Path
+from typing import Callable, Optional
 from urllib.parse import urlsplit
 
 
@@ -165,16 +166,28 @@ def clear_switch_profile() -> None:
         pass
 
 
-def cleanup_profile_backup() -> None:
+def cleanup_profile_backup(on_error: Optional[Callable[[str], None]] = None) -> None:
+    """清理备份或恢复旧登录；失败时保留 .bak 并报告，不静默丢弃。"""
     target = login_profile_dir()
     backup = target + ".bak"
-    try:
-        if os.path.isdir(target):
-            shutil.rmtree(backup)
-        elif os.path.isdir(backup):
-            os.replace(backup, target)
-    except OSError:
-        pass
+    last_error: Optional[OSError] = None
+    for attempt in range(3):
+        try:
+            if os.path.isdir(target):
+                if os.path.isdir(backup):
+                    shutil.rmtree(backup)
+            elif os.path.isdir(backup):
+                os.replace(backup, target)
+            return
+        except OSError as error:
+            last_error = error
+            if attempt + 1 < 3:
+                time.sleep(0.5)
+    if last_error is not None and on_error is not None:
+        on_error(
+            "内置登录备份清理/恢复失败，备份已保留："
+            f"{backup}（{last_error}）"
+        )
 
 
 def _replace_with_retry(source: str, target: str, attempts: int = 3) -> None:

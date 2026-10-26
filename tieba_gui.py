@@ -25,7 +25,7 @@ from tieba_gui_dialogs import DialogsMixin
 from tieba_gui_export import ExportMixin
 from tieba_gui_grid import GridMixin
 from tieba_gui_identity import BatchIdentityMixin
-from tieba_gui_layout import APP_TITLE, GuiLayoutMixin
+from tieba_gui_layout import GuiLayoutMixin
 from tieba_gui_links import LinksMixin
 from tieba_gui_logging import LoggingMixin
 from tieba_gui_login import LoginMixin
@@ -38,6 +38,7 @@ from tieba_gui_settings_runtime import SettingsRuntimeMixin
 from tieba_gui_theme import ThemeMixin
 from tieba_gui_tools import ToolsMixin
 from tieba_gui_utils import (
+    APP_TITLE,
     decode_display,  # noqa: F401  (兼容旧导入)
     default_output_path,
     display_text,
@@ -257,10 +258,14 @@ class App(GuiLayoutMixin, MessageMixin, SettingsMixin, GridMixin, LookupMixin, W
         self._login_probe_token = 0
         self._active_choice_window: Optional[tk.Toplevel] = None
         self._usage_window: Optional[tk.Toplevel] = None
-        webview2.cleanup_profile_backup()
+        startup_warnings: list[str] = []
+        webview2.cleanup_profile_backup(startup_warnings.append)
         webview2.clear_switch_profile()
 
         self._build_ui()
+        for warning in startup_warnings:
+            self._append_log(warning, "warn")
+            self._write_log("webview_cleanup_failed", detail=warning)
         self._apply_window_icon()
         self._apply_theme()
         self._apply_table_density()
@@ -481,7 +486,7 @@ class App(GuiLayoutMixin, MessageMixin, SettingsMixin, GridMixin, LookupMixin, W
             try:
                 self._toggle_emoji_inline()
                 return
-            except Exception:  # noqa: BLE001
+            except Exception:  # noqa: S110, BLE001
                 pass
         self._open_emoji_picker()
 
@@ -598,7 +603,7 @@ class App(GuiLayoutMixin, MessageMixin, SettingsMixin, GridMixin, LookupMixin, W
                 import ctypes
 
                 ctypes.windll.user32.SetWindowTextW(edit, "")
-            except Exception:  # noqa: BLE001
+            except Exception:  # noqa: S110, BLE001
                 pass
         if self.lookup_entry is not None:
             self.lookup_entry.focus_set()
@@ -2349,7 +2354,7 @@ class App(GuiLayoutMixin, MessageMixin, SettingsMixin, GridMixin, LookupMixin, W
         try:
             self._refresh_people()
             self._refresh_grid()
-        except Exception:  # noqa: BLE001
+        except Exception:  # noqa: S110, BLE001
             pass
         incomplete = sum(1 for thread in threads if not getattr(thread, "complete", True))
         self.status_var.set(
@@ -2583,7 +2588,7 @@ def _focus_existing_window() -> None:
         if handle:
             user32.ShowWindow(handle, 9)
             user32.SetForegroundWindow(handle)
-    except Exception:  # noqa: BLE001
+    except Exception:  # noqa: S110, BLE001
         pass
 
 
@@ -2614,14 +2619,14 @@ def main() -> int:
     if hasattr(sys.stdout, "reconfigure"):
         try:
             sys.stdout.reconfigure(encoding="utf-8", errors="replace")
-        except Exception:  # noqa: BLE001
+        except Exception:  # noqa: S110, BLE001
             pass
     if os.name == "nt":
         try:
             import ctypes
 
             ctypes.windll.shcore.SetProcessDpiAwareness(2)
-        except Exception:  # noqa: BLE001
+        except Exception:  # noqa: S110, BLE001
             pass
     if _acquire_instance() is None:
         _focus_existing_window()

@@ -189,7 +189,7 @@ class MessageMixin:
                 url = (getattr(self, "_current_urls", []) or ["https://tieba.baidu.com/"])[0]
                 try:
                     webbrowser.open(url)
-                except Exception:  # noqa: BLE001
+                except Exception:  # noqa: S110, BLE001
                     pass
                 self.cookie_entry.focus_set()
                 self._append_log(
@@ -470,7 +470,7 @@ class MessageMixin:
             self._refresh_grid()
             if str(getattr(self, "_last_identity_strategy", "full")) == "detail":
                 self.post_nb.select(self.tab_people)
-        except Exception:  # noqa: BLE001
+        except Exception:  # noqa: S110, BLE001
             pass
         self._set_running(False)
         identity_missing = int(getattr(self, "_identity_missing", 0) or 0)

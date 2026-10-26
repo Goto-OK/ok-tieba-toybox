@@ -77,6 +77,18 @@ def test_cleanup_profile_backup_restores_when_target_missing(monkeypatch, tmp_pa
     assert not os.path.exists(profile + ".bak")
 
 
+def test_cleanup_profile_backup_reports_failure(monkeypatch, tmp_path):
+    profile = _use_temp_profile(monkeypatch, tmp_path)
+    os.makedirs(profile)
+    os.makedirs(profile + ".bak")
+    messages = []
+    monkeypatch.setattr(webview2.shutil, "rmtree", lambda *_args, **_kwargs: (_ for _ in ()).throw(OSError("locked")))
+    monkeypatch.setattr(webview2.time, "sleep", lambda _seconds: None)
+    webview2.cleanup_profile_backup(messages.append)
+    assert messages and "备份已保留" in messages[0]
+    assert os.path.isdir(profile + ".bak")
+
+
 def test_profile_metadata_contains_no_raw_cookie(monkeypatch, tmp_path):
     profile = _use_temp_profile(monkeypatch, tmp_path)
     webview2.save_profile_fingerprint({"TIEBAUID": "uid-secret", "BDUSS": "bduss-secret"})

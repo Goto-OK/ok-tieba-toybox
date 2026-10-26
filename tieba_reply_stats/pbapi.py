@@ -59,7 +59,7 @@ def _level_from_user(user: Dict) -> tuple:
             continue
         try:
             data = json.loads(custom.get("data") or "{}")
-        except Exception:  # noqa: BLE001
+        except Exception:  # noqa: S112, BLE001
             continue
         level_id = data.get("level_id")
         if level_id:

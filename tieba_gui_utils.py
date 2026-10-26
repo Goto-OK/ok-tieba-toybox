@@ -8,6 +8,8 @@ import sys
 from datetime import datetime
 from typing import Optional
 
+APP_TITLE = "OK的贴吧玩具箱"
+
 _EMOJI_CODE_RE = re.compile(r"\[U\+([0-9A-Fa-f]{4,6})\]", re.I)
 
 

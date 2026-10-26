@@ -11,7 +11,8 @@ from tieba_reply_stats.models import ThreadData, ThreadMeta
 
 
 @pytest.fixture
-def root_app():
+def root_app(monkeypatch, tmp_path):
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / "localappdata"))
     root = None
     last_error = None
     for _attempt in range(5):
