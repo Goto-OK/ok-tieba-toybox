@@ -28,6 +28,7 @@
 - GUI 测试隔离 `LOCALAPPDATA`，不再触碰开发者真实内置登录目录；
 - `APP_TITLE` 集中到 `tieba_gui_utils.py`；
 - S110/S112 改为逐处 noqa，收紧目录级例外；
+- `_run_worker` 拆出单帖抓取器后移除 C901 noqa；
 - `_merge_forum_lists` 移到资料模块，`_retry_incomplete_threads` / `_expand_large_threads` 移到 worker 模块。
 - ruff 启用 C90/S 规则；复杂度阈值 40，两个入口方法保留 noqa，安全规则按目录配置已知例外。
 - GUI 版面构建方法拆出为独立 `tieba_gui_layout.py`，App 主类减少约 1,300 行；

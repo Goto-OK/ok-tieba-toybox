@@ -268,7 +268,43 @@ class WorkerMixin:
         self.status_var.set("正在停止…")
 
 
-    def _run_worker(  # noqa: C901  (抓取状态机，后续再拆)
+    def _collect_one_thread(self, url, fetcher, options, tid):
+        rate_attempt = 0
+        thread = None
+        while True:
+            try:
+                thread = collect_thread(url, fetcher, options)
+                break
+            except RateLimitError as error:
+                if rate_attempt >= 3:
+                    raise
+                rate_attempt += 1
+                self._post(
+                    ("rate_limit_ask", str(error), float(error.retry_after or 0), url)
+                )
+                choice = None
+                while choice is None:
+                    try:
+                        choice = self._rate_choice_queue.get(timeout=0.2)
+                    except queue.Empty:
+                        if self.stop_event.is_set():
+                            raise CollectCancelled("已停止") from error
+                if choice == "stop":
+                    raise CollectCancelled("已停止") from error
+                pause_requests(float(choice))
+                continue
+            except CaptchaError:
+                raise
+            except CollectCancelled:
+                raise
+            except (ThreadGoneError, FetchError, CollectError, ValueError) as error:
+                self._write_log("thread_error", tid=tid, error=type(error).__name__)
+                self._post(("log", f"  ✗ 抓取失败：{error}", "err"))
+                thread = None
+                break
+        return thread
+
+    def _run_worker(
         self,
         urls,
         output,
@@ -294,39 +330,7 @@ class WorkerMixin:
                 except ValueError:
                     tid = ""
                 self._write_log("thread_start", tid=tid)
-                rate_attempt = 0
-                thread = None
-                while True:
-                    try:
-                        thread = collect_thread(url, fetcher, options)
-                        break
-                    except RateLimitError as error:
-                        if rate_attempt >= 3:
-                            raise
-                        rate_attempt += 1
-                        self._post(
-                            ("rate_limit_ask", str(error), float(error.retry_after or 0), url)
-                        )
-                        choice = None
-                        while choice is None:
-                            try:
-                                choice = self._rate_choice_queue.get(timeout=0.2)
-                            except queue.Empty:
-                                if self.stop_event.is_set():
-                                    raise CollectCancelled("已停止") from error
-                        if choice == "stop":
-                            raise CollectCancelled("已停止") from error
-                        pause_requests(float(choice))
-                        continue
-                    except CaptchaError:
-                        raise
-                    except CollectCancelled:
-                        raise
-                    except (ThreadGoneError, FetchError, CollectError, ValueError) as error:
-                        self._write_log("thread_error", tid=tid, error=type(error).__name__)
-                        self._post(("log", f"  ✗ 抓取失败：{error}", "err"))
-                        thread = None
-                        break
+                thread = self._collect_one_thread(url, fetcher, options, tid)
                 if thread is None:
                     continue
                 completed.append(thread)
