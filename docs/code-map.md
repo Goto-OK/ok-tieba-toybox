@@ -102,7 +102,7 @@ GUI 的 `App` 通过 mixin 组合上述模块；模块只依赖 `tieba_reply_sta
 | 路径 | 说明 |
 |---|---|
 | `sample/` | 示例 Excel |
-| `snapshots/` | 脱敏离线快照 |
+| `snapshots/` | 离线快照与示例 |
 | `tools/` | 快照采集/查询、wheel 下载 |
 | `assets/` | 图标、版本信息 |
 | `使用说明.txt` | 用户手册 |

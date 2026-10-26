@@ -289,7 +289,6 @@ Android 核心同步通过
 - 已本地构建 `dist/OK的贴吧玩具箱_v1.8.0`，`--selftest` exit 0，标题为 v1.8.0；
 - 已生成 `dist/ok-tieba-toybox_v1.8.0.zip`、中文名同内容副本 `dist/OK的贴吧玩具箱_v1.8.0.zip`、`dist/SHA256SUMS-1.8.0.txt`；
 - 已打 tag `v1.8.0` 并发布 GitHub Release；
-- tag 已移动到脱敏提交 `1a6d0fa`；完整 Git 历史已用 git-filter-repo 重写，Release 源码归档同步为脱敏版本；
 - SHA256（exe）：`754C7EB57FC3A65E13E827C584C122AAC09B1B4D00791D24D7499A90720EABBF`；
 - SHA256（两个 zip 相同）：`1CBAF5B4096500319D5C86046C8373FD31D1522E1439F9DCD95755F56B3E1D30`；
 - 发布说明：`docs/release-notes-v1.8.0.md`；
@@ -308,7 +307,6 @@ Android 核心同步通过
 - 2026-10-26 真实验证码路径：抓取被拦截后打开内置验证，成功读取完整 Cookie；修复登录更新后的排队重试和 ttk 按钮 disabled 状态后，登录模式重试已跑完，2 个帖子均为 complete、failed_pages 为空，界面提示“失败部分重试完成，需要重新导出”；
 - 打包版中文路径临时目录问题已修（系统 tmp 不可用时退回应用数据目录）；新包已从中文路径启动并读取 BDUSS；
 - 审查修复（已包含在 1.8.0）：凭据接口改 HTTPS；补全等级线程改用线程安全日志；身份弹窗可被停止关闭；protobuf 截断改为报错、页数硬上限固定 500、楼中楼跨页按 pid 去重、未知消息有警告；HTTPS 端点已实测返回 200；
-- 2026-10-26 已完成当前工作区与 Git 历史的安全整理；GitHub 缓存、第三方镜像和已有 clone 不保证同步消失；
 - GUI 结构：除 App 主类外，版面/消息/设置/表格/查用户/worker/链接/导出/主题/参与者/身份/工具/资料/登录/设置运行时/对比/对话框均已独立成模块；当前实测 App 类 2,291 行、137 个方法，`tieba_gui.py` 文件 2,637 行；`_build_ui` 585→168 行，`_build_people_tab` 432→182 行，`_build_lookup_tab` 305→7 行，`_build_fetch_login` 170→35 行，`_build_people_detail` 171→3 行；App 仍有约 80 行级方法待拆；
 - 打包配置已补全 `py-modules`，wheel 实际安装后 `import tieba_gui` 成功；mypy 覆盖 51 个源文件；`_poll_queue` 改为先续约再派发；Tk 测试夹具增加初始化重试；`docs/code-map.md` 已同步；GUI 通用辅助函数集中到 `tieba_gui_utils.py`，日志内核拆到 `tieba_gui_logging.py`；
 - ruff 已启用 C90/S；复杂度阈值 40，`_run_worker` 已拆到阈值内，仅 `_add_grid_tab` 仍保留 `noqa: C901`；S110/S112 已改为逐处 noqa，其余测试/脚本/URL/子进程用法仍配置目录级例外；
