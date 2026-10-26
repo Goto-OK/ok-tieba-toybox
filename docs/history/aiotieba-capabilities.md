@@ -133,13 +133,13 @@
 - `follow_days`：关注天数；
 - `level` / `level_name` / `exp`。
 
-匿名实测（`priv_like=3` 的隐藏用户）：
+示例（原实测数据已脱敏；`priv_like=3` 的隐藏用户）：
 
 ```text
 uid=100000001
 示例吧 → is_follow=True, level=14
-北京       → is_follow=False, level=1
-原神       → is_follow=False, level=1
+测试吧     → is_follow=False, level=1
+示例二吧   → is_follow=False, level=1
 ```
 
 也就是说：

@@ -2,14 +2,14 @@ from tieba_reply_stats import follow_probe
 
 
 def test_candidate_bars_filters_known_and_dedupes():
-    user = {"bars": ["示例吧", "示例吧", "北京"]}
+    user = {"bars": ["示例ml", "示例ml", "北京"]}
     profile = {
         "followed_forums": [{"name": "北京"}],
         "recent_posts": [{"bar": "上海"}, {"bar": "北京"}],
     }
-    blacklist = {"safe": ["广州"], "warn": [], "ban": ["示例吧"]}
+    blacklist = {"safe": ["广州"], "warn": [], "ban": ["示例ml"]}
     bars = follow_probe.candidate_bars(user, profile, blacklist)
-    assert bars == ["示例吧", "上海", "广州"]
+    assert bars == ["示例ml", "上海", "广州"]
 
 
 def test_candidate_bars_limit():

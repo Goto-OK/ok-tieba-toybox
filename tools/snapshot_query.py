@@ -1,7 +1,7 @@
 """Look up known user->bar levels from the offline snapshot.
 
 Usage:
-    python tools/snapshot_query.py --uid 100000002 --bars 原神,示例吧,yy小说吧
+    python tools/snapshot_query.py --uid 100000002 --bars 示例吧,测试吧
 """
 
 from __future__ import annotations

@@ -33,7 +33,7 @@ android {
 chaquopy {
     defaultConfig {
         version = "3.12"
-        buildPython("C:/Users/example/.dsh/dsh-runtimes/dsh-primary-runtime/dependencies/python/python.exe")
+        buildPython(System.getenv("CHAQUOPY_PYTHON") ?: "python")
         pip {
             install("beautifulsoup4==4.15.0")
             install("openpyxl")

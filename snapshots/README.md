@@ -2,6 +2,8 @@
 
 这个目录存放**离线快照**：某个用户在某个吧的等级 / 经验 / 是否关注。
 
+> 本文中的 uid、用户名、昵称、吧名、帖子 tid 均为脱敏示例，不对应真实用户。
+
 用途：给"候选吧名单 + 等级检查"做数据基础。对方隐藏关注列表时，实时接口拿不到完整列表，
 但历史抓到的这些记录可以回答"他以前在 X 吧是什么等级"。
 
@@ -12,7 +14,7 @@
 每行一条记录：
 
 ```json
-{"ts":"2026-10-18T04:21:45+08:00","uid":"100000001","bar":"示例吧","level":13,"exp":null,"source":"thread_floor","pid":"100000000001"}
+{"ts":"2026-01-01T00:00:00+08:00","uid":"100000001","bar":"示例吧","level":13,"exp":null,"source":"thread_floor","pid":"100000000001"}
 ```
 
 | 字段 | 说明 |
@@ -37,7 +39,7 @@
 用户资料快照：
 
 ```json
-{"ts":"...","uid":"100000001","username":"example_user","nickname":"示例昵称","post_num":4442,"priv_like":3,"fans":317,"concern":115,"source":"panel+profile"}
+{"ts":"...","uid":"100000001","username":"example_user","nickname":"示例昵称","post_num":123,"priv_like":3,"fans":12,"concern":34,"source":"panel+profile"}
 ```
 
 `priv_like=3` 表示对方隐藏了关注列表。
@@ -57,7 +59,7 @@ python tools/collect_snapshot.py \
 ## 查询
 
 ```bash
-python tools/snapshot_query.py --uid 100000002 --bars 原神,示例吧,yy小说吧
+python tools/snapshot_query.py --uid 100000002 --bars 示例吧,测试吧
 ```
 
 只回答快照里**已有**的 bar；没抓过的 bar 返回“未知”。

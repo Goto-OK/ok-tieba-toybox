@@ -2213,7 +2213,7 @@ GET https://tb.anova.me/getLevel?fname=<吧名>&uid=<tieba_uid>
 GET https://tb.anova.me/getLevel?fname=<吧1>,<吧2>&username=<用户名>
 ```
 
-实测：
+示例（uid/吧名已脱敏）：
 
 ```text
 uid=123456789 + fname=示例吧,测试吧,示例二吧
