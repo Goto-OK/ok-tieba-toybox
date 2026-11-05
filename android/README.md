@@ -52,15 +52,15 @@ Cookie 可以留空，直接抓公开帖子（当前 APK 仍按 Cookie 是否存
 
 ```bash
 # Windows（本机路径示例）
-set JAVA_HOME=E:\android-build\jdk-17.0.12+7
-set ANDROID_HOME=E:\android-build\sdk
-E:\android-build\gradle-8.7\bin\gradle.bat -p E:\android-build\tieba-app :app:assembleDebug
+set JAVA_HOME=D:\Cache\android-build\jdk-17.0.12+7
+set ANDROID_HOME=D:\Cache\android-build\sdk
+D:\Cache\android-build\gradle-8.7\bin\gradle.bat -p D:\Cache\android-build\tieba-app :app:assembleDebug
 ```
 
 APK 输出：
 
 ```
-E:\android-build\tieba-app\app\build\outputs\apk\debug\app-debug.apk
+D:\Cache\android-build\tieba-app\app\build\outputs\apk\debug\app-debug.apk
 ```
 
 更新 Python 代码后，需要把 `tieba-reply-stats/tieba_reply_stats` 重新复制到：

@@ -1,21 +1,21 @@
-﻿<#
+<#
 .SYNOPSIS
   同步核心并构建 Android debug APK（Chaquopy）。
 
 .PARAMETER JavaHome
-  JDK 17 路径；默认取 $env:JAVA_HOME 或 E:\android-build\jdk-17.0.12+7。
+  JDK 17 路径；默认取 $env:JAVA_HOME 或 D:\Cache\android-build\jdk-17.0.12+7。
 
 .PARAMETER AndroidSdk
-  Android SDK 路径；默认取 $env:ANDROID_HOME 或 E:\android-build\sdk。
+  Android SDK 路径；默认取 $env:ANDROID_HOME 或 D:\Cache\android-build\sdk。
 
 .PARAMETER Gradle
-  gradle.bat 路径；默认取 E:\android-build\gradle-8.7\bin\gradle.bat。
+  gradle.bat 路径；默认取 D:\Cache\android-build\gradle-8.7\bin\gradle.bat。
 #>
 [CmdletBinding()]
 param(
-    [string]$JavaHome = $(if ($env:JAVA_HOME) { $env:JAVA_HOME } else { "E:\android-build\jdk-17.0.12+7" }),
-    [string]$AndroidSdk = $(if ($env:ANDROID_HOME) { $env:ANDROID_HOME } else { "E:\android-build\sdk" }),
-    [string]$Gradle = "E:\android-build\gradle-8.7\bin\gradle.bat",
+    [string]$JavaHome = $(if ($env:JAVA_HOME) { $env:JAVA_HOME } else { "D:\Cache\android-build\jdk-17.0.12+7" }),
+    [string]$AndroidSdk = $(if ($env:ANDROID_HOME) { $env:ANDROID_HOME } else { "D:\Cache\android-build\sdk" }),
+    [string]$Gradle = "D:\Cache\android-build\gradle-8.7\bin\gradle.bat",
     [string]$Python = ""
 )
 

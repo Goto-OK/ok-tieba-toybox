@@ -312,7 +312,8 @@ Android 核心同步通过
 - 打包配置已补全 `py-modules`，wheel 实际安装后 `import tieba_gui` 成功；mypy 覆盖 51 个源文件；`_poll_queue` 改为先续约再派发；Tk 测试夹具增加初始化重试；`docs/code-map.md` 已同步；GUI 通用辅助函数集中到 `tieba_gui_utils.py`，日志内核拆到 `tieba_gui_logging.py`；
 - ruff 已启用 C90/S；复杂度阈值 40，`_run_worker` 已拆到阈值内，仅 `_add_grid_tab` 仍保留 `noqa: C901`；S110/S112 已改为逐处 noqa，其余测试/脚本/URL/子进程用法仍配置目录级例外；
 - 内置登录备份清理失败会重试 3 次并保留 `.bak`，启动时写入警告/运行日志；GUI 测试夹具已隔离 `LOCALAPPDATA` 及设置/Cookie/黑名单/最近结果路径；切换临时目录清理失败会重试、报告并改名隔离；`APP_TITLE` 已移到 `tieba_gui_utils.py`；
-- Android 不跟进 UI；
+- Android 不跟进 UI；构建工具链已移到 `D:\Cache\android-build`，`scripts/build_android.ps1` 和 `android/README.md` 已同步；
+- Android 核心副本落后，`scripts/sync_android.py --check` 当前不通过（20 个文件差异）；Android 暂停，未同步；
 - CLI 不跟 GUI 新功能。
 
 ## 7. 当前成品（1.8.0）
